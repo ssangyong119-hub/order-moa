@@ -215,6 +215,22 @@ th {
   gap: 8px;
 }
 
+.button-like {
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-block;
+  padding: 9px 12px;
+}
+
+.button-like.secondary {
+  background: #eef2f6;
+  color: var(--text);
+}
+
+.form-grid h3 {
+  margin: 8px 0 0;
+}
+
 @media (max-width: 960px) {
   .layout {
     grid-template-columns: 1fr;
