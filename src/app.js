@@ -1,4 +1,10 @@
-import { createId, formatCurrency } from "./domain.js";
+import {
+  aggregateItems,
+  buildDeliveryNote,
+  createId,
+  formatCurrency,
+  getOrderTotal
+} from "./domain.js";
 import { sampleData } from "./sample-data.js";
 import { exportData, importDataFromFile, loadData, resetData, saveData } from "./storage.js";
 
@@ -89,10 +95,91 @@ function renderPrices() {
   `;
 }
 
+function renderOrders() {
+  return `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>일자</th><th>거래처</th><th>접수 방식</th><th>품목 수</th><th>금액</th></tr></thead>
+        <tbody>
+          ${data.orders.map((order) => {
+            const customer = data.customers.find((item) => item.id === order.customerId);
+            return `
+              <tr>
+                <td>${order.date}</td>
+                <td>${customer?.name ?? "-"}</td>
+                <td>${order.source}</td>
+                <td>${order.items.length}</td>
+                <td>${formatCurrency(getOrderTotal(order, data.products, data.prices))}</td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+    <form class="form-grid" data-form="order">
+      <h3>발주 추가</h3>
+      <div class="form-row"><label>일자</label><input name="date" type="date" required value="${new Date().toISOString().slice(0, 10)}"></div>
+      <div class="form-row"><label>거래처</label><select name="customerId">${options(data.customers)}</select></div>
+      <div class="form-row"><label>접수 방식</label><select name="source"><option>카톡</option><option>전화</option><option>문자</option><option>사진</option><option>직접입력</option></select></div>
+      <div class="form-row"><label>품목</label><select name="productId">${options(data.products)}</select></div>
+      <div class="form-row"><label>수량</label><input name="quantity" type="number" min="0.1" step="0.1" required></div>
+      <button type="submit">발주 저장</button>
+    </form>
+  `;
+}
+
+function renderAggregation() {
+  const rows = aggregateItems(data.orders, data.products);
+  return `
+    <h3>오늘 전체 물량 합산</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>품목</th><th>총 수량</th><th>단위</th></tr></thead>
+        <tbody>
+          ${rows.map((row) => `<tr><td>${row.productName}</td><td>${row.quantity}</td><td>${row.unit}</td></tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function renderDeliveryNotes() {
+  return data.orders.map((order) => {
+    const note = buildDeliveryNote(order, data.customers, data.products, data.prices);
+    return `
+      <article class="note-preview">
+        <h3>거래명세서</h3>
+        <p><strong>거래처:</strong> ${note.customerName}</p>
+        <p><strong>일자:</strong> ${note.date}</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>품목</th><th>수량</th><th>단위</th><th>단가</th><th>금액</th></tr></thead>
+            <tbody>
+              ${note.rows.map((row) => `
+                <tr>
+                  <td>${row.productName}</td>
+                  <td>${row.quantity}</td>
+                  <td>${row.unit}</td>
+                  <td>${formatCurrency(row.unitPrice)}</td>
+                  <td>${formatCurrency(row.amount)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+        <p><strong>합계:</strong> ${formatCurrency(note.total)}</p>
+      </article>
+    `;
+  }).join("");
+}
+
 function renderActiveTab() {
   if (activeTab === "customers") return renderCustomers();
   if (activeTab === "products") return renderProducts();
-  return renderPrices();
+  if (activeTab === "prices") return renderPrices();
+  if (activeTab === "orders") return renderOrders();
+  if (activeTab === "aggregation") return renderAggregation();
+  return renderDeliveryNotes();
 }
 
 function render() {
@@ -124,6 +211,9 @@ function render() {
             <button class="tab ${activeTab === "customers" ? "active" : ""}" data-tab="customers">거래처</button>
             <button class="tab ${activeTab === "products" ? "active" : ""}" data-tab="products">품목</button>
             <button class="tab ${activeTab === "prices" ? "active" : ""}" data-tab="prices">거래처별 단가</button>
+            <button class="tab ${activeTab === "orders" ? "active" : ""}" data-tab="orders">발주 입력</button>
+            <button class="tab ${activeTab === "aggregation" ? "active" : ""}" data-tab="aggregation">도매상 발주 합산</button>
+            <button class="tab ${activeTab === "deliveryNotes" ? "active" : ""}" data-tab="deliveryNotes">거래명세서</button>
           </div>
           <div class="stack">${renderActiveTab()}</div>
         </section>
@@ -199,6 +289,21 @@ root.addEventListener("submit", (event) => {
       price.customerId === nextPrice.customerId && price.productId === nextPrice.productId
     ));
     data.prices.push(nextPrice);
+  }
+
+  if (formType === "order") {
+    data.orders.push({
+      id: createId("order"),
+      date: String(formData.get("date")),
+      customerId: String(formData.get("customerId")),
+      source: String(formData.get("source")),
+      items: [
+        {
+          productId: String(formData.get("productId")),
+          quantity: Number(formData.get("quantity"))
+        }
+      ]
+    });
   }
 
   saveData(data);
