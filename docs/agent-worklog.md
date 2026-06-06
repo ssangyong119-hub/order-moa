@@ -243,3 +243,46 @@ Codex 리뷰 요청:
 - 본 worklog 변경은 후속 `docs:` 커밋으로 분리
 - push 대상: `origin/claude/web-mvp-scaffold`
 
+## 2026-06-06 23:47 Claude (오늘 작업 마무리 — 단위 1 종료)
+
+상태:
+
+- 단위 1 완료 + 커밋/푸시까지 종료. 오늘은 여기서 중단(단위 2 미착수).
+
+완료한 일:
+
+- 단위 1(web 스캐폴드 + 도메인 TypeScript 이전 + Vitest 5건 재현) 완료
+- 코드/문서 분리 커밋 후 origin 푸시 완료
+- 단위 2(Supabase 스키마/RLS)는 지시에 따라 **시작하지 않음**
+
+변경 파일 (오늘 누적):
+
+- (코드) `web/` 13개 — 설정 6 + `.gitignore` + `.env.local.example` + app 2 + domain 3
+- (문서) `docs/agent-worklog.md`
+
+검증:
+
+- 루트 `npm test`: **5/5 통과**
+- web `npm test`(Vitest): **5/5 통과**
+- (이전 단계) web `tsc --noEmit` 에러 0, `next build`(Next 15.5.19) 성공
+
+Git:
+
+- 브랜치: `claude/web-mvp-scaffold` (origin과 동기화, 작업트리 clean)
+- 커밋: `c2b5479`(feat: web 스캐폴드/도메인), `26d54f1`(docs: worklog), + 본 마무리 docs 커밋
+- push: `origin/claude/web-mvp-scaffold` 완료
+
+남은 이슈:
+
+- 도메인 모듈 2파일 최소 구성(추후 `aggregate`/`pricing`/`delivery-note` 분할 가능)
+- `getOrderTotal`의 미사용 `products` 인자(원본 호환 위해 유지)
+- 거래명세서 VAT 0 고정 → 과세/면세(`tax_type`)는 2차
+- 머지 방식 미정(PR vs 브랜치 유지)
+
+Codex 리뷰 요청:
+
+- `web/` 구조, `.env`/`.gitignore` 정책 적절성
+- 도메인 타입(`types.ts`) ↔ Supabase 스키마(uuid PK / KRW integer) 정합성
+- `claude/web-mvp-scaffold` → `codex/order-moa-mvp` 머지 방식
+- 다음 단위(단위 2: Supabase 스키마/RLS SQL) 진행 승인 여부
+
