@@ -76,6 +76,44 @@ docs/survey-analysis-2026-06-06.md를 읽고
 현재 목표에 맞춰 다음 작업을 제안하고 실행해줘.
 ```
 
+## 2-1. Claude에게 줄 시작 프롬프트
+
+Claude 앱에서 작업을 시작할 때 아래 프롬프트를 사용한다.
+
+```text
+오더모아 프로젝트를 시작하자.
+
+이 프로젝트는 Codex와 Claude가 같은 GitHub 저장소와 작업 폴더를 사용해 협업한다.
+Codex는 제품 방향, 작업 지시, 문서화, 검증, 리뷰, Git/GitHub 관리, 전체 일정 관리 역할을 맡고,
+Claude는 앱 구현, 코드 작성, UI 구현, 리팩터링, 테스트 작성 역할을 주로 맡는다.
+단, 역할은 고정된 벽이 아니며 제품/보안/UX 문제가 보이면 서로 보완한다.
+
+먼저 아래 파일을 순서대로 읽고 현재 맥락을 파악해줘.
+
+1. CLAUDE.md
+2. docs/agent-collaboration-protocol.md
+3. docs/project-history-for-claude.md
+4. docs/meta-prompt-order-moa.md
+5. docs/web-mvp-strategy.md
+6. docs/web-security-checklist.md
+7. docs/web-architecture-options.md
+8. docs/web-mvp-roadmap.md
+9. docs/survey-analysis-2026-06-06.md
+
+작업 전 반드시 다음을 확인해줘.
+
+git status --short
+git branch --show-current
+npm test
+
+현재 기본 브랜치는 codex/order-moa-mvp다.
+작업을 시작하기 전에 수정 예정 파일을 docs/agent-worklog.md에 기록하고,
+Codex가 동시에 수정하면 안 되는 파일을 접근금지 요청으로 남겨줘.
+
+첫 목표는 로컬 정적 MVP를 웹 서비스 MVP로 전환하기 위한 Next.js + Supabase 기반 구현 준비다.
+바로 대규모 구현에 들어가지 말고, 먼저 어떤 파일을 만들고 어떤 순서로 구현할지 제안해줘.
+```
+
 ## 3. 현재 결정
 
 - 로컬 정적 앱은 실험용으로 유지한다.
@@ -84,4 +122,3 @@ docs/survey-analysis-2026-06-06.md를 읽고
 - MVP 1차 핵심은 카톡/문자 발주 붙여넣기 취합이다.
 - 카카오톡 자동 읽기, OCR, 홈택스/은행 연동은 보류한다.
 - 회사별 데이터 격리와 RLS는 초기에 포함한다.
-
