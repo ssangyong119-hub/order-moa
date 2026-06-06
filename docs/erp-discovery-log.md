@@ -340,3 +340,51 @@
 - 오더모아의 첫 화면과 핵심 가치는 거래명세서보다 발주 취합에 더 가까워야 한다.
 - MVP 우선순위는 카톡/문자 발주 취합 → 품목별 합산 → 거래처별 단가/마진 → 미수금/입금 → 거래명세서/세금계산서 순서로 조정한다.
 - 상세 분석 문서는 `docs/survey-analysis-2026-06-06.md`에 저장했다.
+
+## 16. 2026-06-06 웹 MVP 전환 기획
+
+로컬 정적 MVP는 실험용으로 유지하되, 실제 서비스 방향은 웹 MVP로 전환한다.
+
+전환 이유:
+
+- 사장/직원/회사/집/모바일이 같은 데이터를 봐야 한다.
+- 발주, 단가, 미수금, 거래명세서는 사업자별 데이터 격리가 필요하다.
+- 설문에서 확인된 핵심 문제는 단순 거래명세서보다 카톡/문자 발주 취합이다.
+- 유료 검증을 하려면 로그인, 회사별 데이터, 백업, 배포 URL이 필요하다.
+
+현재 권장 기술 스택:
+
+- Next.js
+- Supabase Auth
+- Supabase Postgres
+- Supabase Row Level Security
+- Vercel
+- TypeScript
+
+웹 MVP 1차 핵심:
+
+- 로그인
+- 회사/사업장 생성
+- 거래처/품목/단가
+- 카톡/문자 발주 붙여넣기
+- 사람이 확인/수정하는 반자동 파싱
+- 거래처별 주문표
+- 품목별 총 발주/출고 합산표
+- 거래명세서 미리보기
+- JSON/CSV/Excel 내보내기
+
+보류:
+
+- 카카오톡 자동 읽기
+- 홈택스 세금계산서 직접 발행
+- 은행 입금 자동 매칭
+- 완전 자동 OCR
+- 이카운트 직접 연동
+
+관련 문서:
+
+- `docs/meta-prompt-order-moa.md`
+- `docs/web-mvp-strategy.md`
+- `docs/web-security-checklist.md`
+- `docs/web-architecture-options.md`
+- `docs/web-mvp-roadmap.md`
