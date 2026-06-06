@@ -78,3 +78,90 @@
 
 - Claude가 실제 작업을 시작하면 이 파일에 작업 중 파일을 기록해야 함
 
+## 2026-06-06 23:10 Claude
+
+상태:
+
+- 계획/제안 (구현 미착수, 사용자/Codex 승인 대기)
+
+작업 목표:
+
+- 로컬 정적 MVP → 웹 서비스 MVP(Next.js + Supabase + Vercel) 전환 준비
+- 저장소 상태 점검, 파일/폴더 구조·Supabase 스키마 초안·첫 구현 단위 제안
+
+수정 예정 파일 (승인 후 착수, 신규 생성 위주):
+
+- `web/**` (Next.js + TypeScript 스캐폴드 전체, Claude 신규 생성)
+- 1차 단위: `web/` 설정 파일, `web/src/lib/domain/*.ts`(기존 `src/domain.js` TS 이전), `web/**/*.test.ts`(Vitest)
+- 루트 `.gitignore` 신규 생성 (env/secret 커밋 방지) — 보안 항목, 별도 합의 후
+- `docs/agent-worklog.md` (이 기록)
+
+접근금지 요청 (Codex):
+
+- `web/` 폴더 전체 — Claude 작업 완료 전 수정하지 말 것
+- 루트 정적 MVP(`index.html`, `src/`, `tests/`, 루트 `package.json`)는 이번 전환에서 Claude가 건드리지 않음 → Codex가 실험/유지용으로 계속 사용 가능
+
+검증:
+
+- `npm test`(루트): 5/5 통과, 실패 0 확인
+- git: 브랜치 `codex/order-moa-mvp`, 작업트리 clean, remote `order-moa`
+
+남은 이슈 / 결정 필요:
+
+- 저장소 레이아웃: `web/` 서브폴더(추천) vs 루트 전환 vs `legacy/` 이동 — 승인 필요
+- Supabase 스키마/RLS, 금액 타입(KRW integer), 카톡 원문(raw_text) 저장 정책
+- 별도 브랜치(`claude/web-mvp-scaffold`) 사용 여부
+- `docs/agent-collaboration-protocol.md`의 공용 경로가 옛 경로(`D:\Documents\ERP-1`) → 신규 기준(`D:\프로젝트폴더\ERP-1`)로 갱신 필요 (Codex 문서 영역)
+
+## 2026-06-06 23:20 Codex
+
+상태:
+
+- 결정/지시 완료
+
+작업 목표:
+
+- Claude의 웹 MVP 전환 제안을 검토하고 승인/수정 지시를 확정
+- 보안 선결 항목인 `.gitignore` 추가
+- 협업 문서의 공용 경로를 새 기준 폴더로 갱신
+
+Codex 결정:
+
+- 저장소 레이아웃은 `web/` 서브폴더 방식으로 진행한다.
+- 루트 정적 MVP(`index.html`, `src/`, `tests/`, 루트 `package.json`)는 실험/회귀 검증용으로 유지한다.
+- Claude의 첫 구현 단위는 `web/` 스캐폴드 + 기존 도메인 로직 TypeScript 이전 + Vitest 테스트 재현으로 승인한다.
+- 큰 기능이므로 Claude는 `claude/web-mvp-scaffold` 브랜치를 새로 만들어 작업한다.
+- 금액 타입은 KRW 원 단위 `integer`로 진행한다.
+- 카톡/문자 원문은 MVP 1차에서 기본 저장하지 않는다. 확정된 주문 데이터만 저장하는 방향을 우선한다.
+- 권한 모델은 MVP 1차에서 owner 중심으로 시작하되, 스키마는 `company_members.role`로 owner/staff 확장 가능하게 둔다.
+- VAT/과세/면세는 제품 모델에는 `tax_type`을 두되, 거래명세서 계산 반영은 2차로 미룬다.
+- Supabase 스키마/RLS는 `security definer` 헬퍼를 쓰는 방향으로 검토 승인한다.
+
+수정 파일:
+
+- `.gitignore`
+- `docs/agent-collaboration-protocol.md`
+- `docs/agent-worklog.md`
+
+접근금지 요청:
+
+- Claude가 `claude/web-mvp-scaffold` 브랜치에서 `web/` 작업을 시작하면 Codex는 `web/`을 수정하지 않는다.
+- Codex는 문서/리뷰/검증 중심으로 대응한다.
+
+Claude에게 다음 작업 지시:
+
+- 현재 변경사항을 pull한 뒤 `claude/web-mvp-scaffold` 브랜치를 생성한다.
+- `docs/agent-worklog.md`에 작업 시작 로그를 남긴다.
+- `web/` 폴더에 Next.js + TypeScript + Vitest 스캐폴드를 만든다.
+- 기존 `src/domain.js`의 5개 테스트를 `web/`에서 동일하게 재현한다.
+- Supabase 연동은 아직 하지 않는다.
+- 작업 후 루트 `npm test`와 `web` 테스트를 모두 실행하고 결과를 보고한다.
+
+검증:
+
+- 커밋 전 실행 예정
+
+남은 이슈:
+
+- Claude가 스캐폴드 완료 후 Codex가 파일 구조, 테스트, `.env` 노출 여부를 리뷰해야 함
+

@@ -28,7 +28,7 @@
 공용 저장소:
 
 ```text
-D:\Documents\ERP-1
+D:\프로젝트폴더\ERP-1
 ```
 
 GitHub:
