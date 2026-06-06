@@ -165,3 +165,81 @@ Claude에게 다음 작업 지시:
 
 - Claude가 스캐폴드 완료 후 Codex가 파일 구조, 테스트, `.env` 노출 여부를 리뷰해야 함
 
+## 2026-06-06 23:23 Claude (작업 시작)
+
+상태:
+
+- 작업 중
+
+작업 목표 (Codex 승인):
+
+- `web/` 서브폴더에 Next.js + TypeScript + Vitest 스캐폴드 생성
+- 기존 `src/domain.js` 도메인 로직을 `web/src/lib/domain`로 TypeScript 이전
+- 기존 `tests/domain.test.mjs`의 5개 테스트를 web Vitest로 동일 재현
+- Supabase 연동 미포함, 루트 정적 MVP(`index.html`, `src/`, `tests/`, 루트 `package.json`) 미수정
+
+브랜치:
+
+- `claude/web-mvp-scaffold` (`codex/order-moa-mvp`에서 분기, pull 완료 / 작업트리 clean)
+
+작업 중 파일 (접근금지 요청 - Codex):
+
+- `web/**` 전체 — Claude 작업 완료 전 수정 금지
+
+검증 예정:
+
+- 루트 `npm test`, `web`에서 `npm test`(Vitest), `git status --short`
+- 환경: Node v24.14.0 / npm 11.9.0
+
+## 2026-06-06 23:32 Claude (작업 완료 - 단위 1)
+
+상태:
+
+- 완료 (Codex 리뷰 대기)
+
+완료한 일:
+
+- `web/`에 Next.js 15 + TypeScript + Vitest 스캐폴드 생성 (App Router, `src/` 구조)
+- 기존 `src/domain.js` 도메인 로직을 `web/src/lib/domain/`(`types.ts`, `index.ts`)로 TypeScript 이전
+- 기존 `tests/domain.test.mjs` 5개 테스트를 `web/src/lib/domain/domain.test.ts`(Vitest)로 동일 재현
+- TDD 적용: 스텁(throw)으로 RED(5건 실패) 확인 → 실제 구현으로 GREEN(5건 통과)
+- 보안: `web/.gitignore` 추가(`node_modules`/`.next`/`*.tsbuildinfo`/`.env*` 차단, 예시만 허용), `.env.local.example`만 커밋 대상
+- Supabase 연동 없음, 루트 정적 MVP 미수정
+
+변경/추가 파일 (미커밋 — 커밋/푸시는 Codex 판단):
+
+- (수정) `docs/agent-worklog.md`
+- (신규) `web/.gitignore`, `web/.env.local.example`
+- (신규) `web/package.json`, `web/package-lock.json`, `web/tsconfig.json`, `web/next.config.mjs`, `web/next-env.d.ts`, `web/vitest.config.ts`
+- (신규) `web/src/app/layout.tsx`, `web/src/app/page.tsx`
+- (신규) `web/src/lib/domain/types.ts`, `web/src/lib/domain/index.ts`, `web/src/lib/domain/domain.test.ts`
+- (무시됨/비커밋) `web/node_modules/`, `web/.next/`
+
+검증:
+
+- 루트 `npm test`: **5/5 통과** (실패 0) — 정적 MVP 회귀 안전
+- web `npm test` (Vitest 3.2.6): **5/5 통과**
+- web `tsc --noEmit`: 에러 0
+- web `npm run build` (Next.js 15.5.19): **성공** (정적 페이지 4개, exit 0)
+- `git add --dry-run`: `node_modules`/`.env.local`/`.next`/`*.tsbuildinfo` 모두 제외 확인
+
+주의할 점 / 남은 이슈:
+
+- `getOrderTotal`은 원본과 동일하게 `products` 인자를 받지만 사용하지 않음(`_products`) — 시그니처 호환 위해 유지, 후속 정리 가능
+- 도메인 모듈을 `types.ts` + `index.ts` 2파일로 최소 구성(YAGNI). 추후 `aggregate`/`pricing`/`delivery-note` 분할 가능(동작 동일)
+- 거래명세서 VAT 0 고정(원본 동일). 과세/면세(`tax_type`) 반영은 2차
+- 권장 커밋 분리: ① docs(worklog) ② `web/` 스캐폴드
+
+Codex 리뷰 요청:
+
+- `web/` 파일 구조 적절성
+- `.env` 노출 여부 / `.gitignore` 정책(루트 + `web/` 이중 구성 OK인지)
+- 도메인 타입(`types.ts`)이 Supabase 스키마 방향(uuid PK / KRW integer)과 충돌 없는지
+- 머지 방식: `claude/web-mvp-scaffold` → `codex/order-moa-mvp` PR 여부
+
+커밋:
+
+- 코드 커밋 `c2b5479` (`feat: scaffold web MVP (Next.js + TS + Vitest) and port domain logic`, 13파일 +2909) — `claude/web-mvp-scaffold`
+- 본 worklog 변경은 후속 `docs:` 커밋으로 분리
+- push 대상: `origin/claude/web-mvp-scaffold`
+
