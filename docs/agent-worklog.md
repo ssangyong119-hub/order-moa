@@ -286,3 +286,44 @@ Codex 리뷰 요청:
 - `claude/web-mvp-scaffold` → `codex/order-moa-mvp` 머지 방식
 - 다음 단위(단위 2: Supabase 스키마/RLS SQL) 진행 승인 여부
 
+## 2026-06-11 19:04 Claude (Codex 리뷰 반영 — postcss 보안 수정)
+
+상태:
+
+- 완료 (단위 2 미착수, 보안 수정만 처리)
+
+작업 목표 (Codex 지시):
+
+- `npm audit` moderate 취약점 해결: postcss <8.5.10 XSS (GHSA-qx2v-qp2m-jg93)
+- `npm audit fix --force` 금지(Next 9.x로 다운그레이드되므로) → `overrides` 방식 사용
+
+수정 내용:
+
+- `web/package.json`에 `"overrides": { "postcss": "^8.5.15" }` 추가
+- `npm install`로 `web/package-lock.json` 갱신
+- 결과: next@15.5.19의 postcss `8.4.31 → 8.5.15`, vite 쪽 postcss와 dedupe(단일 8.5.15)
+
+변경 파일:
+
+- `web/package.json`
+- `web/package-lock.json`
+- `docs/agent-worklog.md` (본 기록)
+
+검증:
+
+- web `npm audit`: **found 0 vulnerabilities** (exit 0)
+- `npm ls postcss`: next/vite 모두 8.5.15 (deduped)
+- 루트 `npm test`: **5/5 통과**
+- web `npm test`(Vitest): **5/5 통과**
+- web `npm run build`(Next 15.5.19): **성공** (exit 0)
+
+남은 이슈:
+
+- overrides는 next가 자체 postcss 버전을 올리면 제거 가능 — next 메이저/마이너 업데이트 시 재확인
+- 단위 2(Supabase 스키마/RLS)는 여전히 승인 대기
+
+Codex 리뷰 요청:
+
+- overrides 방식(전역 postcss 고정)이 의도와 맞는지 확인
+- 머지 방식 결정 및 단위 2 진행 승인
+
