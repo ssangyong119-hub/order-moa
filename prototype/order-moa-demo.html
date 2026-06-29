@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>오더모아 데모 (정적 프로토타입)</title>
+<style>
+  :root{
+    --canvas:#faf9f5; --surface-soft:#f5f0e8; --surface-card:#efe9de; --cream-strong:#e8e0d2;
+    --ink:#141413; --body:#3d3d3a; --body-strong:#252523; --muted:#6c6a64; --muted-soft:#8e8b82;
+    --hairline:#e6dfd8; --hairline-soft:#ebe6df;
+    --primary:#cc785c; --primary-active:#a9583e; --primary-disabled:#e6dfd8; --on-primary:#fff;
+    --surface-dark:#181715; --on-dark:#faf9f5;
+    --success:#5db872; --warning:#d4a017; --error:#c64545; --amber:#e8a55a;
+    --serif:Georgia,"Times New Roman","Nanum Myeongjo","Batang",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;max-width:100%}
+  body{font-family:var(--sans);background:var(--canvas);color:var(--body);font-size:16px;line-height:1.55;overflow-x:hidden}
+  h1,h2,h3{font-family:var(--serif);font-weight:400;color:var(--ink);letter-spacing:-0.4px;margin:0}
+  h1{font-size:27px;line-height:1.2}
+  h2{font-size:19px;line-height:1.3;margin:18px 0 10px}
+  p{margin:0}
+  a{color:var(--primary);text-decoration:none}
+
+  /* top nav */
+  header{background:var(--canvas);border-bottom:1px solid var(--hairline);padding:0 18px;height:60px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:20}
+  .wordmark{display:flex;align-items:center;gap:8px;font-family:var(--serif);font-size:20px;color:var(--ink);letter-spacing:-0.3px}
+  .spike{flex:none}
+  .company{color:var(--muted);font-size:13px;padding-left:10px;border-left:1px solid var(--hairline)}
+  nav{margin-left:auto;display:flex;gap:6px}
+  nav button{background:transparent;border:1px solid transparent;color:var(--ink);padding:7px 12px;border-radius:8px;font-size:14px;font-weight:500;font-family:var(--sans);cursor:pointer}
+  nav button:hover{background:var(--surface-card)}
+
+  /* demo strip */
+  .demostrip{background:var(--surface-soft);border-bottom:1px solid var(--hairline-soft);color:var(--muted);font-size:12.5px;text-align:center;padding:6px 12px;letter-spacing:.2px}
+  .demostrip b{color:var(--body-strong);font-weight:600}
+
+  main{max-width:960px;margin:0 auto;padding:22px 18px 8px}
+  .view{display:none}
+  .view.active{display:block}
+  p.lead{color:var(--muted);margin:6px 0 18px;font-size:15px}
+
+  .panel{background:#fff;border:1px solid var(--hairline);border-radius:12px;padding:18px;margin-bottom:14px}
+  .panel.soft{background:var(--surface-card);border-color:transparent}
+  .panel.cream{background:var(--surface-soft);border-color:var(--hairline-soft)}
+
+  .btn{background:var(--primary);color:var(--on-primary);border:1px solid var(--primary);border-radius:8px;padding:11px 18px;font-size:15px;font-weight:600;font-family:var(--sans);cursor:pointer;line-height:1.1;min-height:44px}
+  .btn.sm{min-height:34px}
+  .btn:hover{background:var(--primary-active);border-color:var(--primary-active)}
+  .btn:disabled{background:var(--primary-disabled);border-color:var(--primary-disabled);color:var(--muted-soft);cursor:not-allowed}
+  .btn.secondary{background:var(--canvas);color:var(--ink);border-color:var(--hairline)}
+  .btn.secondary:hover{background:var(--surface-card)}
+  .btn.big{font-size:17px;padding:15px 22px;width:100%}
+  .btn.block{width:100%;margin-top:10px}
+  .btn.sm{padding:6px 12px;font-size:13px}
+
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .row>*{flex:1 1 200px}
+  .muted{color:var(--muted)}
+  .small{font-size:13px}
+  label{display:block;font-size:12.5px;color:var(--muted);margin:12px 0 5px;font-weight:500}
+  select,textarea,input[type=number],input[type=text]{width:100%;max-width:100%;padding:11px 12px;border:1px solid var(--hairline);border-radius:8px;font-size:16px;font-family:inherit;background:#fff;color:var(--ink);min-height:44px}
+  select:focus,textarea:focus,input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(204,120,92,.15)}
+  textarea{min-height:150px;resize:vertical;line-height:1.6}
+
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--hairline-soft);vertical-align:middle;overflow-wrap:anywhere}
+  thead th{color:var(--muted);font-weight:600;font-size:12px;border-bottom:1px solid var(--hairline)}
+  td.num,th.num{text-align:right;white-space:nowrap}
+  table input[type=number],table select{padding:7px 8px;font-size:16px;min-height:40px}
+  .scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
+  #parseTable{min-width:560px}
+  #summaryTable{min-width:420px}
+  .invoice-box table{min-width:440px}
+  .scrollhint{display:none;margin:0 0 8px;color:var(--muted)}
+
+  /* status badges with dot */
+  .tag{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;border:1px solid transparent;white-space:nowrap}
+  .tag::before{content:"";width:7px;height:7px;border-radius:50%;flex:none}
+  .tag.ok{background:#eaf4ec;color:#2f7d44;border-color:#cfe6d4}.tag.ok::before{background:var(--success)}
+  .tag.warn{background:#fbf1d6;color:#8a6d12;border-color:#f0e0ad}.tag.warn::before{background:var(--warning)}
+  .tag.bad{background:#f7e2e0;color:#a8392f;border-color:#eec8c4}.tag.bad::before{background:var(--error)}
+  .tag.np{background:#f7ecda;color:#8a5a22;border-color:#ecd7bb}.tag.np::before{background:var(--amber)}
+  tr.bad td{background:#fdf4f3}
+  tr.warn td{background:#fdf8ec}
+
+  .notice{font-size:13px;color:var(--muted);background:var(--surface-soft);border:1px solid var(--hairline-soft);border-radius:8px;padding:11px 12px;margin-top:12px;line-height:1.5}
+  .notice.warnbox{background:#fdf8ec;border-color:#f0e0ad;color:#7a610f}
+  .notice.okbox{background:#eef6f0;border-color:#cfe6d4;color:#2f7d44}
+
+  /* flow steps */
+  .flow{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;margin:2px 0 16px}
+  .flow .step{flex:1 1 150px;background:var(--surface-card);border-radius:10px;padding:12px 14px;position:relative}
+  .flow .step .n{font-family:var(--serif);font-size:13px;color:var(--primary);font-weight:400}
+  .flow .step .t{font-size:14px;color:var(--ink);font-weight:500;margin-top:2px}
+  .flow .arrow{align-self:center;color:var(--muted-soft);font-size:18px}
+  @media (max-width:600px){.flow .arrow{display:none}}
+
+  .stat{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0}
+  .stat .box{flex:1 1 100px;background:var(--surface-soft);border:1px solid var(--hairline-soft);border-radius:10px;padding:12px 14px}
+  .stat .box .k{color:var(--muted);font-size:12.5px}
+  .stat .box b{font-family:var(--serif);font-size:26px;font-weight:400;color:var(--ink);display:block;line-height:1.1;margin:2px 0}
+
+  .badge{display:inline-flex;align-items:center;gap:6px;background:var(--surface-card);color:var(--ink);border-radius:999px;padding:3px 11px;font-size:12px;font-weight:600}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-bottom:10px}
+
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--surface-dark);color:var(--on-dark);padding:11px 18px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;z-index:60;pointer-events:none}
+  .toast.show{opacity:1}
+
+  /* invoice document */
+  .invoice-box{border:1.5px solid var(--ink);border-radius:6px;padding:0;overflow:hidden;background:#fff}
+  .invoice-box .ititle{text-align:center;font-family:var(--serif);font-size:22px;letter-spacing:6px;color:var(--ink);padding:14px;border-bottom:1.5px solid var(--ink)}
+  .invoice-box .imeta{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:12px 16px;border-bottom:1px solid var(--hairline);font-size:13px}
+  .invoice-box .imeta .k{color:var(--muted)}
+  .invoice-box table{font-size:13.5px}
+  .invoice-box thead th{background:var(--surface-soft);border-bottom:1px solid var(--ink);color:var(--body-strong)}
+  .invoice-box td,.invoice-box th{border-right:1px solid var(--hairline-soft);padding:8px 10px}
+  .invoice-box td:last-child,.invoice-box th:last-child{border-right:none}
+  .itotal{display:flex;justify-content:flex-end;align-items:baseline;gap:14px;padding:12px 16px;border-top:1.5px solid var(--ink)}
+  .itotal .lbl{color:var(--muted);font-size:13px}
+  .itotal .amt{font-family:var(--serif);font-size:22px;color:var(--ink)}
+  .istamp{display:inline-block;border:1.5px solid var(--primary);color:var(--primary);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;letter-spacing:1px;transform:rotate(-4deg)}
+
+  footer{max-width:960px;margin:18px auto 36px;padding:14px 18px 0;border-top:1px solid var(--hairline-soft);color:var(--muted-soft);font-size:12px}
+
+  @media (max-width:600px){
+    body{font-size:15px} h1{font-size:22px}
+    .company{display:none}
+    main{padding:16px 13px}
+    nav button{padding:8px 10px;font-size:13px;min-height:40px}
+    .scrollhint{display:block}
+    .demostrip{font-size:11.5px}
+    .row>*{flex:1 1 100%}
+    .flow .step{flex:1 1 100%}
+  }
+  @media print{
+    header,nav,footer,.demostrip,.no-print{display:none !important}
+    .view{display:none !important}
+    #view-invoice{display:block !important}
+    body{background:#fff}
+    main{max-width:none;padding:0}
+    .panel{border:none;padding:0;margin:0}
+  }
+</style>
+</head>
+<body>
+<header class="no-print">
+  <span class="wordmark">
+    <svg class="spike" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><g fill="#141413">
+      <path d="M12 1.5 L13.5 9 L12 11 L10.5 9 Z"/><path d="M12 22.5 L13.5 15 L12 13 L10.5 15 Z"/>
+      <path d="M1.5 12 L9 10.5 L11 12 L9 13.5 Z"/><path d="M22.5 12 L15 10.5 L13 12 L15 13.5 Z"/>
+      <path d="M4.5 4.5 L10 9 L10 10 L9 10 L4.5 4.5 Z" opacity=".7"/><path d="M19.5 19.5 L14 15 L14 14 L15 14 L19.5 19.5 Z" opacity=".7"/>
+      <path d="M19.5 4.5 L14 10 L14 9 L15 9 Z" opacity=".7"/><path d="M4.5 19.5 L10 14 L10 15 L9 15 Z" opacity=".7"/>
+    </g></svg>
+    오더모아
+  </span>
+  <span class="company">데모 회사 · 오더모아 샘플상사</span>
+  <nav>
+    <button onclick="show('dash')">대시보드</button>
+    <button onclick="show('paste')">발주 붙여넣기</button>
+    <button onclick="show('summary')">합산표</button>
+  </nav>
+</header>
+<div class="demostrip no-print">정적 데모 · <b>DB 연결 없음</b> · 가명 샘플 데이터 · 새로고침하면 초기화됩니다</div>
+
+<main>
+  <!-- 대시보드 -->
+  <section id="view-dash" class="view active">
+    <h1>오늘 할 일</h1>
+    <p class="lead">카톡/문자 발주를 붙여넣으면 거래처별 주문표와 품목별 합산표가 나옵니다.</p>
+
+    <div class="flow">
+      <div class="step"><div class="n">1단계</div><div class="t">카톡에서 복사</div></div>
+      <span class="arrow">→</span>
+      <div class="step"><div class="n">2단계</div><div class="t">오더모아에 붙여넣기</div></div>
+      <span class="arrow">→</span>
+      <div class="step"><div class="n">3단계</div><div class="t">확인 후 합산표</div></div>
+    </div>
+
+    <div class="panel" id="emptyPanel">
+      <h2 style="margin-top:0">먼저 샘플로 흐름을 확인해보세요</h2>
+      <p class="muted small" style="margin:4px 0 14px">아직 등록된 데이터가 없습니다. 가명 샘플 데이터로 핵심 흐름을 바로 볼 수 있습니다. (개인정보 없음)</p>
+      <button class="btn" onclick="show('sample')">샘플 데이터 시작</button>
+    </div>
+
+    <div class="panel" id="readyPanel" style="display:none">
+      <button class="btn big" onclick="show('paste')">＋ 발주 붙여넣기</button>
+      <div class="stat" style="margin-top:14px">
+        <div class="box"><span class="k">오늘 주문</span><b id="dashOrders">0</b><span class="muted small">건</span></div>
+        <div class="box"><span class="k">거래처</span><b id="dashCust">0</b><span class="muted small">곳</span></div>
+        <div class="box"><span class="k">품목</span><b id="dashProd">0</b><span class="muted small">개</span></div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn secondary" onclick="show('summary')">품목별 합산표</button>
+        <button class="btn secondary" onclick="show('invoice')">거래명세서</button>
+        <button class="btn secondary" onclick="show('sample')">거래처 / 품목 / 단가</button>
+      </div>
+      <p class="notice">샘플 데이터가 적재되어 있습니다. <button class="btn secondary sm" onclick="resetData()">샘플 초기화</button></p>
+    </div>
+  </section>
+
+  <!-- 샘플 데이터 시작 -->
+  <section id="view-sample" class="view">
+    <h1>샘플 데이터 시작</h1>
+    <p class="lead">실제 거래처 데이터 없이도 흐름을 확인할 수 있게, 식자재 납품업 기준 <b>가명 데이터</b>를 채웁니다.</p>
+    <div class="panel">
+      <h2 style="margin-top:0">포함되는 데이터</h2>
+      <ul class="small" style="color:var(--body);line-height:1.8;padding-left:18px;margin:6px 0">
+        <li><b>거래처</b> — 가람식당, 한빛카페, 으뜸반찬, 행복마트, 늘봄분식</li>
+        <li><b>품목</b> — 콩나물, 두부, 미나리, 깐양파, 대파, 양배추, 계란, 식탁보, 위생장갑, 키친타월 등</li>
+        <li><b>별칭</b> — 콩→콩나물, 두부판→두부, 양파→깐양파 등</li>
+        <li><b>거래처별 단가</b> 일부 (미등록 품목은 0원 경고로 표시)</li>
+        <li><b>발주 예시</b> 5건 (정형·별칭·수량 불확실·미매칭 포함)</li>
+      </ul>
+      <p class="notice">개인정보 / 실거래처명 / 전화·사업자번호 없음. 모두 테스트용 가명입니다.</p>
+      <button class="btn block" onclick="loadSample()">샘플 데이터 불러오기</button>
+    </div>
+    <button class="btn secondary" onclick="show('dash')">← 대시보드</button>
+  </section>
+
+  <!-- 발주 붙여넣기 -->
+  <section id="view-paste" class="view">
+    <h1>발주 붙여넣기</h1>
+    <p class="lead">거래처를 고르고, 카톡/문자로 받은 발주를 붙여넣은 뒤 [파싱]을 누르세요.</p>
+    <div class="panel">
+      <label>거래처</label>
+      <select id="pasteCustomer"></select>
+
+      <label>샘플 발주 예시로 채우기</label>
+      <select id="sampleOrderPick" onchange="fillSample(this.value)">
+        <option value="">— 직접 입력 또는 예시 선택 —</option>
+      </select>
+
+      <label>발주 원문</label>
+      <textarea id="pasteText" placeholder="콩나물 2박스&#10;두부 3판&#10;미나리 5단"></textarea>
+
+      <p class="notice">
+        붙여넣은 원문은 확인을 위해 저장됩니다. 원문에 연락처·메모 등 민감정보가 있을 수 있습니다.
+        원문은 언제든 삭제할 수 있으며, <b>삭제해도 저장된 주문은 유지</b>됩니다. (삭제는 설정/데이터 관리)
+      </p>
+      <button class="btn block" id="parseBtn" onclick="doParse()">파싱</button>
+    </div>
+    <button class="btn secondary" onclick="show('dash')">← 대시보드</button>
+  </section>
+
+  <!-- 파싱 결과 -->
+  <section id="view-parse" class="view">
+    <h1>파싱 결과 확인 / 수정</h1>
+    <p class="lead">시스템이 후보를 제안합니다. <b>미매칭·수량 확인</b> 항목은 사람이 고친 뒤에야 주문을 확정할 수 있습니다.</p>
+    <div class="legend">
+      <span class="tag ok">정상</span>
+      <span class="tag warn">수량 확인</span>
+      <span class="tag bad">미매칭</span>
+      <span class="tag np">단가 미등록(0원)</span>
+    </div>
+    <p class="scrollhint small">표가 화면보다 넓으면 좌우로 넘겨보세요 →</p>
+    <div class="panel scroll-x">
+      <table id="parseTable">
+        <thead><tr>
+          <th>원문</th><th>품목</th><th class="num">수량</th><th>단위</th><th class="num">단가</th><th class="num">금액</th><th>상태</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div id="parseMsg" class="notice"></div>
+    <div class="row">
+      <button class="btn" id="confirmBtn" onclick="confirmOrder()">주문 확정</button>
+      <button class="btn secondary" onclick="show('paste')">← 다시 붙여넣기</button>
+    </div>
+  </section>
+
+  <!-- 품목별 합산표 -->
+  <section id="view-summary" class="view">
+    <h1>품목별 합산표</h1>
+    <p class="lead">확정된 주문을 품목별로 합산합니다. 도매상 발주에 그대로 쓰는 표입니다.</p>
+    <div class="panel cream">
+      <div class="row">
+        <div><label>날짜</label><input type="text" id="sumDate" value="오늘" readonly></div>
+        <div><label>거래처</label>
+          <select id="sumCustomer" onchange="renderSummary()"><option value="">전체</option></select>
+        </div>
+      </div>
+    </div>
+    <p class="scrollhint small">표가 화면보다 넓으면 좌우로 넘겨보세요 →</p>
+    <div class="panel scroll-x">
+      <table id="summaryTable">
+        <thead><tr><th>품목</th><th>단위</th><th class="num">총수량</th><th class="num">관련 거래처 수</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p id="summaryEmpty" class="muted small" style="display:none">아직 확정된 주문이 없습니다. 발주를 붙여넣어 확정해보세요.</p>
+    </div>
+    <div class="row">
+      <button class="btn secondary" onclick="exportCsv()">CSV 내보내기</button>
+      <button class="btn secondary" onclick="show('invoice')">거래명세서 미리보기 →</button>
+      <button class="btn secondary" onclick="show('dash')">← 대시보드</button>
+    </div>
+  </section>
+
+  <!-- 거래명세서 -->
+  <section id="view-invoice" class="view">
+    <h1 class="no-print">거래명세서 미리보기</h1>
+    <p class="lead no-print">확정된 주문의 납품 명세입니다. VAT 계산은 하지 않으며 <b>공급가 합계</b>만 표시합니다.</p>
+    <div class="panel no-print">
+      <label>주문 선택</label>
+      <select id="invoicePick" onchange="renderInvoice()"></select>
+    </div>
+    <div class="panel" style="border:none;padding:0">
+      <div id="invoiceBox"><p class="muted small">확정된 주문이 없습니다.</p></div>
+    </div>
+    <div class="row no-print">
+      <button class="btn" onclick="window.print()">인쇄</button>
+      <span class="muted small" style="align-self:center">PDF 생성은 후순위(미구현) · 인쇄는 데스크톱 권장</span>
+      <button class="btn secondary" onclick="show('summary')">← 합산표</button>
+    </div>
+  </section>
+</main>
+
+<footer class="no-print">
+  오더모아 · 정적 데모 프로토타입 — 실제 DB / Supabase / API 연결 없음 · 모든 데이터는 브라우저 메모리에서만 동작 · 가명 샘플
+</footer>
+<div id="toast" class="toast"></div>
+
+<script>
+/* ---------- 샘플 데이터 (docs/sample-data-definition.md 기반, 가명) ---------- */
+const CUSTOMERS = [
+  {id:'garam', name:'가람식당'}, {id:'hanbit', name:'한빛카페'},
+  {id:'eutteum', name:'으뜸반찬'}, {id:'happy', name:'행복마트'}, {id:'neulbom', name:'늘봄분식'}
+];
+const PRODUCTS = [
+  {id:'kong', name:'콩나물', unit:'박스'}, {id:'sukju', name:'숙주', unit:'박스'},
+  {id:'dubu', name:'두부', unit:'판'}, {id:'minari', name:'미나리', unit:'단'},
+  {id:'onion', name:'깐양파', unit:'10kg'}, {id:'daepa', name:'대파', unit:'단'},
+  {id:'cabbage', name:'양배추', unit:'통'}, {id:'mu', name:'무', unit:'개'},
+  {id:'buchu', name:'부추', unit:'단'}, {id:'egg', name:'계란', unit:'판'},
+  {id:'eomuk', name:'어묵', unit:'박스'}, {id:'tteok', name:'떡국떡', unit:'kg'},
+  {id:'oil', name:'식용유', unit:'통'}, {id:'cloth', name:'식탁보', unit:'BOX'},
+  {id:'glove', name:'위생장갑', unit:'박스'}, {id:'towel', name:'키친타월', unit:'박스'},
+  {id:'paengi', name:'팽이버섯', unit:'봉'}, {id:'saesong', name:'새송이버섯', unit:'팩'}
+];
+const ALIASES = [
+  ['콩박스','kong'],['콩','kong'],['숙주나물','sukju'],['두부판','dubu'],['미나리단','minari'],
+  ['양파','onion'],['대파단','daepa'],['새송이','saesong'],['팽이','paengi'],['계란판','egg'],['장갑','glove']
+];
+// 거래처별 단가 (일부만; 미등록은 0원 경고)
+const PRICES = {
+  garam:{kong:8000,dubu:2500,minari:3500,daepa:4000,egg:6500},
+  eutteum:{kong:7500,dubu:2300,onion:11000,mu:1500,buchu:3000},
+  hanbit:{egg:6800,towel:9000,oil:5500},
+  happy:{glove:4500,cloth:19500,towel:8500,eomuk:12000},
+  neulbom:{eomuk:12500,tteok:4500,cabbage:3000,daepa:4200}
+};
+const SAMPLE_ORDERS = [
+  {customer:'garam',  label:'① 정형 (가람식당)',        text:'콩나물 2박스\n두부 3판\n미나리 5단'},
+  {customer:'eutteum',label:'② 별칭 (으뜸반찬)',        text:'콩 1박스\n두부판 2\n양파 1'},
+  {customer:'neulbom',label:'③ 수량 불확실 (늘봄분식)', text:'어묵 세 박스\n떡국떡 조금\n대파 큰거로'},
+  {customer:'garam',  label:'④ 단가 미등록 포함 (가람식당)', text:'콩나물 1박스\n양배추 2통'},
+  {customer:'happy',  label:'⑤ 미매칭 포함 (행복마트)',  text:'위생장갑 2박스\n랩 3개'}
+];
+
+const UNITS = ['박스','BOX','10kg','kg','판','단','통','개','포기','봉','팩','병'];
+const UNCERTAIN = ['한','두','세','네','다섯','여섯','몇','조금','약간','많이','큰거','작은거','적당','대충'];
+
+/* ---------- 상태 ---------- */
+let loaded = false;
+let parseLines = [];      // 현재 파싱 결과
+let parseCustomer = null;
+let confirmedOrders = []; // [{id,customerId,customerName,lines:[{productId,name,unit,qty,price,amount}]}]
+let orderSeq = 0;
+
+/* ---------- 유틸 ---------- */
+const won = n => Number(n).toLocaleString('ko-KR') + '원';
+const productById = id => PRODUCTS.find(p=>p.id===id);
+function priceFor(custId, prodId){ return (PRICES[custId]||{})[prodId] ?? null; }
+function toast(msg){ const t=document.getElementById('toast'); if(!t) return; t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
+
+/* 사용자에게 개발자용 오류/JS 에러가 보이지 않도록 전역 가드 */
+window.onerror = function(){ try{ toast('일시적인 문제가 있었습니다. 다시 시도해주세요.'); }catch(e){} return true; };
+window.addEventListener('unhandledrejection', function(ev){ try{ ev.preventDefault(); }catch(e){} });
+
+/* ---------- 화면 전환 ---------- */
+function show(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  if(name==='summary') renderSummary();
+  if(name==='invoice') renderInvoice();
+  if(name==='dash') renderDash();
+  window.scrollTo(0,0);
+}
+
+/* ---------- 샘플 로딩 ---------- */
+function loadSample(){
+  loaded = true;
+  // 거래처 select 채우기
+  const cs = document.getElementById('pasteCustomer');
+  const cs2 = document.getElementById('sumCustomer');
+  cs.innerHTML=''; cs2.innerHTML='<option value="">전체</option>';
+  CUSTOMERS.forEach(c=>{
+    cs.insertAdjacentHTML('beforeend',`<option value="${c.id}">${c.name}</option>`);
+    cs2.insertAdjacentHTML('beforeend',`<option value="${c.id}">${c.name}</option>`);
+  });
+  const sp = document.getElementById('sampleOrderPick');
+  sp.innerHTML='<option value="">— 직접 입력 또는 예시 선택 —</option>';
+  SAMPLE_ORDERS.forEach((o,i)=> sp.insertAdjacentHTML('beforeend',`<option value="${i}">${o.label}</option>`));
+  renderDash();
+  toast('샘플 데이터를 불러왔습니다');
+  show('dash');
+}
+function resetData(){
+  loaded=false; confirmedOrders=[]; parseLines=[]; renderDash(); toast('샘플 데이터를 초기화했습니다'); show('dash');
+}
+function renderDash(){
+  document.getElementById('emptyPanel').style.display = loaded?'none':'block';
+  document.getElementById('readyPanel').style.display = loaded?'block':'none';
+  document.getElementById('dashOrders').textContent = confirmedOrders.length;
+  document.getElementById('dashCust').textContent = loaded?CUSTOMERS.length:0;
+  document.getElementById('dashProd').textContent = loaded?PRODUCTS.length:0;
+}
+
+/* ---------- 발주 붙여넣기 ---------- */
+function fillSample(idx){
+  if(idx==='') return;
+  const o = SAMPLE_ORDERS[+idx];
+  document.getElementById('pasteCustomer').value = o.customer;
+  document.getElementById('pasteText').value = o.text;
+}
+
+/* ---------- 파싱 (규칙 기반, 데모) ---------- */
+function findProduct(text){
+  const t = text.replace(/\s+/g,'');
+  // 별칭 우선 (긴 것부터)
+  const al = [...ALIASES].sort((a,b)=>b[0].length-a[0].length);
+  for(const [alias,pid] of al){ if(t.includes(alias)) return productById(pid); }
+  const ps = [...PRODUCTS].sort((a,b)=>b.name.length-a.name.length);
+  for(const p of ps){ if(t.includes(p.name)) return p; }
+  return null;
+}
+function detectUnit(text){ for(const u of UNITS){ if(text.includes(u)) return u; } return ''; }
+function isUncertain(text){ return UNCERTAIN.some(w=>text.includes(w)); }
+
+function doParse(){
+  const cust = document.getElementById('pasteCustomer').value;
+  const text = document.getElementById('pasteText').value.trim();
+  if(!cust){ toast('거래처를 선택하세요'); return; }
+  if(!text){ toast('발주 원문을 입력하세요'); return; }
+  parseCustomer = cust;
+  const segs = text.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
+  parseLines = segs.map(seg=>{
+    const prod = findProduct(seg);
+    const num = seg.match(/\d+/);
+    const qty = num ? parseInt(num[0],10) : null;
+    const unit = detectUnit(seg) || (prod?prod.unit:'');
+    if(!prod){
+      return {raw:seg, productId:null, name:null, qty:qty, unit:unit, price:0, status:'unmatched'};
+    }
+    const price = priceFor(cust, prod.id);
+    let status;
+    if(qty===null) status = 'uncertain';      // 수량 없음/한글수사 → 확인필요
+    else if(price===null) status='noprice';     // 단가 미등록 → 0원 경고(확정은 가능)
+    else status='ok';
+    if(qty===null && !isUncertain(seg)) status='uncertain';
+    return {raw:seg, productId:prod.id, name:prod.name, qty:qty, unit:unit||prod.unit, price:(price===null?0:price), status:status};
+  });
+  renderParse();
+  show('parse');
+}
+
+function recompute(i, field, val){
+  const ln = parseLines[i];
+  if(field==='qty'){ ln.qty = val===''?null:parseInt(val,10); }
+  if(field==='product'){
+    ln.productId = val||null;
+    const p = productById(val);
+    ln.name = p?p.name:null;
+    if(p && !detectUnit(ln.raw)) ln.unit = p.unit;
+  }
+  // 상태 재계산
+  if(!ln.productId){ ln.status='unmatched'; ln.price=0; }
+  else {
+    const price = priceFor(parseCustomer, ln.productId);
+    ln.price = price===null?0:price;
+    if(ln.qty===null || isNaN(ln.qty)) ln.status='uncertain';
+    else if(price===null) ln.status='noprice';
+    else ln.status='ok';
+  }
+  renderParse();
+}
+
+function renderParse(){
+  const tb = document.querySelector('#parseTable tbody');
+  tb.innerHTML='';
+  parseLines.forEach((ln,i)=>{
+    const amount = (ln.productId && ln.qty!=null && !isNaN(ln.qty)) ? ln.price*ln.qty : 0;
+    let prodCell, qtyCell, statusCell, rowClass='';
+    if(ln.status==='unmatched'){
+      rowClass='bad';
+      let opts = '<option value="">— 품목 선택 —</option>' + PRODUCTS.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+      prodCell = `<select onchange="recompute(${i},'product',this.value)">${opts}</select>`;
+      statusCell = '<span class="tag bad">미매칭</span>';
+    } else {
+      prodCell = ln.name;
+      statusCell = ln.status==='uncertain' ? '<span class="tag warn">수량 확인</span>'
+                 : ln.status==='noprice' ? '<span class="tag np">단가 미등록</span>'
+                 : '<span class="tag ok">정상</span>';
+      if(ln.status==='uncertain') rowClass='warn';
+    }
+    qtyCell = `<input type="number" min="1" style="max-width:80px" value="${ln.qty==null?'':ln.qty}" onchange="recompute(${i},'qty',this.value)">`;
+    tb.insertAdjacentHTML('beforeend',
+      `<tr class="${rowClass}">
+        <td>${ln.raw}</td>
+        <td>${prodCell}</td>
+        <td class="num">${qtyCell}</td>
+        <td>${ln.unit||''}</td>
+        <td class="num">${ln.status==='noprice'?'<span class="tag np">0원</span>':(ln.productId?won(ln.price):'-')}</td>
+        <td class="num">${ln.productId?won(amount):'-'}</td>
+        <td>${statusCell}</td>
+      </tr>`);
+  });
+  const blocked = parseLines.some(l=>l.status==='unmatched'||l.status==='uncertain');
+  const hasNoprice = parseLines.some(l=>l.status==='noprice');
+  const btn = document.getElementById('confirmBtn');
+  btn.disabled = blocked || parseLines.length===0;
+  const msg = document.getElementById('parseMsg');
+  if(blocked){
+    msg.className='notice warnbox';
+    msg.innerHTML = '⚠️ <b>미매칭·수량 확인</b> 항목이 있어 주문을 확정할 수 없습니다. 품목을 고르거나 수량을 입력하세요.';
+  } else if(hasNoprice){
+    msg.className='notice';
+    msg.innerHTML = '단가 미등록 품목은 0원으로 표시됩니다(경고). 그대로 확정할 수 있습니다.';
+  } else {
+    msg.className='notice okbox';
+    msg.innerHTML = '모든 항목이 정상입니다. 주문을 확정하세요.';
+  }
+}
+
+function confirmOrder(){
+  const lines = parseLines.filter(l=>l.productId && l.qty!=null).map(l=>({
+    productId:l.productId, name:l.name, unit:l.unit, qty:l.qty, price:l.price, amount:l.price*l.qty
+  }));
+  if(lines.length===0){ toast('확정할 라인이 없습니다'); return; }
+  const c = CUSTOMERS.find(x=>x.id===parseCustomer);
+  confirmedOrders.push({id:++orderSeq, customerId:parseCustomer, customerName:c.name, lines});
+  toast('주문을 확정했습니다');
+  renderDash();
+  show('summary');
+}
+
+/* ---------- 합산표 ---------- */
+function renderSummary(){
+  const filter = document.getElementById('sumCustomer').value;
+  const map = {}; // productId -> {name,unit,qty,custSet}
+  confirmedOrders.forEach(o=>{
+    if(filter && o.customerId!==filter) return;
+    o.lines.forEach(l=>{
+      if(!map[l.productId]) map[l.productId]={name:l.name,unit:l.unit,qty:0,custs:new Set()};
+      map[l.productId].qty += l.qty;
+      map[l.productId].custs.add(o.customerId);
+    });
+  });
+  const rows = Object.values(map).sort((a,b)=> PRODUCTS.findIndex(p=>p.name===a.name)-PRODUCTS.findIndex(p=>p.name===b.name));
+  const tb = document.querySelector('#summaryTable tbody'); tb.innerHTML='';
+  rows.forEach(r=> tb.insertAdjacentHTML('beforeend',
+    `<tr><td>${r.name}</td><td>${r.unit}</td><td class="num"><b>${r.qty}</b></td><td class="num">${r.custs.size}</td></tr>`));
+  document.getElementById('summaryEmpty').style.display = rows.length?'none':'block';
+}
+function exportCsv(){
+  const rows=[['품목','단위','총수량','관련 거래처 수']];
+  document.querySelectorAll('#summaryTable tbody tr').forEach(tr=>{
+    const t=[...tr.children].map(td=>td.textContent.trim()); rows.push(t);
+  });
+  if(rows.length===1){ toast('내보낼 데이터가 없습니다'); return; }
+  const csv='﻿'+rows.map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='품목별_합산표.csv'; a.click(); URL.revokeObjectURL(url);
+  toast('CSV를 내보냈습니다');
+}
+
+/* ---------- 거래명세서 ---------- */
+function renderInvoice(){
+  const pick=document.getElementById('invoicePick');
+  pick.innerHTML = confirmedOrders.map(o=>`<option value="${o.id}">#${o.id} ${o.customerName}</option>`).join('');
+  const box=document.getElementById('invoiceBox');
+  if(confirmedOrders.length===0){ box.innerHTML='<p class="muted small">확정된 주문이 없습니다.</p>'; return; }
+  const id = +(pick.value || confirmedOrders[confirmedOrders.length-1].id);
+  pick.value=id;
+  const o = confirmedOrders.find(x=>x.id===id);
+  const total = o.lines.reduce((s,l)=>s+l.amount,0);
+  box.innerHTML =
+    `<div class="invoice-box">
+      <div class="ititle">거 래 명 세 서</div>
+      <div class="imeta">
+        <div><span class="k">거래처</span> &nbsp;<b>${o.customerName}</b> 귀하</div>
+        <div><span class="k">공급자</span> &nbsp;오더모아 샘플상사</div>
+        <div><span class="k">일자</span> &nbsp;오늘 (데모)</div>
+      </div>
+      <div class="scroll-x"><table>
+        <thead><tr><th>품목</th><th class="num">수량</th><th>단위</th><th class="num">단가</th><th class="num">금액</th></tr></thead>
+        <tbody>${o.lines.map(l=>`<tr><td>${l.name}</td><td class="num">${l.qty}</td><td>${l.unit}</td><td class="num">${l.price?won(l.price):'<span class=\"tag np\">0원</span>'}</td><td class="num">${won(l.amount)}</td></tr>`).join('')}</tbody>
+      </table></div>
+      <div class="itotal"><span class="lbl">공급가 합계</span><span class="amt">${won(total)}</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:0 16px 14px">
+        <span class="muted small">※ VAT 계산 없음 (1차 MVP)</span>
+        <span class="istamp">정적 데모</span>
+      </div>
+    </div>`;
+}
+
+/* ---------- 초기 ---------- */
+renderDash();
+</script>
+</body>
+</html>
