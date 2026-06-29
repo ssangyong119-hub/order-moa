@@ -1,0 +1,655 @@
+# 오더모아 기능정의서
+
+작성일: 2026-06-29
+작성 주체: Claude (기능정의)
+상위 문서: `docs/requirements-definition.md`
+근거 문서: `docs/order-moa-product-definition.md`, `docs/survey-analysis-2026-06-06.md`, `docs/web-mvp-roadmap.md`, `docs/web-security-checklist.md`, `docs/web-architecture-options.md`
+
+> 표본 한계: 수요 근거가 된 설문은 **5건**으로 작다. 본 문서는 기능 사양을 정의할 뿐, 우선순위·수익화 판단은 가설 전제다.
+
+---
+
+## 1. 문서 목적
+
+- 본 문서는 **요구사항정의서 다음 단계**다. 요구사항정의서가 "무엇을 만들지"를 정했다면, 기능정의서는 "어떻게 동작하는지"를 정의한다.
+- 각 기능(F1~F13)의 **입력 / 처리 / 출력**, 각 화면(S1~S11)의 **동작·상태·예외**, 그리고 **데이터 객체·검증 규칙·RLS 정책**을 개발 착수 가능한 수준으로 구체화한다.
+- 새 기능을 추가하지 않는다. 요구사항정의서의 F1~F13 / S1~S11 범위 안에서만 정의한다.
+
+---
+
+## 2. 기능 범위 요약
+
+| 구분 | 기능 |
+|---|---|
+| 1차 MVP 필수 | F1 로그인 · F2 회사/사업장 생성 · F3 거래처 관리 · F4 품목 관리 · F5 품목 별칭 관리 · F6 거래처별 단가 관리 · F7 발주 붙여넣기 · F8 발주 파싱 · F9 파싱 확인/수정 · F10 주문 저장 · F11 품목별 합산표 · F12 거래처별 주문표 · F13 거래명세서 미리보기 |
+| 1차 단순화 | 거래명세서 인쇄(미리보기 기반) · CSV/Excel 내보내기 · 미수금 수동 체크 · 샘플 데이터 생성 · 모바일 반응형 |
+| 2차(후순위) | 단가 변경 이력 · 매입가/마진 · 미수금/입금 본격 관리 · 오래된 미수금 알림 · 월 정산표 · 직원 권한 UI · 세금계산서 부족/초과 표시 |
+| 명시적 제외 | 카톡 자동 읽기 · 완전 자동 OCR · 홈택스 직접 발행 · 은행 자동 매칭 · 이카운트 연동 · 전체 재고 ERP |
+
+### 2.1 영업/검증용 MVP 우선순위 (`mvp-validation-strategy.md` 반영)
+
+> 1차 MVP는 완성형 ERP가 아니라 **영업/검증용 MVP**다. 아래는 새 기능 추가가 아니라 F1~F13의 **우선순위·운영 관점 보정**이다.
+
+**A. 관점**
+- 1차 MVP는 완성형 ERP가 아니라 **영업/검증용 MVP**다.
+- 실제 사용자가 직접 모든 데이터를 넣게 하지 않고, **초기 세팅은 우리가 대행**할 수 있다.
+- **샘플 데이터는 시연을 위해 필수**다.
+- 빠른 **거래처/품목/단가 입력 편의**가 중요하다.
+- 첫 테스트 사용자는 **"발주 붙여넣기 → 확인/수정 → 품목별 합산표"** 흐름만 경험해도 된다.
+- 거래명세서/미수금/세금계산서는 **후순위 검증 가치**다.
+
+**B. 영업/검증용 우선순위** (F1~F13은 유지, 우선순위만 별도)
+
+| 순위 | 항목 | 대응 기능 |
+|---|---|---|
+| 1 | 샘플 데이터 | 시연 지원(아래 C) |
+| 2 | 거래처/품목/단가 빠른 등록 | F3·F4·F5·F6 |
+| 3 | 발주 붙여넣기 | F7 |
+| 4 | 파싱 결과 수정 | F8·F9 |
+| 5 | 품목별 합산표 | F11 |
+| 6 | 거래처별 주문표 | F12 |
+| 7 | 거래명세서 미리보기 | F13 |
+| 8 | 미수금/세금계산서 후순위 검증 | 2차 |
+
+**C. 샘플 데이터** (새 대형 기능 아님 — 1차 단순화/시연 지원 기능)
+- 새 대형 기능이 아니라 §2 "샘플 데이터 생성"에 해당하는 **시연 지원용 단순 기능**으로 정의한다.
+- 포함: 거래처(**가명 데이터**) · 품목/별칭 · 거래처별 단가 · 발주 예시.
+- **개인정보/실거래처명 금지**(가명·자리표시자만).
+
+---
+
+## 3. 열린 질문 확정값 (요구사항정의서 Q1~Q5)
+
+| Q | 확정값 | 기능 반영 |
+|---|---|---|
+| Q1 발주 원문 저장 | 1차는 **확정 주문 저장 우선** + **`raw_text` 기본 저장 ON**. 사용자가 원문 삭제 가능(삭제 시 **확정 주문은 유지, `raw_text`만 null**). 장기 보관 정책·첨부/OCR 원본은 후순위/제외 | F7/F8/F10, `order_imports.raw_text` 기본 저장 + 삭제(→null) 동작 |
+| Q2 거래명세서 PDF | 1차는 **인쇄 가능한 미리보기 화면 우선**. PDF 파일 생성은 후순위 | F13, S11은 브라우저 인쇄(`window.print`) 대상 레이아웃 |
+| Q3 미수금 | 1차는 주문/거래명세서 기준 **수동 미수 체크만**. 입금 자동 매칭·오래된 미수금 알림은 2차 | `receivables` 수동 status 토글만, 자동화 없음 |
+| Q4 세금계산서 | 1차 **직접 발행 안 함**. 월말 정산/세금계산서 **자료 정리 후보만 확장 가능**하게 데이터 구조 유지 | `tax_invoice` 후보 객체는 스키마 여지만, 1차 기능 없음 |
+| Q5 거래처 주문 링크 | 1차 **제외**. 거래처가 링크를 쓸지 검증 후 실험 | 기능/화면 없음 |
+
+---
+
+## 4. 화면 목록 정의 (S1~S11)
+
+### S1 로그인
+- 화면 목적: 인증된 사용자만 앱 진입
+- 접근 권한: 비로그인 포함 전체
+- 주요 UI: 이메일 입력, 로그인 버튼(또는 소셜 1종), 안내 문구
+- 사용자 행동: 인증 정보 입력 → 로그인
+- 성공 상태: 회사 보유 시 S3, 미보유 시 S2로 이동
+- 빈 상태: 입력 전 비활성 버튼
+- 오류 상태: 인증 실패 메시지, 네트워크 오류 재시도
+- 연결 기능: F1
+- 연결 데이터: auth user
+
+### S2 회사 선택/생성
+- 화면 목적: 최초 회사 생성 또는 소속 회사 선택
+- 접근 권한: 로그인 사용자
+- 주요 UI: 소속 회사 목록, "회사 만들기" 폼(상호, 사업자번호 선택)
+- 사용자 행동: 회사 생성 또는 선택
+- 성공 상태: 회사 컨텍스트 설정 후 S3
+- 빈 상태: 소속 회사 0개 → 생성 폼만 노출
+- 오류 상태: 상호 누락, 생성 실패
+- 연결 기능: F2
+- 연결 데이터: companies, company_members
+
+### S3 대시보드
+- 화면 목적: 오늘 발주 입력/합산표로의 진입점
+- 접근 권한: 회사 소속 사용자
+- 주요 UI: "발주 붙여넣기" 진입, 오늘 주문 수/합산 요약, 거래처/품목/단가 바로가기
+- 사용자 행동: 주요 작업 화면으로 이동
+- 성공 상태: 요약 카드 표시
+- 빈 상태: 데이터 없음 → "거래처/품목부터 등록" 안내 + 샘플 생성 버튼
+- 오류 상태: 로드 실패 재시도
+- 연결 기능: F7, F11, F3~F6
+- 연결 데이터: orders, order_items(집계)
+
+### S4 거래처 목록/등록/수정
+- 화면 목적: 거래처 CRUD
+- 접근 권한: 회사 소속 사용자
+- 주요 UI: 목록(검색), 등록/수정 폼(상호, 전화, 주소, 메모), 보관(archive)
+- 사용자 행동: 거래처 추가/수정/보관
+- 성공 상태: 목록 갱신, 토스트
+- 빈 상태: "첫 거래처 등록" 안내
+- 오류 상태: 상호 누락, 저장 실패
+- 연결 기능: F3
+- 연결 데이터: customers
+
+### S5 품목 목록/등록/수정
+- 화면 목적: 품목 + 별칭 관리
+- 접근 권한: 회사 소속 사용자
+- 주요 UI: 품목 목록, 등록/수정 폼(품목명, 기본단위, 과세구분), 별칭 입력(다중)
+- 사용자 행동: 품목/별칭 추가·수정·보관
+- 성공 상태: 목록 갱신
+- 빈 상태: "첫 품목 등록" 안내
+- 오류 상태: 품목명 누락, 중복 별칭 경고
+- 연결 기능: F4, F5
+- 연결 데이터: products, product_aliases
+
+### S6 단가 관리
+- 화면 목적: 거래처별 판매 단가 등록/수정
+- 접근 권한: 회사 소속 사용자
+- 주요 UI: 거래처 선택 → 품목별 단가 입력 표(품목, 단가, 적용일)
+- 사용자 행동: 단가 입력/수정
+- 성공 상태: 저장 후 표 갱신
+- 빈 상태: 단가 미등록 품목 표시
+- 오류 상태: 단가 음수, 저장 실패
+- 연결 기능: F6
+- 연결 데이터: customer_prices
+
+### S7 발주 붙여넣기
+- 화면 목적: 카톡/문자 원문 입력 후 파싱 시작
+- 접근 권한: 회사 소속 사용자
+- 주요 UI: 거래처 선택, 원문 textarea, "파싱" 버튼, 원문 길이 표시
+- 사용자 행동: 거래처 선택 + 원문 붙여넣기 → 파싱
+- 성공 상태: S8로 파싱 결과 전달
+- 빈 상태: 원문 빈칸 → 버튼 비활성
+- 오류 상태: 거래처 미선택, 원문 길이 초과
+- 연결 기능: F7, F8
+- 연결 데이터: order_imports(임시)
+
+### S8 파싱 결과 확인
+- 화면 목적: 파싱 후보를 사람이 확인·수정·확정
+- 접근 권한: 회사 소속 사용자
+- 주요 UI: 라인별 표(원문 토막, 매칭 품목, 수량, 단위, 단가, 상태), 미매칭 경고(빨강), "별칭으로 등록", "주문 확정"
+- 사용자 행동: 매칭/수량/단위/단가 수정, 미매칭 해결, 확정
+- 성공 상태: 주문 저장 후 S9 또는 S3
+- 빈 상태: 파싱 결과 0줄 → 수동 추가 행
+- 오류 상태: 미매칭/수량 미확정 잔존 시 확정 차단
+- 연결 기능: F8, F9, F10, F5(별칭 등록)
+- 연결 데이터: order_imports, products, product_aliases, customer_prices
+
+### S9 주문 상세
+- 화면 목적: 저장된 주문 조회/수정
+- 접근 권한: 회사 소속 사용자
+- 주요 UI: 거래처/일자, 품목 라인, 합계, 수정/삭제, "거래명세서 보기"
+- 사용자 행동: 주문 수정·삭제, 명세서 이동
+- 성공 상태: 갱신된 주문 표시
+- 빈 상태: 해당 없음(주문 존재 전제)
+- 오류 상태: 권한 외 접근 차단, 저장 실패
+- 연결 기능: F10, F13
+- 연결 데이터: orders, order_items
+
+### S10 품목별 합산표
+- 화면 목적: 도매상 발주용 총 물량 합산
+- 접근 권한: 회사 소속 사용자
+- 주요 UI: 날짜/거래처 필터, 품목별 총수량 표, CSV 내보내기
+- 사용자 행동: 필터, 합산 확인, 내보내기
+- 성공 상태: 합산표 표시
+- 빈 상태: 대상 주문 없음 안내
+- 오류 상태: 집계 실패 재시도
+- 연결 기능: F11
+- 연결 데이터: orders, order_items, products
+
+### S11 거래명세서 미리보기
+- 화면 목적: 거래처 납품 명세 인쇄용 미리보기
+- 접근 권한: 회사 소속 사용자
+- 주요 UI: 거래처/일자 헤더, 품목·수량·단가·금액 표, 공급가/합계, 인쇄 버튼
+- 사용자 행동: 미리보기 확인 → 브라우저 인쇄
+- 성공 상태: 인쇄용 레이아웃 렌더
+- 빈 상태: 품목 0줄 주문 경고
+- 오류 상태: 단가 미등록 라인 0원 표시 + 경고
+- 연결 기능: F13
+- 연결 데이터: orders, order_items, customers, customer_prices
+
+---
+
+## 5. 기능별 상세 정의 (F1~F13)
+
+### F1 로그인
+- 목적: 인증된 사용자만 접근 / 사용자: 전체 / 선행: 없음
+- 입력값: 이메일(+인증수단)
+- 처리 규칙: Supabase Auth 위임, 비밀번호 직접 저장 금지, 세션 발급
+- 출력값: 세션, 사용자 id
+- 저장/변경: auth user(직접 생성 안 함, 공급자 관리)
+- 예외: 인증 실패, 세션 만료 → 재로그인
+- 검증: 이메일 형식
+- MVP 포함: 필수 (소셜/이메일 중 1종)
+
+### F2 회사/사업장 생성
+- 목적: 데이터 격리 단위 생성 / 사용자: 로그인 사용자 / 선행: F1
+- 입력값: 상호(필수), 사업자번호(선택)
+- 처리 규칙: companies 생성 + 생성자를 company_members(role=owner)로 등록(트랜잭션)
+- 출력값: 회사 id, 회사 컨텍스트
+- 저장/변경: companies, company_members
+- 예외: 상호 누락, 부분 실패 시 롤백
+- 검증: 상호 비빈값, 사업자번호 형식(선택)
+- MVP 포함: 필수 (owner 단일)
+
+### F3 거래처 관리
+- 목적: 거래처 CRUD / 사용자: 회사 소속 / 선행: F2
+- 입력값: 상호(필수), 전화, 주소, 메모
+- 처리 규칙: 회사 범위 내 생성/수정, 삭제는 `archived_at` soft delete 우선
+- 출력값: 거래처 목록/상세
+- 저장/변경: customers
+- 예외: 상호 누락, 타 회사 접근 차단
+- 검증: 상호 비빈값, (경고) 동일 상호 중복
+- MVP 포함: 필수
+
+### F4 품목 관리
+- 목적: 품목 CRUD / 사용자: 회사 소속 / 선행: F2
+- 입력값: 품목명(필수), 기본단위(필수), 과세구분(`tax_type`), 메모
+- 처리 규칙: 회사 범위 생성/수정, soft delete
+- 출력값: 품목 목록/상세
+- 저장/변경: products
+- 예외: 품목명 누락
+- 검증: 품목명·단위 비빈값
+- MVP 포함: 필수 (과세 계산 반영은 2차)
+
+### F5 품목 별칭 관리
+- 목적: 파싱 매칭용 별칭 등록 / 사용자: 회사 소속 / 선행: F4
+- 입력값: 품목 선택, 별칭 문자열
+- 처리 규칙: 별칭 등록, 회사+별칭 중복 방지, S8에서 즉석 등록 가능
+- 출력값: 품목별 별칭 목록
+- 저장/변경: product_aliases
+- 예외: 동일 별칭이 다른 품목에 존재 → 경고/차단
+- 검증: 별칭 비빈값, (회사 내) 별칭 유일
+- MVP 포함: 필수 (F8 정확도 핵심)
+
+### F6 거래처별 단가 관리
+- 목적: 거래처×품목 판매 단가 / 사용자: 회사 소속 / 선행: F3,F4
+- 입력값: 거래처, 품목, 판매단가(integer), 적용일(선택)
+- 처리 규칙: (거래처,품목) 단가 upsert, 단가 변경 이력은 2차
+- 출력값: 거래처 단가표
+- 저장/변경: customer_prices
+- 예외: 단가 음수, 미등록 조합
+- 검증: `sale_price >= 0` 정수
+- MVP 포함: 필수 (이력 없이 현재 단가만)
+
+### F7 카톡/문자 발주 붙여넣기
+- 목적: 원문 입력 후 파싱 시작 / 사용자: 회사 소속 / 선행: F3
+- 입력값: 거래처(필수), 원문 텍스트(필수)
+- 처리 규칙: 원문 길이 제한, F8 호출. 원문은 Q1대로 `order_imports`에 임시 저장 가능(사용자 삭제 가능)
+- 출력값: 파싱 후보(S8)
+- 저장/변경: order_imports(임시, raw_text nullable)
+- 예외: 거래처 미선택, 길이 초과
+- 검증: 거래처 선택, 원문 비빈값, 최대 길이
+- MVP 포함: 필수
+
+### F8 발주 내용 파싱
+- 목적: 원문을 주문 후보로 변환 / 사용자: 회사 소속 / 선행: F5,F7
+- 입력값: 원문, 거래처
+- 처리 규칙: 규칙 기반(§6). **완전 자동 확정 금지**, 후보만 생성
+- 출력값: 라인별 {원문토막, 매칭품목후보, 수량후보, 단위후보, 단가, 상태}
+- 저장/변경: 없음(확정 전), 원문은 F7 임시저장
+- 예외: 빈 결과, 전부 미매칭
+- 검증: §6, §8 참조
+- MVP 포함: 필수 (핵심 가치)
+
+### F9 파싱 결과 확인/수정
+- 목적: 사람이 후보 확정 / 사용자: 회사 소속 / 선행: F8
+- 입력값: 라인별 수정(품목, 수량, 단위, 단가), 미매칭 해결
+- 처리 규칙: 미매칭/미확정 라인 잔존 시 확정 차단, 별칭 즉석 등록 가능
+- 출력값: 확정 가능한 주문 후보
+- 저장/변경: product_aliases(별칭 추가 시)
+- 예외: 미매칭 잔존, 수량 0/음수
+- 검증: 라인별 수량>0, 품목 매칭 필수
+- MVP 포함: 필수
+
+### F10 거래처별 주문 저장
+- 목적: 확정 주문 저장 / 사용자: 회사 소속 / 선행: F9
+- 입력값: 확정된 라인 집합, 거래처, 일자
+- 처리 규칙: orders + order_items 트랜잭션 저장, 라인 단가는 저장 시점 customer_prices 적용(미등록 시 0+경고)
+- 출력값: 저장된 주문(S9)
+- 저장/변경: orders, order_items, order_imports.confirmed_at
+- 예외: 부분 실패 롤백
+- 검증: 최소 1라인, 수량>0, 금액 integer
+- MVP 포함: 필수
+
+### F11 품목별 총 발주/출고 합산표
+- 목적: 도매상 발주용 총 물량 / 사용자: 회사 소속 / 선행: F10
+- 입력값: 날짜/거래처 필터
+- 처리 규칙: 대상 주문의 order_items를 품목별 수량 합산, 품목 등록순 정렬
+- 출력값: {품목, 단위, 총수량} 목록, CSV
+- 저장/변경: 없음(읽기)
+- 예외: 대상 0건
+- 검증: 회사 범위 한정
+- MVP 포함: 필수
+
+### F12 거래처별 주문표
+- 목적: 거래처 단위 주문 정리 출력 / 사용자: 회사 소속 / 선행: F10
+- 입력값: 거래처/날짜
+- 처리 규칙: 거래처별 주문/라인 조회·정리
+- 출력값: 거래처별 주문표, CSV
+- 저장/변경: 없음
+- 예외: 대상 0건
+- 검증: 회사 범위 한정
+- MVP 포함: 필수
+
+### F13 거래명세서 미리보기
+- 목적: 납품 명세 인쇄용 미리보기 / 사용자: 회사 소속 / 선행: F10
+- 입력값: 주문 id
+- 처리 규칙: 라인 금액 `line_amount = round(단가 × 수량)`, **공급가 합계 = Σ line_amount**(합산 후 반올림 없음). **1차는 "공급가 합계"만 표시(VAT 계산·표기 없음).** `products.tax_type`은 확장용 필드로 보존(계산 2차). Q2대로 인쇄 미리보기 우선, PDF 후순위 (B/C2/C5)
+- 출력값: 거래명세서 미리보기(인쇄 가능)
+- 저장/변경: 없음(미리보기). `delivery_notes` 저장·`note_number` 채번은 후순위/선택 (D)
+- 예외: 단가 미등록 라인 0원 + 경고, 품목 0줄
+- 검증: 금액 integer
+- MVP 포함: 필수 (미리보기/인쇄)
+
+---
+
+## 6. 발주 파싱 기능 상세 정의 (F8)
+
+### 6.1 입력 원문 예시
+정형:
+```
+콩나물 2박스
+두부 3판
+미나리 5단
+```
+비정형:
+```
+콩 2, 두부 세개, 저번 양파 말고 큰거
+```
+
+### 6.2 처리 단계
+1. **거래처 선택**: 파싱 전 사용자가 S7에서 거래처를 명시 선택(자동 추정 안 함).
+2. **줄 단위 분리**: 개행 기준 분리. 한 줄에 쉼표 다항목(`콩 2, 두부 세개`)이면 쉼표/구분자로 2차 분리 시도.
+3. **품목명 후보 추출**: 줄에서 숫자·단위를 제외한 토막을 품목명 후보로 본다.
+4. **수량 후보 추출**: 아라비아 숫자 우선. 한글 수사("세개")는 후보로만 변환하고 **불확실 표시**.
+5. **단위 후보 추출**: 품목 `base_unit` 및 일반 단위(박스/판/단/개/kg) 사전과 매칭.
+6. **품목 별칭 매칭**: 품목명 후보를 `product_aliases`(회사 범위)와 매칭 → 품목 후보 확정. 다중 후보 시 사용자 선택.
+7. **단가 자동 적용**: 매칭 품목 + 선택 거래처로 `customer_prices` 조회 → 단가 채움(미등록 0 + 경고).
+
+### 6.3 상태 처리
+| 상태 | 조건 | 표시 |
+|---|---|---|
+| 정상(matched) | 품목 매칭 + 수량 확정 | 일반 |
+| 미매칭(unmatched) | 별칭 매칭 실패 | **빨강/경고**, "별칭 등록" 버튼 |
+| 수량 불확실 | 한글 수사·모호 표현("큰거") | 노랑/주의, 사용자 확정 요구 |
+| 단가 없음 | customer_prices 미등록 | 0원 + 경고 |
+
+### 6.4 사용자 확정 규칙
+- 시스템은 **후보만 제안**, 최종 확정은 사용자가 한다.
+- **미매칭/수량 불확실 라인이 남아 있으면 주문 확정(F10) 차단.**
+- 미매칭 품목은 S8에서 **품목 별칭으로 즉석 등록**(F5) 가능 → 재매칭.
+- 확정 전: `order_imports`(임시, 미저장 주문). 확정 후: `orders`+`order_items` 저장, `order_imports.confirmed_at` 기록.
+
+---
+
+## 7. 데이터 객체 상세 정의
+
+공통 규칙: PK `uuid`(default `gen_random_uuid()`), 모든 업무 테이블 `company_id uuid NOT NULL`(FK companies), 금액 `integer`(KRW), 수량 `numeric`(소수 확장 대비), 시각 `timestamptz default now()`, 삭제는 `archived_at`/`status` soft delete 우선. 라인 금액은 `line_amount = round(quantity × unit_price)`(원 단위 반올림, integer), **주문/명세서 합계는 라인 금액의 합**(합산 후 반올림 안 함). 1차 VAT 미적용 (C2/B). service role key 클라이언트 노출 금지.
+
+### companies
+| 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
+|---|---|---|---|---|
+| id | uuid | ✅ | gen_random_uuid() | PK |
+| name | text | ✅ | | 상호 |
+| business_number | text | | null | 사업자번호(선택) |
+| owner_user_id | uuid | ✅ | | FK auth.users |
+| created_at | timestamptz | ✅ | now() | |
+- 관계: 1:N 모든 업무 객체 / MVP: ✅
+
+### company_members
+| 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
+|---|---|---|---|---|
+| id | uuid | ✅ | gen_random_uuid() | PK |
+| company_id | uuid | ✅ | | FK companies |
+| user_id | uuid | ✅ | | FK auth.users |
+| role | text | ✅ | 'owner' | owner/staff |
+| created_at | timestamptz | ✅ | now() | |
+- 관계: N:1 회사·사용자, unique(company_id,user_id) / MVP: ✅(owner만 사용)
+
+### customers
+| 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
+|---|---|---|---|---|
+| id | uuid | ✅ | gen_random_uuid() | PK |
+| company_id | uuid | ✅ | | FK |
+| name | text | ✅ | | 상호 |
+| phone | text | | null | |
+| address | text | | null | |
+| memo | text | | null | |
+| created_at | timestamptz | ✅ | now() | |
+| archived_at | timestamptz | | null | soft delete |
+- 관계: 1:N 주문·단가 / MVP: ✅
+
+### products
+| 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
+|---|---|---|---|---|
+| id | uuid | ✅ | gen_random_uuid() | PK |
+| company_id | uuid | ✅ | | FK |
+| name | text | ✅ | | 품목명 |
+| base_unit | text | ✅ | | 기본단위 |
+| tax_type | text | | 'taxable' | 과세/면세(계산 반영 2차) |
+| memo | text | | null | |
+| created_at | timestamptz | ✅ | now() | |
+| archived_at | timestamptz | | null | soft delete |
+- 관계: 1:N 별칭·단가·주문품목 / MVP: ✅
+
+### product_aliases
+| 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
+|---|---|---|---|---|
+| id | uuid | ✅ | gen_random_uuid() | PK |
+| company_id | uuid | ✅ | | FK |
+| product_id | uuid | ✅ | | FK products |
+| alias | text | ✅ | | unique(company_id,alias) |
+- 관계: N:1 품목 / MVP: ✅
+
+### customer_prices
+| 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
+|---|---|---|---|---|
+| id | uuid | ✅ | gen_random_uuid() | PK |
+| company_id | uuid | ✅ | | FK |
+| customer_id | uuid | ✅ | | FK customers |
+| product_id | uuid | ✅ | | FK products |
+| sale_price | integer | ✅ | | ≥0, KRW |
+| effective_from | date | | null | 적용일(선택) |
+| created_at | timestamptz | ✅ | now() | |
+- 관계: N:1 거래처·품목, unique(company_id,customer_id,product_id) 권장 / MVP: ✅
+
+### order_imports
+| 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
+|---|---|---|---|---|
+| id | uuid | ✅ | gen_random_uuid() | PK |
+| company_id | uuid | ✅ | | FK |
+| customer_id | uuid | ✅ | | FK customers. **1차 MVP NOT NULL**(붙여넣기 전 거래처 선택 필수), 자동 추정 후순위 (C4) |
+| source | text | | 'kakao' | 원문 출처 |
+| raw_text | text | | null | Q1/C3 확정: 파싱 검수 보조. **1차 기본 저장 ON.** 민감정보 가능→**사용자 삭제 가능(삭제 시 확정 주문 유지, `raw_text`만 null)**. 장기보관 후순위, 첨부/OCR 원본 제외 |
+| parsed_at | timestamptz | | null | |
+| confirmed_at | timestamptz | | null | 확정 시각 |
+| created_by | uuid | ✅ | | FK auth.users |
+| created_at | timestamptz | ✅ | now() | |
+- 관계: 1:N 주문(파생) / MVP: 🔶(원문 기본 저장 ON·삭제 가능(→null), `customer_id`는 1차 필수)
+
+### orders
+| 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
+|---|---|---|---|---|
+| id | uuid | ✅ | gen_random_uuid() | PK |
+| company_id | uuid | ✅ | | FK |
+| customer_id | uuid | ✅ | | FK customers |
+| order_date | date | ✅ | today | |
+| source | text | | null | kakao/sms/phone 등 |
+| status | text | ✅ | 'confirmed' | draft/confirmed/cancelled |
+| memo | text | | null | |
+| created_at | timestamptz | ✅ | now() | |
+- 관계: 1:N order_items / MVP: ✅
+
+### order_items
+| 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
+|---|---|---|---|---|
+| id | uuid | ✅ | gen_random_uuid() | PK |
+| company_id | uuid | ✅ | | FK |
+| order_id | uuid | ✅ | | FK orders |
+| product_id | uuid | ✅ | | FK products. **NOT NULL** — 1차 `order_items`는 확정 주문 라인만 저장(파싱 후보 미저장) (C1/A 확정) |
+| raw_name | text | | null | 원문 토막 |
+| quantity | numeric | ✅ | | >0 |
+| unit | text | | null | |
+| unit_price | integer | ✅ | 0 | ≥0, KRW |
+| amount | integer | ✅ | 0 | 라인 금액 `round(quantity × unit_price)`(원 단위 반올림, integer). 주문/명세 합계는 이 값들의 합 (C2/B) |
+| confirmed | boolean | ✅ | false | 확정 여부 |
+- 관계: N:1 주문 / MVP: ✅
+- 상태 규칙(C1/A 확정): **1차 MVP `order_items`에는 확정 주문 라인만 저장**한다. 파싱 후보/draft 라인은 DB에 영구 저장하지 않고 **S8 화면 상태 + `order_imports.raw_text`** 로 관리한다. 따라서 `order_items.product_id`는 **NOT NULL**. 미매칭/수량 불확실 라인은 S8에서 해결해야 하며, 미해결 시 F10 저장을 차단한다. 후보 라인 영구 저장 테이블은 후순위.
+
+### delivery_notes
+| 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
+|---|---|---|---|---|
+| id | uuid | ✅ | gen_random_uuid() | PK |
+| company_id | uuid | ✅ | | FK |
+| order_id | uuid | ✅ | | FK orders |
+| note_number | text | | null | 명세서 번호. **1차 자동 채번 불필요(후순위)** (D) |
+| issued_at | timestamptz | | null | |
+| total_amount | integer | ✅ | 0 | **공급가 합계 = Σ 라인 amount(KRW), VAT 미포함**(1차, 합산 후 반올림 안 함). 과세 계산은 2차 (C5/B) |
+| memo | text | | null | |
+- 관계: N:1 주문 / MVP: 🔶 **선택/후순위**(주문 기반 미리보기/인쇄 우선, 저장형 명세서·`note_number` 채번 규칙 후순위) (D)
+
+### receivables
+| 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
+|---|---|---|---|---|
+| id | uuid | ✅ | gen_random_uuid() | PK |
+| company_id | uuid | ✅ | | FK |
+| customer_id | uuid | ✅ | | FK customers |
+| order_id | uuid | | null | FK orders |
+| amount | integer | ✅ | 0 | KRW |
+| paid_amount | integer | ✅ | 0 | KRW |
+| status | text | ✅ | 'unpaid' | unpaid/partial/paid(수동) |
+| due_date | date | | null | |
+| paid_at | timestamptz | | null | |
+- 관계: N:1 거래처·주문 / MVP: 🔶(수동 status만), 자동화 ⛔ 2차
+
+### price_history (후순위)
+| 필드 | 타입 | 필수 | 비고 |
+|---|---|---|---|
+| id,company_id,customer_id,product_id,old_price,new_price,changed_at,changed_by | (uuid/integer/timestamptz) | | 단가 변경 감사 |
+- MVP: ⛔ 2차
+
+### tax_invoice 후보 객체 (후순위)
+- 테이블명 후보: `tax_invoice_summaries`
+- 목적: 월·거래처 매출합계, 발행 필요/부족/초과 정리(직접 발행 아님)
+- 주요 필드(미설계): company_id, customer_id, year_month, sales_total, issued_amount, gap
+- MVP: ⛔ 2차 (구조 확장 여지만)
+
+---
+
+## 8. 검증 규칙
+
+| 항목 | 규칙 | 적용 |
+|---|---|---|
+| 필수값 누락 | 상호/품목명/단위/거래처/원문 비빈값 | F2~F7 |
+| 문자열 길이 | 원문 최대 길이 제한(예: N자), 텍스트 필드 상한 | F7 |
+| 수량 | `quantity > 0` | F9,F10 |
+| 단가 | `unit_price ≥ 0`, `sale_price ≥ 0` | F6,F10 |
+| 금액 | `amount`/`*_amount`는 정수(KRW). 라인 `amount = round(quantity × unit_price)`, **합계 = Σ 라인 amount**(합산 후 반올림 없음). 1차 VAT 계산 없음 | F10,F13 |
+| 날짜 | order_date/effective_from 유효 날짜 | F6,F10 |
+| 회사 격리 | 모든 read/write는 `company_id = 내 회사`만 | 전체(RLS) |
+| 중복 별칭 | unique(company_id,alias), 충돌 시 경고/차단 | F5 |
+| 중복 거래처명 | 동일 상호 등록 시 **경고**(차단 아님) | F3 |
+| 미매칭 품목 | `product_id` 미매칭 라인 잔존 시 **확정 차단**(확정 주문은 `product_id` NOT NULL) | F8,F9 |
+
+---
+
+## 9. 권한/RLS 기능 정의
+
+전제: Supabase RLS 활성화. 소속 판정은 `security definer` 헬퍼 `is_company_member(company_id)`로 `company_members`를 조회(정책 재귀 회피).
+
+| 객체 | select | insert | update | delete |
+|---|---|---|---|---|
+| companies | 멤버 or owner | 로그인 사용자(본인 owner) | owner | 제한(soft) |
+| company_members | 동일 회사 멤버 | owner | owner | owner |
+| customers | 멤버 | 멤버 | 멤버 | soft(archived_at) |
+| products | 멤버 | 멤버 | 멤버 | soft |
+| product_aliases | 멤버 | 멤버 | 멤버 | 멤버 |
+| customer_prices | 멤버 | 멤버 | 멤버 | 멤버 |
+| order_imports | 멤버 | 멤버 | 멤버(본인) | 멤버(원문 삭제, Q1) |
+| orders | 멤버 | 멤버 | 멤버 | soft(status=cancelled) |
+| order_items | 멤버 | 멤버 | 멤버 | 멤버(주문 범위) |
+| delivery_notes | 멤버 | 멤버 | 멤버 | 멤버 |
+| receivables | 멤버 | 멤버 | 멤버 | 멤버 |
+
+역할: 1차는 **owner 중심**, staff는 스키마(`role`)만 준비하고 UI 미구현.
+
+**RLS 검증 시나리오:** A회사 사용자가 B회사 `customers`/`orders`/`customer_prices`를 select/insert/update 시도 → **0행/거부**. 공개 API에서 `company_id`를 B로 바꿔도 차단.
+
+---
+
+## 10. 업무 흐름별 시나리오
+
+| 시나리오 | 시작 조건 | 사용자 행동 | 시스템 처리 | 완료 조건 | 실패/예외 |
+|---|---|---|---|---|---|
+| 신규 사용자 첫 설정 | 가입/로그인 | 회사 생성 | companies+members(owner) 트랜잭션 | 회사 컨텍스트 확보 | 상호 누락→차단 |
+| 거래처/품목/단가 등록 | 회사 존재 | 거래처·품목·별칭·단가 입력 | 회사 범위 저장 | 최소 1거래처·1품목·단가 | 필수값 누락 경고 |
+| 카톡 발주 붙여넣기 | 거래처 존재 | 거래처 선택+원문 붙여넣기 | F8 파싱, 후보 생성 | S8 후보 표시 | 거래처 미선택/길이 초과 |
+| 파싱 결과 수정 | 파싱 후보 존재 | 매칭/수량/단위/단가 수정, 별칭 등록 | 재매칭, 상태 갱신 | 모든 라인 matched+수량 확정 | 미매칭/불확실 잔존 |
+| 주문 확정 | 전 라인 확정 | "주문 확정" | orders+order_items 저장, 단가 적용 | 주문 저장(S9) | 부분 실패 롤백 |
+| 품목별 합산표 | 주문 ≥1 | 필터 선택 | order_items 품목별 합산 | 합산표/CSV | 대상 0건 안내 |
+| 거래명세서 미리보기/인쇄 | 주문 존재 | 명세서 보기→인쇄 | 라인 금액·합계 계산, 인쇄 레이아웃 | 인쇄 가능 | 단가 미등록 0원+경고 |
+| 미수금 수동 체크 | 주문/명세 존재 | status 토글(unpaid/partial/paid) | receivables 수동 갱신 | 상태 반영 | 자동화 없음(2차) |
+
+---
+
+## 11. MVP 완료 기준
+
+- [ ] 샘플 발주 **10건** 입력 가능 (F7~F10)
+- [ ] 거래처별 주문 저장 가능 (F10)
+- [ ] 품목별 합산표 생성 가능 (F11)
+- [ ] 거래처별 단가 자동 적용 가능 (F6,F10)
+- [ ] 거래명세서 미리보기 가능 (F13)
+- [ ] 회사별 데이터 격리 확인 가능 (RLS 시나리오 §9)
+- [ ] 실제 사용자 **1~2명** 테스트 가능
+
+---
+
+## 12. 후순위 기능 목록 (2차)
+
+단가 변경 이력 · 매입가/판매가/마진 계산 · 미수금/입금 본격 관리 · 오래된 미수금 알림 · 거래처별 월 정산표 · 직원 계정/권한 UI · 세금계산서 발행 금액 부족/초과 표시 · 거래처 주문 링크 · OCR · 외부 ERP 연동.
+
+---
+
+## 13. 다음 산출물: DB 스키마 정의서
+
+본 기능정의서 다음 산출물은 **DB 스키마 정의서**다. 이후 산출물 순서:
+
+- **DB 스키마 정의서** (마이그레이션 SQL 전 단계) ← 바로 다음
+- 화면 설계서 (S1~S11 와이어프레임/상태)
+- API/Server Action 정의서 (F1~F13 엔드포인트·입출력)
+- Supabase RLS 정책 SQL (객체별 §9)
+- Claude 구현 작업지시서 (단위 분할·검증 명령)
+
+### 13.1 C1~C5 결정이 DB 스키마에 주는 영향
+
+| 결정 | DB 영향 |
+|---|---|
+| C1 product_id | **확정(A)**: 1차 `order_items`는 확정 라인만 저장 → `product_id` **NOT NULL**. 파싱 후보는 화면+`order_imports.raw_text`로 관리, 후보 영구저장 테이블 후순위 |
+| C2 반올림 | 라인 `amount = round(quantity × unit_price)`(integer), **합계 = Σ 라인 amount**(합산 후 반올림 없음, B). quantity numeric. **VAT 컬럼 1차 없음** |
+| C3 raw_text | **기본 저장 ON(C)**, 사용자 삭제 가능(삭제 시 확정 주문 유지·`raw_text`만 null). 장기보관·첨부/OCR 컬럼 없음 |
+| C4 customer_id | `order_imports.customer_id` **NOT NULL**. 거래처 자동추정용 컬럼 없음 |
+| C5 VAT/tax_type | `products.tax_type` 컬럼 유지(default taxable). 명세서/`delivery_notes`는 공급가 합계만, VAT·세금계산서 비교 컬럼 2차. **`delivery_notes` 저장/`note_number` 채번은 후순위(D)** |
+
+### 13.2 확정된 데이터 설계 원칙 (DB 스키마 정의서 착수 기준)
+
+- 모든 업무 테이블은 `company_id uuid NOT NULL`(FK companies)을 포함하고 RLS로 회사 격리한다.
+- PK는 `uuid`(default `gen_random_uuid()`), 시각은 `timestamptz`로 통일한다.
+- 금액은 KRW 원 단위 `integer`. 라인 `line_amount = round(quantity × unit_price)`, **주문/명세 합계 = Σ line_amount(합산 후 반올림 없음)**. **1차는 VAT 계산을 포함하지 않는다.**
+- 수량은 `numeric`으로 받아 소수 확장에 대비하되, 저장 금액은 항상 integer로 떨어뜨린다.
+- **1차 `order_items`는 확정 주문 라인만 저장**한다(`product_id` NOT NULL). 파싱 후보/draft는 DB에 영구 저장하지 않고 화면+`order_imports.raw_text`로 관리(후보 저장 테이블 후순위).
+- 삭제는 가능한 한 `archived_at`/`status` 기반 soft delete를 우선한다(주문 cancelled, 거래처/품목 archived).
+- 민감 보조 데이터(`order_imports.raw_text`)는 nullable·사용자 삭제 가능으로 두고, 장기보관·첨부·OCR 원본 저장은 스키마에 넣지 않는다(후순위/제외).
+- 과세/면세(`products.tax_type`)·미수금(`receivables`)·세금계산서 정리·`delivery_notes` 저장/`note_number` 채번은 컬럼/테이블 여지만 두고, 자동 계산·매칭·채번 로직은 2차/후순위로 분리한다.
+
+> 비고: 본 문서 기능 범위는 요구사항정의서(설문 5건 한계 전제) 내에서만 정의했다. 새 기능은 추가하지 않았다.
+
+---
+
+## 14. Codex 리뷰 반영 내역
+
+2026-06-29, Codex 기능정의서 리뷰의 미확정/충돌 지점 **C1~C5를 확정값으로 반영**했다. (새 기능 추가·구현 코드·DB SQL 없음)
+
+| ID | 쟁점 | 확정값 | 반영 위치 |
+|---|---|---|---|
+| C1 | `order_items.product_id` nullable vs 확정 차단 | draft는 null 허용, 확정 주문은 `product_id` NOT NULL. 미매칭 라인은 확정 차단 | §5 F9/F10, §6.4, §7 order_items, §8, §13.1 |
+| C2 | 금액 반올림 규칙 | `amount = round(quantity × unit_price)` 원 단위 반올림·integer 저장. 1차 VAT 없음 | §7 공통규칙·order_items, §5 F13, §8, §13.1 |
+| C3 | `raw_text` 저장 정책 | 저장 가능(보조 데이터), 민감정보 가능→사용자 삭제 제공, 장기보관 후순위, 첨부/OCR 제외 | §3 Q1, §5 F7, §7 order_imports, §13.1 |
+| C4 | `order_imports.customer_id` | 1차 NOT NULL(붙여넣기 전 거래처 선택 필수), 자동추정 후순위 | §5 F7, §7 order_imports, §13.1 |
+| C5 | VAT/tax_type/거래명세서 | tax_type 필드 보존, 1차 명세서는 공급가 합계만(VAT 계산·표기 없음), 과세계산·세금계산서 비교는 2차 | §5 F13, §7 delivery_notes·products, §13.1 |
+
+> 표기 규칙: `필수` 컬럼의 △는 "조건부 필수"를 뜻한다(1차 확정으로 대부분 ✅로 정리됨).
+
+### 14.1 DB 설계 전 최종 확정값 (Codex 2차 리뷰, A~D)
+
+| ID | 결정 | 확정값 |
+|---|---|---|
+| A | C1 구현 방식 | 1차 `order_items`는 **확정 주문 라인만 저장**. `product_id` **NOT NULL**. 파싱 후보/draft는 DB 미저장(화면+`order_imports.raw_text`). 미매칭/수량 불확실은 S8에서 해결, 미해결 시 F10 차단. 후보 저장 테이블 후순위 |
+| B | 금액 합계 | 라인 `line_amount = round(quantity × unit_price)`. 주문/명세 합계 = **Σ line_amount**(합산 후 반올림 금지). 1차 VAT 없음 |
+| C | raw_text 기본값 | **기본 저장 ON**. 사용자 삭제 가능(삭제 시 **확정 주문 유지, `raw_text`만 null**). 첨부/OCR 원본 제외 |
+| D | 거래명세서 번호 | `delivery_notes.note_number` **자동 채번 1차 불필요**. 주문 기반 미리보기/인쇄 우선. 저장형 명세서·번호 규칙 후순위. `delivery_notes`는 둘 수 있으나 1차 선택/후순위 |

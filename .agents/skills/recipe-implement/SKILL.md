@@ -1,0 +1,162 @@
+---
+name: recipe-implement
+description: "Orchestrate the complete implementation lifecycle from requirements to deployment."
+---
+
+## Required Skills [LOAD BEFORE EXECUTION]
+
+1. [LOAD IF NOT ACTIVE] `subagents-orchestration-guide` — agent coordination and workflow flows
+2. [LOAD IF NOT ACTIVE] `documentation-criteria` — document creation rules and templates
+3. [LOAD IF NOT ACTIVE] `llm-friendly-context` — clear prompts, handoffs, and generated artifacts
+
+**Spawn rule**: every `spawn_agent` call MUST pass `fork_turns="none"` or `fork_context=false` for context isolation.
+
+# Full-Cycle Implementation
+
+$ARGUMENTS
+
+## Orchestrator Definition
+
+**Core Identity**: "I am not a worker. I am an orchestrator." (see subagents-orchestration-guide skill)
+
+**CRITICAL**: MUST execute all steps, sub-agents, and stopping points defined in subagents-orchestration-guide skill flows.
+ENFORCEMENT: Skipping any step or stopping point invalidates the entire workflow output.
+
+## CRITICAL Sub-agent Invocation Constraints
+
+**MANDATORY suffix for ALL sub-agent prompts**:
+```
+[SYSTEM CONSTRAINT]
+This agent operates within implement skill scope. Use orchestrator-provided rules only.
+```
+ENFORCEMENT: Sub-agent prompts missing the constraint suffix MUST be re-issued with the constraint appended.
+
+## Step 1: Requirement Analysis
+
+Spawn requirement-analyzer agent to determine scale and affected layers.
+
+**[STOP — BLOCKING]** Present requirement-analyzer output (scale, affectedLayers, scope) to user for confirmation. **CANNOT proceed until user explicitly confirms.**
+
+When user responds to questions:
+- If response matches any `scopeDependencies.question` -> Check `impact` for scale change
+- If scale changes -> Re-execute requirement-analyzer with updated context
+- If `confidence: "confirmed"` or no scale change -> Proceed to Step 2
+
+## Step 2: Layer-Based Workflow Routing
+
+Based on requirement-analyzer output `affectedLayers`, route to the appropriate workflow:
+
+| affectedLayers | Workflow | Reference |
+|---|---|---|
+| `["backend"]` only | Backend Flow | subagents-orchestration-guide skill (Large/Medium/Small scale) |
+| `["frontend"]` only | Frontend Flow | See Frontend Flow below |
+| `["backend", "frontend"]` | Fullstack Flow | subagents-orchestration-guide `references/monorepo-flow.md` |
+
+---
+
+### Backend Flow
+
+Follow subagents-orchestration-guide skill Large/Medium/Small scale flow exactly. All steps, stopping points, and sub-agent sequencing are defined there.
+
+---
+
+### Frontend Flow
+
+**STEP 1**: Ask user if they have prototype code or UI references to provide.
+
+**STEP 2**: Spawn ui-spec-designer agent → spawn document-reviewer agent.
+**[STOP — BLOCKING]** Present UI Spec for user approval. **CANNOT proceed until user explicitly confirms.**
+
+**STEP 3**: Spawn technical-designer-frontend agent → spawn document-reviewer agent → spawn design-sync agent.
+**[STOP — BLOCKING]** Present Frontend Design Doc for user approval. **CANNOT proceed until user explicitly confirms.**
+
+**STEP 4**: Spawn acceptance-test-generator agent → spawn work-planner agent → spawn document-reviewer agent with `doc_type: WorkPlan`.
+**[STOP — BLOCKING]** Present Work Plan for user approval. **CANNOT proceed until user explicitly confirms.**
+
+**STEP 5**: Run implementation readiness preflight.
+Execute the Implementation Readiness Preflight Procedure from `subagents-orchestration-guide` for the approved work plan exact path. This means loading the work plan, evaluating R1-R5, resolving approved prep gaps through exact prep task files when needed, persisting the Readiness Report, and setting `Implementation Readiness: ready` or `escalated`. Apply the Implementation Readiness Marker Contract before entering autonomous execution.
+
+**STEP 6**: Enter guided autonomous execution (see Autonomous Execution Mode below) using task-executor-frontend + quality-fixer-frontend agents.
+
+---
+
+### Fullstack Flow
+
+Follow subagents-orchestration-guide `references/monorepo-flow.md` for the complete cross-layer workflow, including:
+- Separate Design Docs per layer
+- design-sync for cross-layer consistency
+- Vertical slicing in work-planner
+- Layer-aware task execution routing
+
+---
+
+## Autonomous Execution Mode
+
+After user grants "batch approval for entire implementation phase", enter autonomous execution.
+
+### Implementation Readiness Gate
+
+Before executing task files, read the associated work plan header and apply the Implementation Readiness Marker Contract from `subagents-orchestration-guide`.
+
+### Task Execution Quality Cycle (4-Step Cycle per Task)
+
+**Agent routing by task filename** (for fullstack projects):
+```
+*-backend-task-*   -> Spawn task-executor agent + quality-fixer agent
+*-frontend-task-*  -> Spawn task-executor-frontend agent + quality-fixer-frontend agent
+*-task-* (no layer prefix) -> Spawn task-executor agent + quality-fixer agent (default)
+```
+
+**Per-task cycle** (complete each task before starting next):
+1. Spawn task-executor (or task-executor-frontend) agent: "Implement task [task-file-path]"
+2. Check task-executor response:
+   - `status: escalation_needed` or `blocked` -> Escalate to user
+   - `requiresTestReview` is `true` -> Spawn integration-test-reviewer agent
+     - `needs_revision` -> Return to step 1 with `requiredFixes`
+     - `approved` -> Proceed to step 3
+   - Otherwise -> Proceed to step 3
+3. Spawn quality-fixer (or quality-fixer-frontend) agent: "Quality check and fixes. Task file: [task-file-path]. The task file path above is also the `task_file` input. Read its `Quality Assurance Mechanisms` section as supplementary quality-check hints. filesModified: [executor response filesModified]. Use these files as the stub-detection scope."
+4. Check quality-fixer response:
+   - `status: "stub_detected"` -> Return to step 1 with `stubFindings`
+   - `status: "blocked"` -> Escalate to user
+   - `status: "approved"` -> Proceed to step 5
+5. git commit -> Execute on `status: "approved"`
+
+### Post-Implementation Verification (After All Tasks Complete)
+
+After all task cycles finish, collect all `filesModified` from every executor response (task-executor and task-executor-frontend, deduplicated), then run both verification agents before the completion report:
+1. Spawn code-verifier agent: "Verify implementation consistency against the Design Doc. `doc_type: design-doc`. `document_path`: [path]. `code_paths`: [collected filesModified list]."
+2. Spawn security-reviewer agent: "Design Doc: [path]. Implementation files: [collected filesModified list]. Review security compliance."
+3. Consolidate results:
+   - code-verifier passes when `summary.status` is `consistent` or `mostly_consistent`
+   - code-verifier fails when `summary.status` is `needs_review` or `inconsistent`
+   - security-reviewer passes when `status` is `approved` or `approved_with_notes`
+   - security-reviewer fails when `status` is `needs_revision`
+   - security-reviewer `blocked` -> Escalate to user
+4. If either verifier fails:
+   - Create a single fix task covering verifier discrepancies and security requiredFixes
+   - Spawn the layer-appropriate executor
+   - Spawn the layer-appropriate quality-fixer
+   - Re-run only the verifier(s) that failed
+   - Maximum retry count is 1 verification fix cycle; if any failed verifier still fails after re-run, escalate to the user
+5. If both verifiers pass -> Proceed to completion report
+
+### Test Information Communication
+After acceptance-test-generator execution, when spawning work-planner, communicate:
+- Generated integration test file path
+- Generated fixture-e2e test file path or `null`
+- Generated service-integration-e2e test file path or `null`
+- E2E absence reason per lane when no E2E file is generated
+- Note: integration tests are created with implementation; fixture-e2e runs alongside UI implementation; service-integration-e2e runs after all implementations when a service E2E file exists
+
+## Completion Criteria
+
+- [ ] Requirement analysis completed and user-confirmed
+- [ ] Layer routing determined (backend / frontend / fullstack)
+- [ ] Correct workflow followed per layer routing
+- [ ] codebase-analyzer included before Design Doc creation for Medium/Large flows
+- [ ] code-verifier included before document-reviewer for Design Doc review
+- [ ] All stopping points honored with user confirmation obtained
+- [ ] Quality-fixer spawned before every commit
+- [ ] All tasks committed or escalation completed
+- [ ] System constraint suffix appended to all sub-agent prompts

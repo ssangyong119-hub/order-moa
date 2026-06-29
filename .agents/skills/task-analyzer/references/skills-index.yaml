@@ -1,0 +1,226 @@
+# Skills Metadata Index
+# Used to select appropriate skills based on task analysis
+
+skills:
+  coding-rules:
+    skill: "coding-rules"
+    tags: [implementation, code-quality, refactoring, clean-code, maintainability, function-design, error-handling, parameterized-dependencies, reference-representativeness, performance, security]
+    typical-use: "Language-agnostic code creation, modification, and refactoring principles applicable to all programming languages"
+    size: medium
+    key-references:
+      - "YAGNI Principle - Kent Beck"
+      - "Clean Code - Robert C. Martin"
+      - "DRY Principle - The Pragmatic Programmer"
+      - "Refactoring - Martin Fowler"
+      - "Single Responsibility Principle - SOLID"
+    sections:
+      - "Language-Specific References"
+      - "Core Philosophy [MANDATORY]"
+      - "Minimum Surface Terms [MANDATORY]"
+      - "Code Quality [MANDATORY]"
+      - "Function Design [MANDATORY]"
+      - "Error Handling [MANDATORY]"
+      - "Dependency Management"
+      - "Reference Representativeness"
+      - "Performance"
+      - "Code Organization"
+      - "Commenting Principles"
+      - "Refactoring [SAFE CHANGE PROTOCOL]"
+      - "Security"
+      - "Version Control [MANDATORY]"
+    references:
+      - "references/typescript.md"
+      - "references/security-checks.md"
+
+  testing:
+    skill: "testing"
+    tags: [testing, tdd, quality, unit-testing, integration-testing, e2e-testing, data-layer-testing, test-design, coverage, mocking, test-independence, ci-cd, test-quality-criteria]
+    typical-use: "Universal testing principles, TDD practice, test quality criteria, test creation and quality assurance for all programming languages"
+    size: large
+    key-references:
+      - "Test-Driven Development - Kent Beck"
+      - "Red-Green-Refactor Cycle - Kent Beck"
+      - "AAA Pattern - Arrange-Act-Assert"
+      - "Test Pyramid - Mike Cohn"
+    sections:
+      - "Language-Specific References"
+      - "Core Testing Philosophy"
+      - "TDD Process [MANDATORY for all code changes]"
+      - "Quality Requirements [MANDATORY]"
+      - "Test Types"
+      - "Test Design Principles"
+      - "Test Independence"
+      - "Mocking and Test Doubles"
+      - "Data Layer Testing"
+      - "Test Quality Practices [MANDATORY]"
+      - "What to Test"
+      - "Test Quality Criteria [MANDATORY]"
+      - "Verification Requirements [MANDATORY for VERIFY phase]"
+      - "Test Organization"
+      - "Performance Considerations"
+      - "Common Anti-Patterns"
+      - "Regression Testing"
+    references:
+      - "references/typescript.md"
+
+  ai-development-guide:
+    skill: "ai-development-guide"
+    tags: [anti-patterns, technical-judgment, debugging, quality-commands, rule-of-three, implementation, refactoring, code-reading, best-practices, fail-fast, error-handling, impact-analysis]
+    typical-use: "Technical decision criteria, anti-pattern detection, debugging techniques, quality check workflows, impact analysis procedures"
+    size: large
+    key-references:
+      - "Rule of Three - Martin Fowler"
+      - "5 Whys - Toyota Production System"
+      - "DRY Principle - The Pragmatic Programmer"
+      - "YAGNI Principle - Extreme Programming"
+    sections:
+      - "Language-Specific References"
+      - "Technical Anti-patterns (Red Flag Patterns) [MANDATORY]"
+      - "Fail-Fast Fallback Design Principles"
+      - "Rule of Three - Criteria for Code Duplication"
+      - "Common Failure Patterns and Avoidance Methods"
+      - "Debugging Techniques"
+      - "Quality Assurance Mechanism Awareness"
+      - "Quality Check Workflow [MANDATORY]"
+      - "Situations Requiring Technical Decisions"
+      - "Implementation Completeness Assurance"
+      - "Impact Analysis"
+    references:
+      - "references/frontend.md"
+
+  documentation-criteria:
+    skill: "documentation-criteria"
+    tags: [documentation, decision-making, adr, prd, design-doc, ui-spec, work-plan, templates, planning, process, scale-assessment]
+    typical-use: "Scale assessment at implementation start, document creation criteria, ADR/PRD/Design Doc/Work Plan creation standards"
+    size: medium
+    key-references:
+      - "ADR Method - Michael Nygard"
+      - "Design Doc Culture - Google Engineering Practices"
+      - "Single Source of Truth"
+    sections:
+      - "Templates"
+      - "Creation Decision Matrix [MANDATORY]"
+      - "ADR Creation Conditions [MANDATORY if Any Apply]"
+      - "Detailed Document Definitions"
+      - "Creation Process [MANDATORY]"
+      - "Storage Locations"
+      - "ADR Status"
+      - "AI Automation Rules [MANDATORY]"
+      - "Diagram Requirements"
+      - "Common ADR Relationships"
+    references:
+      - "references/prd-template.md"
+      - "references/adr-template.md"
+      - "references/ui-spec-template.md"
+      - "references/design-template.md"
+      - "references/plan-template.md"
+      - "references/task-template.md"
+
+  implementation-approach:
+    skill: "implementation-approach"
+    tags: [architecture, implementation, task-decomposition, strategy-patterns, strangler-pattern, facade-pattern, design, planning, verification-levels]
+    typical-use: "Implementation strategy selection, task decomposition, design decisions, large-scale change planning"
+    size: medium
+    key-references:
+      - "Strangler Fig Pattern - Martin Fowler"
+      - "Feature Slicing - Martin Fowler"
+      - "Walking Skeleton - Alistair Cockburn"
+    sections:
+      - "Meta-cognitive Strategy Selection Process [MANDATORY]"
+      - "Verification Level Definitions"
+      - "Integration Point Definitions"
+      - "Anti-patterns [MANDATORY to detect]"
+      - "Guidelines for Meta-cognitive Execution"
+
+  integration-e2e-testing:
+    skill: "integration-e2e-testing"
+    tags: [testing, integration-testing, e2e-testing, fixture-e2e, service-integration-e2e, e2e-absence-reason, test-design, behavior-first, roi, test-skeleton, ears-format]
+    typical-use: "Integration and E2E test design principles, value-based test selection, behavior-first approach, test skeleton specification"
+    size: medium
+    key-references:
+      - "Test Pyramid - Mike Cohn"
+      - "Behavior-Driven Development"
+    sections:
+      - "References"
+      - "Test Type Definition and Limits [MANDATORY]"
+      - "Behavior-First Principle [MANDATORY]"
+      - "Value and Selection Model"
+      - "Test Skeleton Specification [MANDATORY]"
+      - "EARS Format Mapping"
+      - "Test File Naming Convention"
+      - "Review Criteria"
+      - "Quality Standards [MANDATORY]"
+    references:
+      - "references/e2e-design.md"
+
+  subagents-orchestration-guide:
+    skill: "subagents-orchestration-guide"
+    tags: [orchestration, workflow, subagents, context-isolation, autonomous-execution, guided-autonomous-execution, planning, design-flow, implementation-flow, implementation-readiness, readiness-resolution]
+    typical-use: "Orchestrating subagents through implementation workflows, scale determination, stop points, guided autonomous execution mode"
+    size: large
+    key-references:
+      - "Orchestrator Pattern"
+      - "Conductor Pattern"
+    sections:
+      - "Role: The Orchestrator"
+      - "Decision Flow When Receiving Tasks"
+      - "Available Subagents"
+      - "Orchestration Principles"
+      - "Constraints Between Subagents [MANDATORY]"
+      - "How to Spawn Agents"
+      - "Explicit Stop Points [MANDATORY]"
+      - "Scale Determination and Document Requirements"
+      - "Structured Response Specification"
+      - "Implementation Readiness Marker Contract"
+      - "Implementation Readiness Preflight Procedure"
+      - "Handling Requirement Changes"
+      - "Basic Flow for Work Planning"
+      - "Autonomous Execution Mode"
+      - "Main Orchestrator Roles"
+      - "Important Constraints [MANDATORY]"
+      - "Required Dialogue Points with Humans [MANDATORY]"
+      - "Action Checklist"
+      - "References"
+    references:
+      - "references/monorepo-flow.md"
+
+  external-resource-context:
+    skill: "external-resource-context"
+    tags: [external-resources, external-resource-hearing, project-context, mcp, design-source, design-system, visual-verification, generated-artifacts, api-schema, infrastructure, secret-store, context-engineering, documentation]
+    typical-use: "Discover, confirm, and record external resource access methods for downstream design, planning, implementation, and review"
+    size: medium
+    key-references:
+      - "Single Source of Truth"
+      - "Context Engineering"
+    sections:
+      - "Purpose"
+      - "Scope Boundaries"
+      - "Storage Locations"
+      - "Hearing Protocol"
+      - "Storage Protocol"
+      - "Lookup Protocol"
+      - "Output Format"
+      - "Quality Checklist"
+      - "References"
+    references:
+      - "references/frontend.md"
+      - "references/backend.md"
+      - "references/api.md"
+      - "references/infra.md"
+      - "references/template.md"
+
+  llm-friendly-context:
+    skill: "llm-friendly-context"
+    tags: [cross-cutting, llm-facing, prompt-writing, handoff, subagent-prompt, documentation, planning, task-decomposition, test-skeleton, generated-instructions, ambiguity-reduction, output-format, success-criteria]
+    typical-use: "Writing or revising LLM-facing prompts, subagent handoffs, design/planning artifacts, review findings, completion reports, generated instructions, and task files so downstream agents can execute without guessing"
+    size: small
+    key-references:
+      - "Rewrite Patterns"
+      - "Handoff Checklist"
+      - "Generated Artifact Checklist"
+    sections:
+      - "Purpose"
+      - "Core Rules"
+      - "Rewrite Patterns"
+      - "Handoff Checklist"
+      - "Generated Artifact Checklist"
