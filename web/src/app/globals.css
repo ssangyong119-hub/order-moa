@@ -1,0 +1,122 @@
+/* 오더모아 데모 스타일 — warm cream/coral/ink (prototype 톤 참고).
+   외부 폰트/CDN 없음. 모바일/인쇄 고려. */
+:root {
+  --cream: #faf9f5;
+  --paper: #ffffff;
+  --ink: #141413;
+  --ink-soft: #54524c;
+  --coral: #cc785c;
+  --coral-dark: #b5634a;
+  --line: #e7e4da;
+  --ok-bg: #e7f3e8; --ok-fg: #2f6b3a;
+  --warn-bg: #fbf3d9; --warn-fg: #8a6d11;
+  --err-bg: #fbe4e0; --err-fg: #b23c28;
+  --amber-bg: #fdeccf; --amber-fg: #9a6b14;
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--cream);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Malgun Gothic", sans-serif;
+  line-height: 1.55;
+  overflow-x: hidden; /* 가로 넘침 격리 */
+}
+
+h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; font-weight: 600; }
+h1 { font-size: 1.5rem; margin: 0; }
+h2 { font-size: 1.2rem; }
+
+a { color: var(--coral); }
+
+.app { max-width: 920px; margin: 0 auto; padding: 16px; }
+
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); margin-bottom: 16px;
+}
+.topbar .company { font-size: 0.85rem; color: var(--ink-soft); }
+
+.nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.nav button { font-size: 0.9rem; }
+
+.card {
+  background: var(--paper); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 16px; margin-bottom: 14px;
+}
+
+/* 버튼 — 터치 44px 이상 */
+button {
+  font-size: 16px; min-height: 44px; padding: 8px 16px;
+  border: 1px solid var(--line); border-radius: 10px;
+  background: var(--paper); color: var(--ink); cursor: pointer;
+}
+button:hover { border-color: var(--coral); }
+button.primary { background: var(--coral); color: #fff; border-color: var(--coral); }
+button.primary:hover { background: var(--coral-dark); }
+button.big { font-size: 1.05rem; min-height: 56px; width: 100%; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.link { border: none; background: none; color: var(--coral); min-height: auto; padding: 4px; }
+
+/* 입력 — 16px (iOS 줌 방지) */
+input, select, textarea {
+  font-size: 16px; padding: 8px 10px; min-height: 44px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink);
+  width: 100%; font-family: inherit;
+}
+textarea { min-height: 140px; resize: vertical; line-height: 1.6; }
+label { display: block; font-size: 0.85rem; color: var(--ink-soft); margin: 8px 0 4px; }
+
+.muted { color: var(--ink-soft); font-size: 0.85rem; }
+.notice { background: var(--warn-bg); color: var(--warn-fg); padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; }
+
+/* 상태 배지 */
+.badge { display: inline-block; font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.badge.ok { background: var(--ok-bg); color: var(--ok-fg); }
+.badge.warn { background: var(--warn-bg); color: var(--warn-fg); }
+.badge.err { background: var(--err-bg); color: var(--err-fg); }
+.badge.amber { background: var(--amber-bg); color: var(--amber-fg); }
+
+/* 표 — 모바일 가로 스크롤 */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { width: 100%; border-collapse: collapse; min-width: 520px; }
+th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); font-size: 0.9rem; vertical-align: middle; }
+th { color: var(--ink-soft); font-weight: 600; font-size: 0.8rem; }
+td.num, th.num { text-align: right; }
+td input, td select { min-height: 40px; }
+td input.qty, td input.price { max-width: 96px; }
+
+.summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.summary-grid .stat { font-size: 1.6rem; font-weight: 700; }
+
+.row-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* 거래명세서 */
+.note-doc { background: #fff; color: #000; border: 1px solid #999; padding: 20px; }
+.note-head { display: flex; justify-content: space-between; gap: 16px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+.note-title { font-family: Georgia, serif; font-size: 1.6rem; letter-spacing: 0.4em; }
+.note-block { font-size: 0.85rem; }
+.note-block b { display: inline-block; min-width: 56px; color: #333; }
+.note-table th, .note-table td { border: 1px solid #999; padding: 6px 8px; }
+.note-total { text-align: right; font-weight: 700; padding-top: 8px; }
+.note-hanja { font-size: 0.9rem; }
+
+@media (max-width: 480px) {
+  .summary-grid { grid-template-columns: 1fr; }
+  .note-head { flex-direction: column; }
+  h1 { font-size: 1.3rem; }
+}
+
+/* 인쇄: 앱 UI 숨기고 명세서만 A4 */
+@media print {
+  @page { size: A4; margin: 12mm; }
+  body { background: #fff; }
+  .no-print { display: none !important; }
+  .app { max-width: none; padding: 0; }
+  table { min-width: 0; }
+  .note-doc { border: none; padding: 0; }
+}

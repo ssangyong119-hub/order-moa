@@ -15,6 +15,8 @@ export interface Product {
   name: string;
   baseUnit: string;
   aliases?: string[];
+  /** 기준 매입단가(원, 정수). 예상 마진 표시용 참고값. 미등록(없음)이면 마진 미표시. */
+  basePurchasePrice?: number | null;
 }
 
 export interface CustomerPrice {

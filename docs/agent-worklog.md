@@ -327,3 +327,89 @@ Codex 리뷰 요청:
 - overrides 방식(전역 postcss 고정)이 의도와 맞는지 확인
 - 머지 방식 결정 및 단위 2 진행 승인
 
+## 2026-06-30 Claude (단위 6 — Next.js 샘플 데이터 기반 핵심 흐름 구현)
+
+상태:
+
+- 완료 (커밋 안 함 — Codex 검수 후 결정). 작업 브랜치 `claude/web-mvp-scaffold`
+
+작업 목표:
+
+- `docs/task-prompt-unit-6-nextjs-demo-flow.md` 기준으로 샘플 데이터 기반 핵심 흐름을 실제 Next.js 화면으로 구현
+- Supabase/로그인/DB/PDF 없이 클라이언트 메모리 상태만 사용
+
+브랜치 결정(사용자 확인):
+
+- web/ 스캐폴드가 `codex/order-moa-mvp`에 없어 작업 중단·확인 → 사용자: **claude/web-mvp-scaffold에서 구현, codex로 임의 머지 금지**
+
+구현한 화면/흐름:
+
+- 샘플 데이터 로딩(가명) → 대시보드 → 발주 붙여넣기(거래처 선택+예시) → 파싱 결과 확인/수정 → 품목별 합산표(CSV) → 판매조회형 주문 목록 → 거래명세서 미리보기/브라우저 인쇄
+- 파싱 화면: 품목/수량/단위/단가 직접 수정, 금액 자동 재계산, 미매칭(빨강)/수량확인(노랑)/단가미등록(앰버) 배지, **단가 미등록 시 즉석 입력+[이 단가 저장]**, 미매칭 라인 **별칭 등록**, 미매칭·수량불확실 잔존 시 [주문 확정] 차단
+- 예상 마진: 기준 매입단가 있으면 라인/주문 단위 참고값 표시, 없으면 `-`
+- 모바일 반응형(입력 16px·터치 44px·표 가로스크롤·overflow 격리), 네이티브 에러 경계(error.tsx)로 오류 비노출
+
+추가/수정 파일(web/ + worklog):
+
+- (수정) `web/src/lib/domain/types.ts` — Product에 `basePurchasePrice?` 추가(additive)
+- (신규) `web/src/lib/calculations.ts` — lineAmount/sumAmounts/estimated*Margin/format*
+- (신규) `web/src/lib/order-parser.ts` — parseOrderText/canConfirm/confirmBlockReason
+- (신규) `web/src/lib/sample-data.ts` — 가명 거래처/품목/별칭/단가/기준매입단가/발주 예시
+- (신규) `web/src/lib/calculations.test.ts`, `web/src/lib/order-parser.test.ts`
+- (수정) `web/src/app/page.tsx` — 데모 핵심 흐름 UI(단일 페이지 뷰 전환)
+- (수정) `web/src/app/layout.tsx` — globals.css import
+- (신규) `web/src/app/globals.css` — warm 테마/배지/모바일/@media print
+- (신규) `web/src/app/error.tsx` — 친화적 에러 화면
+- (수정) `docs/agent-worklog.md` (본 기록)
+
+계산 규칙(준수·테스트):
+
+- 라인 금액 = round(수량×단가), 합계 = 라인 합(추가 반올림 없음)
+- 예상 마진 = round((판매단가−기준 매입단가)×수량), 매입단가 없으면 `-`
+- 단가 미등록 0원+경고(확정은 막지 않음), 미매칭/수량불확실은 확정 차단
+
+검증:
+
+- web `npm test`(Vitest): **19/19 통과**(기존 도메인 5 + 신규 계산 6 + 파서 8)
+- web `npm run build`(Next 15.5.19): **성공**(타입체크 통과, 정적 4페이지)
+- 루트 `npm test`: **5/5 통과**(회귀 없음)
+- 모바일: 360px에서 dev 서버 렌더·상호작용(샘플 불러오기 클릭) 정상, 콘솔 오류 없음. **스크린샷 캡처는 preview 렌더러 타임아웃(환경 이슈)으로 미수집** — CSS 모바일 가드로 보완
+
+남은 이슈:
+
+- 시각적 스크린샷(360/390/430) 미수집(preview 도구 타임아웃) — 다음에 실제 브라우저 수동 확인 권장
+- 영구 저장 없음(새로고침 초기화) — 의도된 데모 범위. 다음 단위: Supabase 연결
+- 별칭 등록은 첫 토큰 기반 단순안 — 정교화 후보
+- 커밋/머지/push는 Codex 판단
+
+## 2026-06-30 Claude (단위 6 검수 반영 — 별칭 버튼 + 합산표 날짜 필터)
+
+상태:
+
+- 완료 (커밋 안 함). 브랜치 `claude/web-mvp-scaffold`
+
+수정 1 — 별칭 즉석 등록 버튼 노출/동작:
+
+- 문제: 버튼 조건이 `status==="unmatched" && productId`라 노출 불가(미매칭이면 productId null, 지정하면 matched).
+- 해결: `ParsedLine.wasUnmatched` 플래그 추가(파싱 시 미매칭이면 true) + `canRegisterAlias()` 순수 헬퍼. 미매칭이었던 라인을 사용자가 품목 지정하면 버튼 노출.
+- 별칭 토큰은 `extractNameCandidate(rawText)`로 추출(예: "랩 3개"→"랩"), 선택 품목 aliases에 추가, `aliasRegistered` 플래그로 버튼 숨김 + "별칭 등록됨" 표시 + 안내 메시지.
+- 자동 매칭된 정상 라인에는 버튼 미노출(불필요).
+
+수정 2 — 품목별 합산표 날짜 필터:
+
+- date input + [오늘]/[전체 날짜] 버튼 추가. `ConfirmedOrder.date` 기준 필터, 거래처 필터와 AND 결합. 현재 필터 라벨 표시. 빈 상태 메시지 유지.
+
+수정 파일:
+
+- (수정) `web/src/lib/order-parser.ts` — wasUnmatched/aliasRegistered, extractNameCandidate export, canRegisterAlias
+- (수정) `web/src/app/page.tsx` — 별칭 버튼 조건(canRegisterAlias), 별칭 토큰 추출, 날짜 필터 UI/로직
+- (수정) `web/src/lib/order-parser.test.ts` — 별칭 등록 가능 상태/재파싱 매칭 테스트 3건 추가
+- (수정) `docs/agent-worklog.md`
+
+검증:
+
+- web `npm test`: **22/22 통과**(+3)
+- web `npm run build`: **성공**
+- 루트 `npm test`: **5/5 통과**
+- 브라우저 390px(preview_eval 기반): 샘플 로딩 → "위생장갑 2박스/랩 3개" 파싱(랩 미매칭) → 랩을 종이컵으로 지정 시 **별칭 버튼 노출** → 클릭 시 메시지+버튼 숨김 → **재파싱 시 랩→종이컵 자동 매칭** → 합산표 날짜(오늘=표시 / 과거일=빈상태)+거래처 필터 동작 확인. 콘솔 오류 0.
+
