@@ -434,3 +434,58 @@ Codex 리뷰 요청:
 - 선별 통합 후 `web npm test`, 루트 `npm test`, `web npm run build`를 다시 실행한다.
 - 문서 통합이 앱 동작을 깨지 않는지 확인하고, 민감정보/금지 기능이 새로 들어오지 않았는지 스캔한다.
 
+
+## 2026-06-30 Claude (단위 7 — 매입처 발주용 품목 합산 흐름)
+
+상태:
+
+- 완료 (커밋 안 함). 브랜치 `codex/integrate-mvp-docs-web`
+
+작업 목표:
+
+- 여러 거래처의 오늘 발주를 품목별로 합산해 "매입처에 바로 보낼 총 발주 수량"을 만든다(F11). 복사용 발주 문장 + 거래처별 기여 내역까지.
+
+구현:
+
+- 신규 순수 모듈 `web/src/lib/aggregate.ts`:
+  - `buildAggregateRows(orders, productOrder)` — 품목별 총수량 + 거래처별 기여(수량 내림차순·이름순) + 품목 등록순 정렬
+  - `formatPurchaseOrderText(rows, title)` — "오늘 발주 합산\n콩나물 7박스\n양파 3망"
+  - `buildContributionText(row)` — "가람식당 3박스, 으뜸반찬 2박스, 한빛카페 2박스"
+  - `formatQtyUnit(qty, unit)`
+- `web/src/app/page.tsx` 합산표 뷰 개선:
+  - 보조 문구 "매입처에 보낼 총 발주 수량" 추가(제목 "품목별 합산표"는 유지)
+  - 총수량을 "7박스"처럼 단위 포함 표시, "거래처별 내역" 열 추가(기여 내역)
+  - "매입처에 보낼 발주 문장" 카드: 읽기전용 textarea(항상 노출=fallback) + [발주 문장 복사] 버튼
+  - 복사: `navigator.clipboard.writeText` 시도 → 실패 시 textarea select + 안내 메시지(사용자 친화)
+  - 발주 문장 제목은 날짜 필터에 맞춰 "오늘 발주 합산"/"YYYY-MM-DD 발주 합산"/"발주 합산"
+  - 기존 인라인 합산 로직을 aggregate.ts로 이전(중복 제거), CSV/날짜·거래처 필터 유지
+
+수정/추가 파일:
+
+- (신규) `web/src/lib/aggregate.ts`, `web/src/lib/aggregate.test.ts`
+- (수정) `web/src/app/page.tsx`
+- (수정) `docs/agent-worklog.md`
+
+검증:
+
+- web `npm test`: **29/29 통과**(+aggregate 7)
+- web `npm run build`: **성공**(타입체크 통과)
+- 루트 `npm test`: **5/5 통과**
+- 브라우저 390px: 샘플 로딩 → 3거래처(가람 콩나물3 / 한빛 콩나물2·양파2 / 으뜸 콩나물2·양파1) 확정 → 합산표 **콩나물 7박스·깐양파 3망**, 거래처별 내역 표시, 발주 문장 "콩나물 7박스 / 깐양파 3망", 복사 버튼(헤드리스라 clipboard 차단 → **fallback textarea 전체 선택 + 안내** 동작), 날짜 "오늘" 필터 시 제목 "오늘 발주 합산", 가로 overflow 없음(scrollWidth=390), 콘솔 오류 0
+
+설계 경계(준수):
+
+- 매입처별 저장/분리 없음, 품목 기본 매입처 등록 없음, 매입단가 이력/정확 마진/재고 없음(2차)
+- Supabase/로그인/DB/영구저장/PDF/세금계산서/연동/OCR 없음
+
+남은 이슈:
+
+- 복사 성공 경로는 실제 브라우저(localhost 보안 컨텍스트)에서 동작, 헤드리스 preview에선 fallback로 검증됨
+- 거래처별 기여 정렬은 수량 내림차순+이름순(고정). 발주 단위가 품목별로 섞이면(예: 같은 품목 다른 단위) 단순 합산 — 1차 단순안
+- 커밋/머지/push는 Codex 판단
+
+Codex 검수:
+
+- `web npm test` 29/29, 루트 `npm test` 5/5, `web npm run build` 성공 확인.
+- 390px 브라우저에서 3거래처 주문 확정 → 합산표 콩나물 7박스/깐양파 3망, 거래처별 내역, 발주 문장, 복사 fallback, 콘솔 오류 0 확인.
+- 합산표 카드 안에 새 `card`가 중첩되어 있던 부분은 같은 섹션의 구분 영역으로 보정(레이아웃 구조만 변경, 기능 변화 없음).

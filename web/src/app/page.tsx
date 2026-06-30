@@ -21,6 +21,11 @@ import {
   sumAmounts,
 } from "@/lib/calculations";
 import { loadSampleData, type SampleOrderExample } from "@/lib/sample-data";
+import {
+  buildAggregateRows,
+  buildContributionText,
+  formatPurchaseOrderText,
+} from "@/lib/aggregate";
 
 type View = "dashboard" | "paste" | "review" | "aggregate" | "orders" | "note";
 
@@ -203,26 +208,44 @@ export default function HomePage() {
     flash("주문이 확정되었습니다.");
   }
 
-  // ---- 합산표 ----
+  // ---- 합산표 (매입처 발주용) ----
   const aggregate = useMemo(() => {
     const filtered = orders.filter(
       (o) =>
         (aggCustomer === "all" || o.customerId === aggCustomer) &&
         (aggDate === "" || o.date === aggDate),
     );
-    const map = new Map<string, { name: string; unit: string; qty: number; custs: Set<string> }>();
-    for (const order of filtered) {
-      for (const l of order.lines) {
-        const cur = map.get(l.productId) ?? { name: l.productName, unit: l.unit, qty: 0, custs: new Set() };
-        cur.qty += l.quantity;
-        cur.custs.add(order.customerId);
-        map.set(l.productId, cur);
-      }
-    }
-    return [...map.entries()]
-      .map(([pid, v]) => ({ pid, name: v.name, unit: v.unit, qty: v.qty, custCount: v.custs.size }))
-      .sort((a, b) => products.findIndex((p) => p.id === a.pid) - products.findIndex((p) => p.id === b.pid));
+    return buildAggregateRows(filtered, products);
   }, [orders, aggCustomer, aggDate, products]);
+
+  // 복사용 발주 문장 (현재 필터 기준)
+  const purchaseTitle = useMemo(() => {
+    if (aggDate === today()) return "오늘 발주 합산";
+    if (aggDate !== "") return `${aggDate} 발주 합산`;
+    return "발주 합산";
+  }, [aggDate]);
+  const purchaseText = useMemo(
+    () => formatPurchaseOrderText(aggregate, purchaseTitle),
+    [aggregate, purchaseTitle],
+  );
+
+  async function copyPurchaseText() {
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(purchaseText);
+        flash("발주 문장을 복사했습니다. 매입처에 붙여넣어 보내세요.");
+        return;
+      }
+      throw new Error("clipboard unavailable");
+    } catch {
+      const el = document.getElementById("purchase-text") as HTMLTextAreaElement | null;
+      if (el) {
+        el.focus();
+        el.select();
+      }
+      flash("자동 복사가 안 돼요. 아래 칸이 선택되었으니 길게 눌러(또는 Ctrl+C) 복사하세요.");
+    }
+  }
 
   function exportCsv() {
     const rows = [
@@ -378,6 +401,9 @@ export default function HomePage() {
       {view === "aggregate" && (
         <section className="card">
           <h2>품목별 합산표</h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            여러 거래처 발주를 품목별로 합쳤습니다 — <strong>매입처에 보낼 총 발주 수량</strong>입니다.
+          </p>
           <div className="row-actions no-print" style={{ marginBottom: 8 }}>
             <select value={aggCustomer} onChange={(e) => setAggCustomer(e.target.value)} style={{ maxWidth: 200 }}>
               <option value="all">전체 거래처</option>
@@ -409,30 +435,56 @@ export default function HomePage() {
           {aggregate.length === 0 ? (
             <p className="muted">대상 주문이 없습니다. 발주를 붙여넣고 확정해보세요.</p>
           ) : (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>품목</th>
-                    <th>단위</th>
-                    <th className="num">총수량</th>
-                    <th className="num">거래처 수</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {aggregate.map((a) => (
-                    <tr key={a.pid}>
-                      <td>{a.name}</td>
-                      <td>{a.unit}</td>
-                      <td className="num">
-                        <strong>{a.qty}</strong>
-                      </td>
-                      <td className="num">{a.custCount}</td>
+            <>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>품목</th>
+                      <th>단위</th>
+                      <th className="num">총수량</th>
+                      <th>거래처별 내역</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {aggregate.map((a) => (
+                      <tr key={a.productId}>
+                        <td>{a.name}</td>
+                        <td>{a.unit}</td>
+                        <td className="num">
+                          <strong>
+                            {a.qty}
+                            {a.unit}
+                          </strong>
+                        </td>
+                        <td className="muted" style={{ fontSize: "0.85rem" }}>
+                          {buildContributionText(a)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ borderTop: "1px solid var(--line)", marginTop: 16, paddingTop: 14 }}>
+                <h3 style={{ marginTop: 0 }}>매입처에 보낼 발주 문장</h3>
+                <p className="muted" style={{ marginTop: 0 }}>
+                  아래 내용을 복사해 매입처에 그대로 보내세요.
+                </p>
+                <textarea
+                  id="purchase-text"
+                  readOnly
+                  value={purchaseText}
+                  rows={Math.min(aggregate.length + 2, 12)}
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+                <div className="row-actions no-print" style={{ marginTop: 8 }}>
+                  <button className="primary" onClick={copyPurchaseText}>
+                    발주 문장 복사
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </section>
       )}
