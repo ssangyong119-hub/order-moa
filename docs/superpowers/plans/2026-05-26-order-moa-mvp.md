@@ -439,7 +439,7 @@ test("aggregateItems groups all order items by product", () => {
 });
 
 test("buildDeliveryNote creates customer-facing rows and totals", () => {
-  const customers = [{ id: "c1", name: "마라톤 홀", phone: "010-0000-0000" }];
+  const customers = [{ id: "c1", name: "가람식당", phone: "010-0000-0000" }];
   const products = [
     { id: "p1", name: "미나리", baseUnit: "단" },
     { id: "p2", name: "식탁보", baseUnit: "BOX" }
@@ -461,7 +461,7 @@ test("buildDeliveryNote creates customer-facing rows and totals", () => {
   assert.deepEqual(buildDeliveryNote(order, customers, products, prices), {
     orderId: "o1",
     date: "2026-05-26",
-    customerName: "마라톤 홀",
+    customerName: "가람식당",
     customerPhone: "010-0000-0000",
     rows: [
       { productName: "미나리", unit: "단", quantity: 2, unitPrice: 3500, amount: 7000 },
@@ -611,9 +611,9 @@ Create `src/sample-data.js`:
 ```js
 export const sampleData = {
   customers: [
-    { id: "cust_marathon", name: "마라톤 홀", phone: "010-9151-5109", memo: "부산 사상구" },
-    { id: "cust_alddol", name: "알뜰식품", phone: "", memo: "채소류 주문 많음" },
-    { id: "cust_konabari", name: "코나바리", phone: "", memo: "반찬 납품" }
+    { id: "cust_garam", name: "가람식당", phone: "", memo: "가명 샘플 거래처" },
+    { id: "cust_hanbit", name: "한빛식품", phone: "", memo: "가명 샘플 거래처" },
+    { id: "cust_neulbom", name: "늘봄분식", phone: "", memo: "가명 샘플 거래처" }
   ],
   products: [
     { id: "prod_minari", name: "미나리", baseUnit: "단", aliases: ["미나리", "미나리 국산"] },
@@ -1349,4 +1349,3 @@ Type consistency:
 - IDs use string fields: `customerId`, `productId`, `order.id`.
 - Order items consistently use `productId` and `quantity`.
 - Prices consistently use `customerId`, `productId`, and `price`.
-
