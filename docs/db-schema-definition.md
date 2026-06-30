@@ -24,6 +24,9 @@
 - **금액은 KRW `integer`**, **수량은 `numeric`**.
 - **`line_amount = round(quantity × unit_price)`** (원 단위 반올림). `order_items.amount`는 이 규칙의 **생성 컬럼(generated)** 으로 강제.
 - **주문/명세서 합계 = 라인 `amount`의 합**(합산 후 반올림 없음).
+- **`order_items.unit_price`는 주문 확정 시점의 단가 스냅샷**이다. 확정 후 `customer_prices`가 바뀌어도 과거 주문/거래명세서 금액은 변하지 않는다 → **거래명세서 재출력·거래처별 기간 금액 집계·세금계산서 대조의 기준**(§5.2 기능정의서). 재출력 시 단가를 `customer_prices`에서 다시 조회하지 않는다.
+- **예상 마진은 주문에 스냅샷 저장하지 않는다**(1차). 표시 시점에 `products.base_purchase_price`로 계산하는 **참고값**일 뿐이며, 회계 기록이 아니다. 정확 마진은 2차.
+- 거래처별 **일/월/년 금액 집계**는 별도 집계 테이블 없이 `orders.order_date`(+`customer_id`)와 `order_items.amount`의 합으로 쿼리한다(1차). 집계 캐시/월정산 테이블은 후순위.
 - **`order_items`는 확정 주문 라인만 저장** → `product_id` **NOT NULL**. 파싱 후보/draft는 DB 영구 저장 안 함(화면 + `order_imports.raw_text`).
 - **`order_imports.customer_id` NOT NULL**. `raw_text` **기본 저장 ON**, 사용자 삭제 가능(→null).
 - **raw_text 삭제가 확정 주문에 영향 없게**: `orders`/`order_items`는 `order_imports`와 **FK로 묶지 않는다**(논리적 파생만). 따라서 raw_text를 null로 지워도 확정 주문은 그대로 유지된다.

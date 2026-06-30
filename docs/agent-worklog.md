@@ -489,3 +489,48 @@ Codex 검수:
 - `web npm test` 29/29, 루트 `npm test` 5/5, `web npm run build` 성공 확인.
 - 390px 브라우저에서 3거래처 주문 확정 → 합산표 콩나물 7박스/깐양파 3망, 거래처별 내역, 발주 문장, 복사 fallback, 콘솔 오류 0 확인.
 - 합산표 카드 안에 새 `card`가 중첩되어 있던 부분은 같은 섹션의 구분 영역으로 보정(레이아웃 구조만 변경, 기능 변화 없음).
+
+## 2026-06-30 Claude (단위 8 사전 설계 점검 — DB 연결 전 정합성)
+
+상태:
+
+- 완료 (문서만. web/·prototype/·Supabase·코드 미수정). 브랜치 `codex/integrate-mvp-docs-web`
+
+작업 목표:
+
+- Supabase/DB 저장 전환 전, 주문 저장·기간 집계·거래명세서 재출력·매입처 발주·세금계산서 근거 데이터의 설계 정합성 점검
+
+핵심 질문 점검 결과(모두 현 문서로 답변 가능):
+
+1. 주문 확정 저장 데이터 → orders + order_items(+order_imports.raw_text). 라인 단가 스냅샷.
+2. 거래처별 일/월/년 집계 → 별도 테이블 없이 orders.order_date+customer_id 범위의 order_items.amount 합(쿼리).
+3. 거래명세서 재출력 → orders+order_items+customers+companies만으로 재구성(스냅샷 단가). delivery_notes 없어도 가능.
+4. 세금계산서 근거 → 거래처별 기간 금액(orders/order_items) 1차 보존. 발행/대조는 2차(tax_invoice_summaries).
+5. 합산표/매입처 발주 문장 → 현재 주문 데이터만으로 충분(aggregate.ts 재사용).
+6. 2차 품목별 기본 매입처 → suppliers + products.default_supplier_id(nullable) additive, 현 스키마 안 막힘.
+7. 기준 매입단가 예상 마진(1차 참고값) vs 정확 회계 마진(2차) → §5.1/§5.2/db §2 일관.
+
+문서 보정(과한 기능 추가 없음, 1차/2차 경계 명확화):
+
+- `docs/db-schema-definition.md` §2: unit_price 스냅샷 원칙, 예상 마진 미저장(표시 참고값), 기간 집계 쿼리 기반 명시
+- `docs/function-specification.md` F12: 거래처별 일/월/년 기간 합계(§5.2 근거) 명시 / F13: 재출력은 저장 주문 스냅샷 기준, delivery_notes 없이 재출력 가능 명시
+
+신규 문서:
+
+- `docs/task-prompt-unit-8-supabase-persistence-flow.md` (단위 8 목표·범위·금지·저장 데이터·화면별 흐름·기간 집계·재출력·합산표 관계·세금계산서 1차 보존·검증·구현 지시)
+
+수정/신규 파일:
+
+- (신규) `docs/task-prompt-unit-8-supabase-persistence-flow.md`
+- (수정) `docs/db-schema-definition.md`, `docs/function-specification.md`, `docs/agent-worklog.md`
+
+민감정보 스캔:
+
+- docs 전체 실거래처명/전화/사업자번호/주소 패턴 스캔 — 신규 작성분에 없음(공급자/거래처는 가명·공란 원칙 유지)
+
+남은 쟁점(Codex 검수 포인트):
+
+- 단위 8에 인증(F1)·회사 부트스트랩(F2) 포함 범위 확정(앞 단위들이 로그인 보류였음) — RLS 회사격리에는 auth.uid 필요
+- delivery_notes/receivables 1차 포함 여부(현 권고: 기본 제외, 미저장 재출력으로 충분)
+- 주문 수정/취소(soft, status=cancelled) UX 범위
+- 커밋/머지/push는 Codex 판단(이번 미커밋)
