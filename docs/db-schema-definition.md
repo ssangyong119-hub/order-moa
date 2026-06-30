@@ -28,6 +28,7 @@
 - **`order_imports.customer_id` NOT NULL**. `raw_text` **기본 저장 ON**, 사용자 삭제 가능(→null).
 - **raw_text 삭제가 확정 주문에 영향 없게**: `orders`/`order_items`는 `order_imports`와 **FK로 묶지 않는다**(논리적 파생만). 따라서 raw_text를 null로 지워도 확정 주문은 그대로 유지된다.
 - **VAT 계산 없음**(1차). `products.tax_type`은 확장 필드로만 둠.
+- **기준 매입단가**는 `products.base_purchase_price integer nullable`(품목당 단일, 선택)로만 둔다 → **예상 마진은 표시용 참고값**(판매단가 − 기준 매입단가). 매입처별/시점별 정밀 원가·재고·정확한 회계 마진은 **2차 별도 테이블**로 분리(§4.12).
 - **`delivery_notes` 저장/`note_number` 채번은 후순위/선택**.
 - 삭제는 가능한 한 **soft delete**(customers/products=`archived_at`, orders=`status='cancelled'`).
 - 모든 **FK 참조는 같은 `company_id` 안에서만** 연결한다(교차 회사 혼입 차단). 강제 방식은 §5.1 / §6.1(트리거) 참조.
@@ -40,6 +41,7 @@
 | 1 | `customer_prices.effective_from` | **유지**. 1차는 현재 단가 관리용 **메모성 필드**(단가 이력 테이블은 2차) |
 | 2 | `receivables` 생성 시점 | 주문 확정 시 **자동 생성 안 함**. 1차는 **수동 생성 + 수동 status** |
 | 3 | `order_items.unit` | **입력 단위 그대로 저장**. `products.base_unit`은 기본값/참고값. 단위 정규화는 2차 |
+| 4 | 기준 매입단가 위치 | **`products.base_purchase_price integer nullable`(1차 단순안 채택)**. 예상 마진 표시용 참고값. 매입단가가 거래처/매입처/시점별로 다른 정밀 모델(매입이력·원가이력·재고평가)은 **2차 별도 테이블**(`purchase_prices`/`price_history` 류)로 분리. 1차는 품목당 단일 매입단가 1개로 단순화 |
 
 ---
 
@@ -117,6 +119,7 @@
 | name | text | ✅ | | 품목명, length≥1 |
 | base_unit | text | ✅ | | 기본단위(참고/기본값) |
 | tax_type | text | ✅ | 'taxable' | CHECK in ('taxable','exempt'). **계산 반영 2차** |
+| base_purchase_price | integer | | null | **기준 매입단가(선택, 질문4 확정)** — CHECK (>=0). 예상 마진 표시용 참고값. **정확한 매입이력/원가이력/재고평가는 2차**(별도 테이블) |
 | memo | text | | null | |
 | created_at | timestamptz | ✅ | now() | |
 | archived_at | timestamptz | | null | soft delete |
@@ -216,6 +219,7 @@
 ### 4.12 후순위(2차) 테이블 — 스키마 여지만
 
 - **price_history**: `id, company_id, customer_id, product_id, old_price int, new_price int, changed_at timestamptz, changed_by uuid`. 단가 변경 감사/이력. (1차 미생성)
+- **purchase_prices / cost_history(가칭)**: 매입처별·매입일별 원가, 재고 평가 등 **정확한 원가 모델**. 1차 `products.base_purchase_price`(단일 참고값)를 대체/확장. **정확한 회계 마진 계산의 근거**가 되는 2차 테이블. (1차 미생성)
 - **tax_invoice_summaries**: `id, company_id, customer_id, year_month text, sales_total int, issued_amount int, gap int`. 월·거래처 매출/발행 정리. (1차 미생성, 직접 발행 아님)
 
 ---
@@ -298,6 +302,7 @@ create table public.products (
   name text not null check (char_length(name) >= 1),
   base_unit text not null,
   tax_type text not null default 'taxable' check (tax_type in ('taxable','exempt')),
+  base_purchase_price integer check (base_purchase_price >= 0), -- 질문4: 기준 매입단가(선택), 예상 마진 표시용 참고값. 정밀 원가는 2차
   memo text,
   created_at timestamptz not null default now(),
   archived_at timestamptz
