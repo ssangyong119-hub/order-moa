@@ -223,6 +223,7 @@
 - 모바일: 미리보기 위주, 실제 인쇄/공유는 데스크톱 권장(§12)
 - 연결 기능: F13 / 연결 데이터: orders, order_items, customers, customer_prices, (회사 정보) companies
 - 후순위·제외: **PDF 생성 후순위**, note_number 채번 후순위, **VAT/세금계산서 발행 제외**
+- 인쇄 구현 상세 기준: `docs/delivery-note-print-spec.md` 참조(A4·@media print·1장 2부 검토·모바일 미리보기)
 
 ### S13 미수금 수동 체크
 - 목적: 주문/명세 기준 미수 상태를 수동 체크 / 사용자: 회사 소속

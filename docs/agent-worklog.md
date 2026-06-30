@@ -272,3 +272,43 @@ Claude에게 다음 작업 지시:
 - Codex 검수: base_purchase_price 단일 컬럼 안 vs 2차 원가 테이블 분리 경계 확인
 - 다음: 실제 Next.js 구현 TASK 작성(단위 분할·검증 명령)
 
+## 2026-06-30 Claude (단위 5 마무리 + 단위 6 TASK 준비)
+
+상태:
+
+- 완료 (문서만. 코드/SQL/Supabase/web 미수정)
+
+한 일:
+
+- 이카운트 벤치마크 반영분 자체 리뷰 후 **커밋** (`docs: reflect ecount benchmark`, 해시 20db94a) — push는 안 함(Codex 판단)
+- 민감정보 정리: `ecount-benchmark-2026-06-30.md`의 실상호 포함 엑셀 파일명을 `[실상호]`로 일반화
+- 샘플 데이터 고도화: `sample-data-definition.md` §10 신설 — "실제 ERP 품목 패턴에서 일반화한 샘플 설계 원칙"(품목명/규격 분리, 단위 사전, 별칭/수량 표현 패턴, 확장 후보 품목). 기존 데이터 유지
+- 거래명세서 인쇄 기준 신규 문서: `docs/delivery-note-print-spec.md` (A4/@media print/1장 2부 검토/모바일 미리보기/VAT 없음/PDF 후순위). S12에서 참조 연결
+- 구현 TASK 신규 문서: `docs/task-prompt-unit-6-nextjs-demo-flow.md` (샘플 기반 핵심 흐름, Supabase 미연결, 검증 명령 포함)
+
+신규/수정 파일(2차 배치, 미커밋):
+
+- (신규) `docs/delivery-note-print-spec.md`
+- (신규) `docs/task-prompt-unit-6-nextjs-demo-flow.md`
+- (수정) `docs/sample-data-definition.md` (§10 신설, §11 다음 산출물)
+- (수정) `docs/screen-specification.md` (S12 인쇄 기준 참조)
+- (수정) `docs/agent-worklog.md` (본 기록)
+
+자체 리뷰:
+
+- 1차/2차 경계 일관(예상 마진 참고값=1차, 정확 회계 마진=2차). base_purchase_price nullable 9개 문서 일관
+- 실거래처명/전화/사업자번호/주소 없음(엑셀 실상호 일반화 완료)
+- web/·prototype/·.codex/·.planr/·data/ 미수정 확인
+- 단위 6 TASK는 "샘플 기반 핵심 흐름"으로 범위 한정(전체 ERP 아님), 다음 세션 바로 실행 가능
+
+남은 이슈:
+
+- web 구현 브랜치(claude/web-mvp-scaffold 계속 vs codex 머지) → Codex/사용자 결정 필요
+- 2차 배치 문서 커밋·push 여부 → Codex 판단
+- 민감정보 가린 이카운트 캡처가 필요하면 사용자가 `data/references/ecount/`에 넣어주면 구조 정밀화 가능(원본 미커밋)
+
+Codex 후속 검수:
+
+- 예전 계획 문서 `docs/superpowers/plans/2026-05-26-order-moa-mvp.md` 안 샘플 코드에 남아 있던 실번호/실상호처럼 보이는 값을 가명·더미값으로 마스킹.
+- 현재 남은 `010-0000-0000`은 샘플 더미 번호로 판단.
+
