@@ -534,3 +534,76 @@ Codex 검수:
 - delivery_notes/receivables 1차 포함 여부(현 권고: 기본 제외, 미저장 재출력으로 충분)
 - 주문 수정/취소(soft, status=cancelled) UX 범위
 - 커밋/머지/push는 Codex 판단(이번 미커밋)
+
+## 2026-06-30 Claude (단위 8a — Supabase 인증/회사/RLS 기반)
+
+상태:
+
+- 완료 (커밋 안 함). 브랜치 `codex/integrate-mvp-docs-web`
+
+작업 목표:
+
+- 단위 8 전체가 아니라 8a만: Supabase 클라이언트/서버 준비 + 최소 인증(F1) + 회사 생성/선택(F2) + 1차 테이블 마이그레이션/RLS/부트스트랩 RPC 파일. 데이터 저장(주문/합산/명세서 DB 연결)은 이번 제외.
+
+구현:
+
+- 마이그레이션 파일(적용은 별도): `web/supabase/migrations/`
+  - `0001_schema.sql` — 9개 1차 테이블 + 인덱스 + 교차회사 무결성 트리거(방식 B)
+  - `0002_rls.sql` — is_company_member/is_company_owner + 전 테이블 RLS + 정책(부트스트랩 예외 포함)
+  - `0003_company_bootstrap.sql` — create_company_with_owner RPC(security definer, authenticated만)
+- Supabase 설정: `web/src/lib/supabase/config.ts`(env 가드, 미설정 시 null), `client.ts`(브라우저 anon), `server.ts`(서버 전용 준비물, 8a 미사용), `config.test.ts`
+- 인증/회사 게이트: `web/src/app/auth-gate.tsx` — `useCompanySession` 훅 + LoginView(이메일 매직링크)/CompanySetupView(회사 생성·선택)/AuthBar(로그아웃)
+- `web/src/app/page.tsx` 얇게 통합: 상단에 게이트 훅, 로그인/회사 없음 시 게이트 화면, 있으면 기존 데모 진입. **Supabase 미설정이면 status="disabled" → 데모 그대로**
+- `web/.env.local.example` 갱신(anon 3종 + service role 서버전용 경고)
+- 순수 로직(parser/calculations/aggregate) 미변경
+
+보류(8a 제외, 다음):
+
+- 주문/합산표/거래명세서 DB 연결, delivery_notes/receivables, 세금계산서/VAT/이카운트/OCR/PDF, 매입처/재고/정확 마진 — 전부 미착수
+
+검증:
+
+- 루트 `npm test`: **5/5**
+- web `npm test`: **32/32**(+supabase config 3)
+- web `npm run build`: **성공**(타입체크 통과, 초기 TS 오류 1건 수정 — onAuthStateChange 파라미터 타입)
+- **service role key 클라이언트 번들 미포함** 확인(`.next/static` grep 0)
+- server.ts(next/headers) 클라이언트 번들 미유입 확인(미import → 번들 제외)
+- `.env` 미추적(예시만), `.env.local` 없음(데모 모드)
+- 브라우저(데모 모드): 랜딩→샘플 로딩→nav 정상, AuthBar 숨김(disabled), 콘솔 오류 0
+
+RLS 검증 방법(문서 기준, 실제 Supabase 미적용이라 코드검증만):
+
+- `supabase-rls-policy.md` §9 시나리오로 A/B회사 격리 검증 예정: U_A가 B회사 customers/orders/order_items/customer_prices select→0행, insert/update→거부. 실제 검증은 Supabase 적용 후 SQL/통합 테스트로 수행.
+
+남은 쟁점(Codex 확인):
+
+- 실제 Supabase 프로젝트에 마이그레이션 적용 + RLS 시나리오 실측(8a 코드는 준비 완료, 미적용).
+- 인증 리다이렉트(magic link) 콜백 처리 — 현재 클라이언트 세션 감지(onAuthStateChange)로 처리, 서버 세션 쿠키/미들웨어는 다음 단위.
+- Codex 검수 중 npm 저위험 취약점 1건(esbuild dev 서버, Windows, dev 전용)은 기존 보안 보정 방식과 맞춰 `overrides.esbuild=^0.28.1`로 해결. `npm audit --audit-level=low`: 0 vulnerabilities.
+- 커밋/머지/push는 Codex 판단(이번 미커밋).
+
+## 2026-07-01 Codex (단위 8a 검수 및 보안 보정)
+
+상태:
+
+- 완료. Claude 단위 8a 작업을 검수하고 npm audit 저위험 항목을 보정.
+
+검수 내용:
+
+- 변경 범위가 8a(인증/회사/RLS 기반)에 머무는지 확인. 주문 저장/합산표/거래명세서 DB 연결은 미구현 상태 유지.
+- Supabase 마이그레이션 3개, 인증 게이트, env 예시, package 변경 직접 검수.
+- `esbuild` Windows dev-server low 취약점은 기존 `postcss` 보안 보정과 같은 방식으로 `web/package.json` overrides에 `esbuild: ^0.28.1` 추가 후 `npm install`로 lockfile 갱신.
+
+검증:
+
+- 루트 `npm test`: 5/5 통과
+- web `npm test`: 32/32 통과
+- web `npm run build`: 성공
+- web `npm audit --audit-level=low`: found 0 vulnerabilities
+- `git diff --check`: 공백 오류 없음
+- `.env.local` 미존재, 커밋 대상은 `.env.local.example`만 확인
+
+남은 이슈:
+
+- Supabase 실제 프로젝트 적용 및 RLS A/B 회사 격리 실측은 다음 단위에서 수행.
+- magic link 서버 쿠키/미들웨어 정리는 다음 단위에서 처리.

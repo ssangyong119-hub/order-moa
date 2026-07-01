@@ -26,6 +26,12 @@ import {
   buildContributionText,
   formatPurchaseOrderText,
 } from "@/lib/aggregate";
+import {
+  AuthBar,
+  CompanySetupView,
+  LoginView,
+  useCompanySession,
+} from "./auth-gate";
 
 type View = "dashboard" | "paste" | "review" | "aggregate" | "orders" | "note";
 
@@ -53,6 +59,9 @@ function today(): string {
 }
 
 export default function HomePage() {
+  // 단위 8a 인증/회사 게이트 (Supabase 미설정이면 status="disabled" → 데모 그대로)
+  const session = useCompanySession();
+
   const [data, setData] = useState<ReturnType<typeof loadSampleData> | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -263,9 +272,23 @@ export default function HomePage() {
   }
 
   // ===== 렌더 =====
+  // 인증 게이트: Supabase 설정 시 로그인/회사 컨텍스트가 준비돼야 데모 진입.
+  if (session.status === "loading") {
+    return (
+      <main className="app">
+        <div className="card">
+          <p className="muted">불러오는 중…</p>
+        </div>
+      </main>
+    );
+  }
+  if (session.status === "signed_out") return <LoginView session={session} />;
+  if (session.status === "no_company") return <CompanySetupView session={session} />;
+
   if (!data) {
     return (
       <main className="app">
+        <AuthBar session={session} />
         <div className="topbar">
           <h1>오더모아</h1>
           <span className="company">데모</span>
@@ -288,6 +311,7 @@ export default function HomePage() {
 
   return (
     <main className="app">
+      <AuthBar session={session} />
       <div className="topbar no-print">
         <h1>오더모아</h1>
         <span className="company">데모 회사: {data.company.name}</span>
