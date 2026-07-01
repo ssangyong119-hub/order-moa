@@ -1,35 +1,37 @@
--- 오더모아 단위 8a — 1차 필수 테이블 스키마
+-- 오더모아 단위 8a — 1차 필수 테이블 스키마 (공유 Supabase 프로젝트용)
 -- 근거: docs/db-schema-definition.md §4/§6 (확정값 C1~C5/A~D)
+-- 공유 프로젝트(yangsan-inventory) 충돌 방지: 모든 오더모아 객체에 `ordermoa_` 접두사.
 -- 적용은 Supabase 프로젝트에서 별도 수행. 이 파일은 마이그레이션 소스.
--- 범위(8a): companies, company_members, customers, products, product_aliases,
---           customer_prices, order_imports, orders, order_items
+-- 범위(8a): ordermoa_companies, ordermoa_company_members, ordermoa_customers,
+--           ordermoa_products, ordermoa_product_aliases, ordermoa_customer_prices,
+--           ordermoa_order_imports, ordermoa_orders, ordermoa_order_items
 -- 제외(후순위): delivery_notes, receivables, price_history, tax_invoice_summaries
 
 -- Supabase는 gen_random_uuid() 기본 제공(pgcrypto). 필요 시:
 -- create extension if not exists pgcrypto;
 
-create table if not exists public.companies (
+create table if not exists public.ordermoa_companies (
   id uuid primary key default gen_random_uuid(),
   name text not null check (char_length(name) between 1 and 200),
   business_number text,
   owner_user_id uuid not null references auth.users(id),
   created_at timestamptz not null default now()
 );
-create index if not exists idx_companies_owner on public.companies(owner_user_id);
+create index if not exists ordermoa_idx_companies_owner on public.ordermoa_companies(owner_user_id);
 
-create table if not exists public.company_members (
+create table if not exists public.ordermoa_company_members (
   id uuid primary key default gen_random_uuid(),
-  company_id uuid not null references public.companies(id) on delete cascade,
+  company_id uuid not null references public.ordermoa_companies(id) on delete cascade,
   user_id uuid not null references auth.users(id),
   role text not null default 'owner' check (role in ('owner','staff')),
   created_at timestamptz not null default now(),
   unique (company_id, user_id)
 );
-create index if not exists idx_company_members_user on public.company_members(user_id);
+create index if not exists ordermoa_idx_company_members_user on public.ordermoa_company_members(user_id);
 
-create table if not exists public.customers (
+create table if not exists public.ordermoa_customers (
   id uuid primary key default gen_random_uuid(),
-  company_id uuid not null references public.companies(id) on delete cascade,
+  company_id uuid not null references public.ordermoa_companies(id) on delete cascade,
   name text not null check (char_length(name) >= 1),
   phone text,
   address text,
@@ -37,12 +39,12 @@ create table if not exists public.customers (
   created_at timestamptz not null default now(),
   archived_at timestamptz
 );
-create index if not exists idx_customers_company on public.customers(company_id);
-create index if not exists idx_customers_company_name on public.customers(company_id, name);
+create index if not exists ordermoa_idx_customers_company on public.ordermoa_customers(company_id);
+create index if not exists ordermoa_idx_customers_company_name on public.ordermoa_customers(company_id, name);
 
-create table if not exists public.products (
+create table if not exists public.ordermoa_products (
   id uuid primary key default gen_random_uuid(),
-  company_id uuid not null references public.companies(id) on delete cascade,
+  company_id uuid not null references public.ordermoa_companies(id) on delete cascade,
   name text not null check (char_length(name) >= 1),
   base_unit text not null,
   tax_type text not null default 'taxable' check (tax_type in ('taxable','exempt')),
@@ -51,32 +53,32 @@ create table if not exists public.products (
   created_at timestamptz not null default now(),
   archived_at timestamptz
 );
-create index if not exists idx_products_company on public.products(company_id);
+create index if not exists ordermoa_idx_products_company on public.ordermoa_products(company_id);
 
-create table if not exists public.product_aliases (
+create table if not exists public.ordermoa_product_aliases (
   id uuid primary key default gen_random_uuid(),
-  company_id uuid not null references public.companies(id) on delete cascade,
-  product_id uuid not null references public.products(id) on delete cascade,
+  company_id uuid not null references public.ordermoa_companies(id) on delete cascade,
+  product_id uuid not null references public.ordermoa_products(id) on delete cascade,
   alias text not null check (char_length(alias) >= 1),
   unique (company_id, alias)
 );
-create index if not exists idx_product_aliases_product on public.product_aliases(product_id);
+create index if not exists ordermoa_idx_product_aliases_product on public.ordermoa_product_aliases(product_id);
 
-create table if not exists public.customer_prices (
+create table if not exists public.ordermoa_customer_prices (
   id uuid primary key default gen_random_uuid(),
-  company_id uuid not null references public.companies(id) on delete cascade,
-  customer_id uuid not null references public.customers(id) on delete cascade,
-  product_id uuid not null references public.products(id) on delete cascade,
+  company_id uuid not null references public.ordermoa_companies(id) on delete cascade,
+  customer_id uuid not null references public.ordermoa_customers(id) on delete cascade,
+  product_id uuid not null references public.ordermoa_products(id) on delete cascade,
   sale_price integer not null check (sale_price >= 0),
   effective_from date, -- 1차: 현재 단가 메모성 필드
   created_at timestamptz not null default now(),
   unique (company_id, customer_id, product_id)
 );
 
-create table if not exists public.order_imports (
+create table if not exists public.ordermoa_order_imports (
   id uuid primary key default gen_random_uuid(),
-  company_id uuid not null references public.companies(id) on delete cascade,
-  customer_id uuid not null references public.customers(id), -- C4: NOT NULL
+  company_id uuid not null references public.ordermoa_companies(id) on delete cascade,
+  customer_id uuid not null references public.ordermoa_customers(id), -- C4: NOT NULL
   source text default 'kakao',
   raw_text text,            -- C3: 기본 저장 ON, 삭제 시 null
   parsed_at timestamptz,
@@ -84,27 +86,27 @@ create table if not exists public.order_imports (
   created_by uuid not null references auth.users(id),
   created_at timestamptz not null default now()
 );
-create index if not exists idx_order_imports_company on public.order_imports(company_id);
-create index if not exists idx_order_imports_customer on public.order_imports(customer_id);
+create index if not exists ordermoa_idx_order_imports_company on public.ordermoa_order_imports(company_id);
+create index if not exists ordermoa_idx_order_imports_customer on public.ordermoa_order_imports(customer_id);
 
-create table if not exists public.orders (
+create table if not exists public.ordermoa_orders (
   id uuid primary key default gen_random_uuid(),
-  company_id uuid not null references public.companies(id) on delete cascade,
-  customer_id uuid not null references public.customers(id),
+  company_id uuid not null references public.ordermoa_companies(id) on delete cascade,
+  customer_id uuid not null references public.ordermoa_customers(id),
   order_date date not null default current_date,
   source text,
   status text not null default 'confirmed' check (status in ('draft','confirmed','cancelled')),
   memo text,
   created_at timestamptz not null default now()
 );
-create index if not exists idx_orders_company_date on public.orders(company_id, order_date);
-create index if not exists idx_orders_customer on public.orders(customer_id);
+create index if not exists ordermoa_idx_orders_company_date on public.ordermoa_orders(company_id, order_date);
+create index if not exists ordermoa_idx_orders_customer on public.ordermoa_orders(customer_id);
 
-create table if not exists public.order_items (
+create table if not exists public.ordermoa_order_items (
   id uuid primary key default gen_random_uuid(),
-  company_id uuid not null references public.companies(id) on delete cascade,
-  order_id uuid not null references public.orders(id) on delete cascade,
-  product_id uuid not null references public.products(id), -- A: 확정 라인만, NOT NULL
+  company_id uuid not null references public.ordermoa_companies(id) on delete cascade,
+  order_id uuid not null references public.ordermoa_orders(id) on delete cascade,
+  product_id uuid not null references public.ordermoa_products(id), -- A: 확정 라인만, NOT NULL
   raw_name text,
   quantity numeric not null check (quantity > 0),
   unit text,                                    -- 입력 단위 그대로
@@ -112,12 +114,12 @@ create table if not exists public.order_items (
   -- B: line_amount = round(quantity * unit_price), 생성 컬럼으로 강제
   amount integer not null generated always as (round(quantity * unit_price)::integer) stored
 );
-create index if not exists idx_order_items_order on public.order_items(order_id);
-create index if not exists idx_order_items_company_product on public.order_items(company_id, product_id);
+create index if not exists ordermoa_idx_order_items_order on public.ordermoa_order_items(order_id);
+create index if not exists ordermoa_idx_order_items_company_product on public.ordermoa_order_items(company_id, product_id);
 
 -- 교차 회사 참조 무결성 (db-schema §5.1/§6.1, 방식 B: 트리거)
 -- 참조하는 행의 company_id가 본인 company_id와 같은지 검증한다.
-create or replace function public.assert_same_company(child_company uuid, parent_company uuid, label text)
+create or replace function public.ordermoa_assert_same_company(child_company uuid, parent_company uuid, label text)
 returns void language plpgsql as $$
 begin
   if parent_company is null or parent_company <> child_company then
@@ -126,66 +128,66 @@ begin
 end;
 $$;
 
-create or replace function public.check_product_aliases_company()
+create or replace function public.ordermoa_check_product_aliases_company()
 returns trigger language plpgsql as $$
 begin
-  perform public.assert_same_company(NEW.company_id,
-    (select company_id from public.products where id = NEW.product_id), 'product_aliases.product_id');
+  perform public.ordermoa_assert_same_company(NEW.company_id,
+    (select company_id from public.ordermoa_products where id = NEW.product_id), 'ordermoa_product_aliases.product_id');
   return NEW;
 end;
 $$;
-create trigger trg_product_aliases_company
-  before insert or update on public.product_aliases
-  for each row execute function public.check_product_aliases_company();
+create trigger ordermoa_trg_product_aliases_company
+  before insert or update on public.ordermoa_product_aliases
+  for each row execute function public.ordermoa_check_product_aliases_company();
 
-create or replace function public.check_customer_prices_company()
+create or replace function public.ordermoa_check_customer_prices_company()
 returns trigger language plpgsql as $$
 begin
-  perform public.assert_same_company(NEW.company_id,
-    (select company_id from public.customers where id = NEW.customer_id), 'customer_prices.customer_id');
-  perform public.assert_same_company(NEW.company_id,
-    (select company_id from public.products where id = NEW.product_id), 'customer_prices.product_id');
+  perform public.ordermoa_assert_same_company(NEW.company_id,
+    (select company_id from public.ordermoa_customers where id = NEW.customer_id), 'ordermoa_customer_prices.customer_id');
+  perform public.ordermoa_assert_same_company(NEW.company_id,
+    (select company_id from public.ordermoa_products where id = NEW.product_id), 'ordermoa_customer_prices.product_id');
   return NEW;
 end;
 $$;
-create trigger trg_customer_prices_company
-  before insert or update on public.customer_prices
-  for each row execute function public.check_customer_prices_company();
+create trigger ordermoa_trg_customer_prices_company
+  before insert or update on public.ordermoa_customer_prices
+  for each row execute function public.ordermoa_check_customer_prices_company();
 
-create or replace function public.check_order_imports_company()
+create or replace function public.ordermoa_check_order_imports_company()
 returns trigger language plpgsql as $$
 begin
-  perform public.assert_same_company(NEW.company_id,
-    (select company_id from public.customers where id = NEW.customer_id), 'order_imports.customer_id');
+  perform public.ordermoa_assert_same_company(NEW.company_id,
+    (select company_id from public.ordermoa_customers where id = NEW.customer_id), 'ordermoa_order_imports.customer_id');
   return NEW;
 end;
 $$;
-create trigger trg_order_imports_company
-  before insert or update on public.order_imports
-  for each row execute function public.check_order_imports_company();
+create trigger ordermoa_trg_order_imports_company
+  before insert or update on public.ordermoa_order_imports
+  for each row execute function public.ordermoa_check_order_imports_company();
 
-create or replace function public.check_orders_company()
+create or replace function public.ordermoa_check_orders_company()
 returns trigger language plpgsql as $$
 begin
-  perform public.assert_same_company(NEW.company_id,
-    (select company_id from public.customers where id = NEW.customer_id), 'orders.customer_id');
+  perform public.ordermoa_assert_same_company(NEW.company_id,
+    (select company_id from public.ordermoa_customers where id = NEW.customer_id), 'ordermoa_orders.customer_id');
   return NEW;
 end;
 $$;
-create trigger trg_orders_company
-  before insert or update on public.orders
-  for each row execute function public.check_orders_company();
+create trigger ordermoa_trg_orders_company
+  before insert or update on public.ordermoa_orders
+  for each row execute function public.ordermoa_check_orders_company();
 
-create or replace function public.check_order_items_company()
+create or replace function public.ordermoa_check_order_items_company()
 returns trigger language plpgsql as $$
 begin
-  perform public.assert_same_company(NEW.company_id,
-    (select company_id from public.products where id = NEW.product_id), 'order_items.product_id');
-  perform public.assert_same_company(NEW.company_id,
-    (select company_id from public.orders where id = NEW.order_id), 'order_items.order_id');
+  perform public.ordermoa_assert_same_company(NEW.company_id,
+    (select company_id from public.ordermoa_products where id = NEW.product_id), 'ordermoa_order_items.product_id');
+  perform public.ordermoa_assert_same_company(NEW.company_id,
+    (select company_id from public.ordermoa_orders where id = NEW.order_id), 'ordermoa_order_items.order_id');
   return NEW;
 end;
 $$;
-create trigger trg_order_items_company
-  before insert or update on public.order_items
-  for each row execute function public.check_order_items_company();
+create trigger ordermoa_trg_order_items_company
+  before insert or update on public.ordermoa_order_items
+  for each row execute function public.ordermoa_check_order_items_company();

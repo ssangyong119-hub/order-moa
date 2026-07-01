@@ -45,7 +45,7 @@ export function useCompanySession(): CompanySession {
   const loadCompanies = useCallback(async () => {
     if (!supabase) return;
     const { data, error: qErr } = await supabase
-      .from("companies")
+      .from("ordermoa_companies")
       .select("id,name")
       .order("created_at", { ascending: true });
     if (!mounted.current) return;
@@ -133,7 +133,7 @@ export function useCompanySession(): CompanySession {
       if (!supabase) return;
       setBusy(true);
       setError(null);
-      const { error: rErr } = await supabase.rpc("create_company_with_owner", {
+      const { error: rErr } = await supabase.rpc("ordermoa_create_company_with_owner", {
         p_name: name.trim(),
       });
       if (!mounted.current) return;

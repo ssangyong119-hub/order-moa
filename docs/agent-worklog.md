@@ -607,3 +607,63 @@ RLS 검증 방법(문서 기준, 실제 Supabase 미적용이라 코드검증만
 
 - Supabase 실제 프로젝트 적용 및 RLS A/B 회사 격리 실측은 다음 단위에서 수행.
 - magic link 서버 쿠키/미들웨어 정리는 다음 단위에서 처리.
+
+## 2026-06-30 Claude (단위 8a-공유 — ordermoa_ 접두사 적용)
+
+상태:
+
+- 완료 (커밋 안 함). 브랜치 `codex/integrate-mvp-docs-web`
+
+배경:
+
+- Supabase 무료 프로젝트 한도로, 기존 `yangsan-inventory` 프로젝트를 공유해 오더모아 MVP 테스트. 충돌 방지 위해 모든 오더모아 DB 객체에 `ordermoa_` 접두사 적용.
+
+변경(마이그레이션 SQL 재작성, 적용은 아직 안 함):
+
+- 테이블 9개: companies→ordermoa_companies, company_members→ordermoa_company_members, customers→ordermoa_customers, products→ordermoa_products, product_aliases→ordermoa_product_aliases, customer_prices→ordermoa_customer_prices, order_imports→ordermoa_order_imports, orders→ordermoa_orders, order_items→ordermoa_order_items
+- 함수/RPC: is_company_member→ordermoa_is_company_member, is_company_owner→ordermoa_is_company_owner, create_company_with_owner→ordermoa_create_company_with_owner, assert_same_company→ordermoa_assert_same_company, check_*_company→ordermoa_check_*_company
+- 트리거: ordermoa_trg_*_company / 인덱스: ordermoa_idx_* / 정책: ordermoa_* (모두 접두사)
+- FK/PK/unique/check 제약은 테이블명 기반 자동 명명이라 이미 ordermoa_ 포함
+
+앱 코드:
+
+- `web/src/app/auth-gate.tsx`: `.from("companies")`→`.from("ordermoa_companies")`, `rpc("create_company_with_owner")`→`rpc("ordermoa_create_company_with_owner")`
+
+검증:
+
+- 접두사 누락 grep: SQL 내 `public.<비접두사>` 0건, create policy/trigger/function/index 이름 전부 ordermoa_ 시작, 앱 내 비접두사 from/rpc 0건
+- 루트 `npm test` 5/5, web `npm test` 32/32, web `npm run build` 성공, `npm audit` **0 vulnerabilities**
+- 데모 모드(env 미설정) 스모크: 랜딩→샘플 로딩→nav 정상, 콘솔 오류 0 (접두사 변경은 Supabase 설정 시에만 영향)
+
+적용 전 주의:
+
+- yangsan-inventory 기존 테이블/데이터 미변경. 이 SQL은 오더모아 객체만 새로 생성.
+- 3개 파일 순서대로 적용: 0001_schema → 0002_rls → 0003_company_bootstrap
+- `auth.users`(Supabase 인증 스키마) 참조는 그대로 사용(공유 프로젝트 공통).
+
+다음 단계:
+
+- 사용자가 `web/.env.local`에 공유 프로젝트 NEXT_PUBLIC_SUPABASE_URL/ANON_KEY 입력 → 3개 SQL을 Supabase SQL 편집기에 적용 → 로그인/회사 생성(F2, ordermoa_create_company_with_owner RPC) 실동작 확인.
+- RLS A/B 회사 격리 실측(§9 시나리오).
+- 커밋/머지/push는 Codex 판단(이번 미커밋).
+
+## 2026-07-01 Codex (단위 8a-공유 접두사 검수)
+
+상태:
+
+- 완료. Claude의 `ordermoa_` 접두사 변경을 검수하고 커밋 준비.
+
+검증:
+
+- SQL 내 `public.companies` 등 비접두사 업무 객체 참조 없음.
+- 앱 코드 내 `.from("companies")`, `rpc("create_company_with_owner")` 등 옛 호출 없음.
+- 루트 `npm test`: 5/5 통과
+- web `npm test`: 32/32 통과
+- web `npm run build`: 성공
+- web `npm audit --audit-level=low`: 0 vulnerabilities
+- `git diff --check`: 공백 오류 없음
+
+남은 이슈:
+
+- 실제 `yangsan-inventory` Supabase SQL Editor 적용은 아직 하지 않음.
+- 적용 전 `web/.env.local`에 공유 프로젝트 URL/anon key 입력 필요.
