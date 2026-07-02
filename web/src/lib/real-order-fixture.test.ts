@@ -76,8 +76,8 @@ const CURRENT: Record<string, ExpectedLine[]> = {
   t08: [[null, 5, "봉", "unmatched", false]],
   t09: [["rp13", 2, "박스", "matched", true], ["rp18", 1, "박스", "matched", true], ["rp19", 3, "단", "matched", true]],
   t10: [["rp01", 1, "박스", "matched", false]],
-  // t11: "청양고추 1kg 2봉" — 첫 숫자 1(규격)을 수량으로 오인, 단위도 kg (현재 한계 — 개선 1순위)
-  t11: [["rp23", 1, "kg", "matched", true]],
+  // t11: "청양고추 1kg 2봉" — 규격 숫자(1kg)는 수량에서 제외, 뒤의 수량단위(2봉)를 채택 (개선 1차 적용)
+  t11: [["rp23", 2, "봉", "matched", true]],
   // t12: '키로'는 단위 사전에 없어 baseUnit(kg)으로 조용히 폴백 — "단위 확인" 상태는 파서에 없음
   t12: [["rp26", 2, "kg", "matched", true]],
   t13: [["rp17", 2, "봉", "matched", true]],
@@ -124,9 +124,23 @@ test("[한계 고정] t04 변형: 별칭 '무' 미등록이면 1글자 품목은
   expect(lines[0].status).toBe("unmatched"); // 별칭 등록으로 해결(t04 본 케이스가 증명)
 });
 
-test("[한계 고정] t11: 규격 숫자(1kg)를 수량으로 오인 — 의도한 2봉이 아니라 1", () => {
+test("[개선 1차] t11: 규격 숫자(1kg)는 수량에서 제외, 수량단위(2봉) 채택", () => {
   const lines = parse(raw.orderSentences.find((s) => s.id === "t11")!);
   expect(lines[0].productId).toBe("rp23");
-  expect(lines[0].quantity).toBe(1); // 개선 1순위: 숫자+중량단위는 규격으로 강등해야 함
-  expect(lines[0].unit).toBe("kg"); // '봉'이 아니라 규격의 kg를 단위로 집음
+  expect(lines[0].quantity).toBe(2); // 1kg의 1이 아니라 2봉의 2
+  expect(lines[0].unit).toBe("봉");
+});
+
+test("[개선 1차] 비닐 100L 3장 → 규격 100L 제외, 수량 3(단위는 baseUnit 폴백 '장')", () => {
+  const lines = parseOrderText("비닐 100L 3장", "tc_d", products, prices);
+  expect(lines[0].productId).toBe("rp28");
+  expect(lines[0].quantity).toBe(3);
+  expect(lines[0].unit).toBe("장"); // '장'은 단위 사전에 없어 baseUnit 폴백(사전 확장은 3순위 과제)
+});
+
+test("[개선 1차 회귀] 측정단위 숫자만 있으면 그대로 수량 — 감자 3kg → 수량 3, 단위 kg", () => {
+  const lines = parseOrderText("감자 3kg", "tc_a", products, prices);
+  expect(lines[0].productId).toBe("rp07");
+  expect(lines[0].quantity).toBe(3);
+  expect(lines[0].unit).toBe("kg");
 });

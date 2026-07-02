@@ -45,9 +45,12 @@ const CONNECTORS = /(이랑|랑|하고|그리고|및)/g;
 const POLITE = ["부탁해요", "부탁드려요", "부탁", "주세요", "해주세요", "주라", "요"];
 const TRAILING_PARTICLES = ["으로", "로", "도"];
 
+// 측정(규격성) 단위 — "1kg", "100L"처럼 숫자와 붙으면 수량이 아니라 규격일 가능성이 높다.
+// 수량 선택 시 우선순위를 낮춘다(개선 1차: t11 규격 숫자 오인).
+const MEASURE_UNITS = ["kg", "g", "l", "ml"];
+
 const unitAlt = UNITS.map((u) => u.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
 // 숫자(+선택 단위) 클러스터
-const numUnitRe = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${unitAlt})?`, "i");
 const numUnitReGlobal = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${unitAlt})?`, "gi");
 // 단독 단위(경계)
 const standaloneUnitRe = new RegExp(`(^|\\s)(${unitAlt})(?=\\s|$)`, "gi");
@@ -102,9 +105,30 @@ export function extractNameCandidate(segment: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-function extractUnit(segment: string, fallback: string): string {
-  const numUnit = segment.match(numUnitRe);
-  if (numUnit && numUnit[2]) return numUnit[2];
+interface QuantityCluster {
+  raw: string;
+  unit: string | null;
+}
+
+/**
+ * 세그먼트의 숫자(+단위) 클러스터 중 "수량"으로 쓸 것을 고른다.
+ * 우선순위: ① 수량단위 결합(2봉/3박스) → ② 단독 숫자(두부판 2) → ③ 측정단위 결합(3kg — 규격일 수도, 수량일 수도).
+ * "청양고추 1kg 2봉"에서 1kg(규격)이 아니라 2봉을 채택하기 위함. 측정단위 숫자만 있으면 그대로 수량("감자 3kg").
+ */
+function pickQuantityCluster(segment: string): QuantityCluster | null {
+  const clusters: QuantityCluster[] = [...segment.matchAll(numUnitReGlobal)].map((m) => ({
+    raw: m[1],
+    unit: m[2] ?? null,
+  }));
+  const isMeasure = (u: string | null) => u !== null && MEASURE_UNITS.includes(u.toLowerCase());
+  const countUnit = clusters.find((c) => c.unit !== null && !isMeasure(c.unit));
+  const bare = clusters.find((c) => c.unit === null);
+  const measure = clusters.find((c) => isMeasure(c.unit));
+  return countUnit ?? bare ?? measure ?? null;
+}
+
+function extractUnit(segment: string, fallback: string, clusterUnit: string | null): string {
+  if (clusterUnit) return clusterUnit;
   const standalone = standaloneUnitRe.exec(` ${segment} `);
   standaloneUnitRe.lastIndex = 0;
   if (standalone && standalone[2]) return standalone[2];
@@ -128,11 +152,11 @@ export function parseOrderText(
   const segments = splitSegments(rawText);
 
   return segments.map((segment, index) => {
-    const numberMatch = segment.match(/(\d+(?:\.\d+)?)/);
-    const quantity = numberMatch ? Number(numberMatch[1]) : null;
+    const cluster = pickQuantityCluster(segment);
+    const quantity = cluster ? Number(cluster.raw) : null;
 
     const product = matchProduct(extractNameCandidate(segment), products);
-    const unit = extractUnit(segment, product ? product.baseUnit : "");
+    const unit = extractUnit(segment, product ? product.baseUnit : "", cluster?.unit ?? null);
 
     let unitPrice = 0;
     let priceRegistered = false;
@@ -159,7 +183,7 @@ export function parseOrderText(
       productId: product ? product.id : null,
       productName: product ? product.name : segment,
       quantity,
-      quantityRaw: numberMatch ? numberMatch[1] : "",
+      quantityRaw: cluster ? cluster.raw : "",
       unit,
       unitPrice,
       priceRegistered,
