@@ -753,3 +753,117 @@ RLS 검증 방법(문서 기준, 실제 Supabase 미적용이라 코드검증만
 남은 이슈:
 
 - 다음 작업은 8a-검증: Supabase Table Editor에서 `ordermoa_companies`/`ordermoa_company_members` row 확인 및 RLS 실측.
+
+## 2026-07-02 Claude (8a-검증 부분 결과 반영 — 대시보드 3종 업데이트)
+
+상태:
+
+- 완료 (커밋 안 함). 브랜치 `codex/integrate-mvp-docs-web`. 앱 코드/SQL 변경 없음(8b 미착수).
+
+오늘 확인된 8a-검증 결과(사용자 실측):
+
+- ✅ `ordermoa_company_members`+`ordermoa_companies` join 조회 성공 — company_name=히든식품, role=owner
+- ✅ 비로그인(anon key) `ordermoa_companies` 조회 → `[]` (공개 접근 차단 확인)
+- ✅ ordermoa_* 테이블별 RLS policy 존재 확인(policy count)
+- ⏳ 남은 검증: **타 계정/타 회사 A/B 격리 실측** (B계정으로 히든식품 데이터 select 0행/insert 거부)
+
+반영 내용:
+
+- 8a-검증 상태: 다음 → **진행 중**(부분 완료), 현재위치 마커 유지
+- 검증 체크리스트: RLS 1행 → 4행 분리(회사/멤버 row ✅ · anon 차단 ✅ · policy 존재 ✅ · A/B 격리 ⏳)
+- 되는 것에 "8a-검증(부분 완료)" 추가, 다음 작업 1순위를 "8a-검증 마무리(A/B 실측만)"로 구체화
+
+수정 파일:
+
+- `docs/order-moa-progress-data.json` (원본), `docs/order-moa-progress-dashboard.html`, `docs/order-moa-progress-tracker.xlsx`(재생성), `docs/agent-worklog.md`
+
+검증:
+
+- XLSX 재로드: 시트 5개, 수식 0/오류 0, "8a-검증=진행 중"·A/B 격리 미실측 행 확인
+- HTML 태그 균형 전부 OK, 미리보기 렌더 확인
+- 루트 npm test 5/5 · web npm test 32/32 · web build 성공 · npm audit --audit-level=low 0건
+
+다음 추천:
+
+1. **8a-검증 마무리**(30분 내): 두 번째 계정으로 로그인 → B회사 생성 → 히든식품(A) 데이터 select 0행/insert 거부 실측 (`supabase-rls-policy.md` §9.1)
+2. **8b 주문 저장/조회/기간 집계**: A/B 격리 확인 후 착수 (`task-prompt-unit-8-supabase-persistence-flow.md` §5/§6)
+
+## 2026-07-02 Claude (대시보드 재검수 + 실제 발주품목 테스트 데이터셋)
+
+상태:
+
+- 완료 (커밋 안 함). 파서/앱/SQL/Supabase 미변경(8b 미착수).
+
+1차 — 대시보드 3종 재검수:
+
+- JSON/HTML/XLSX 일관 확인: 8a-검증=진행 중(현재 위치), 완료 4건(회사·멤버 row/anon 차단/policy 존재) 반영, 남은 1건(A/B 격리) 명확, XLSX 시트 5개 정상 — 수정 필요 없음
+
+2차 — 실제 발주품목 테스트 데이터셋:
+
+- 원본: 사용자 선택 실사용 이카운트 판매조회 엑셀(판매조회 191건/거래처 12/고유 품목 71종) — **읽기만, 미커밋**
+- 관찰 패턴: `품목명(규격,공급사) [단위]` 지배적(세척숙주(3.5kg)[BOX], 건취나물[1kg 국산], 계란[특], 배추(5입)[망]), 단위 BOX/kg/EA/망/판/입/벌크
+- 가명화: 거래처 12곳→A식당~E카페 5곳, 공급사명 제거/일반화, 브랜드명 ○○떡 처리(1건 잔존 발견→수정), 실단가/실금액 미사용(임의 테스트값)
+
+신규 산출물:
+
+- `docs/order-moa-real-order-test-data.json` — 품목 28종(별칭 26개, 기준 매입단가 有/無 혼합), 발주문장 18건(expectedStatus 포함), 개선 후보 5건, 테스트 코드 후보 3건
+- `docs/order-moa-real-order-test-plan.md` — 비개발자용 단계별 테스트 안내(성공 기준 ≥15/18, O/X 기록법)
+- `docs/order-moa-real-order-test-cases.xlsx` — 시트 5(테스트 요약/품목·별칭 후보/발주문장 테스트/파싱 실패 후보/개선 우선순위), 수식 0/오류 0
+
+예상 분포(18건): 성공 9 · 별칭_필요 2 · 수량_확인 2 · 단위_확인 2 · 단가_미등록 1 · 오매칭_위험 2
+
+실데이터에서 발견한 파서 함정(코드 미수정, 후보만):
+
+1. 규격 숫자 오인 — "청양고추 1kg 2봉"의 1을 수량으로(1순위)
+2. 동일 토큰 다중 품목 — '숙주'가 세척숙주/숙주(1kg) 양쪽 포함, 첫 매칭 반환(2순위)
+3. 1글자 품목(무) 정확일치 한계 — 별칭으로 해결(현행 유지 권장)
+4. 단위 사전 부족 — 키로/장/마리/모
+
+검증:
+
+- 민감 스캔: 원본명/공급사명/브랜드명·전화·사업자 패턴 — 3개 산출물+xlsx 셀 전수 clean
+- JSON 파싱 OK, XLSX 수식 0/오류 0/시트 5
+- 루트 npm test 5/5 · web 32/32 · build 성공 · audit 0건
+
+다음 추천(A→B→C):
+
+- A. **8a-검증 마무리**(A/B 격리 실측, 30분) — 잠금 검증 완결이 최우선
+- B. **실제 발주 파서 fixture 테스트 추가** — 본 JSON 18건을 order-parser.test.ts에 로드(t03/t04/t11은 현재 동작 고정), 사용자 수동 테스트와 병행 가능
+- C. **8b 주문 저장/조회** — A 완료 후 착수
+
+## 2026-07-02 Claude (실제 발주 파서 fixture 테스트 추가 — characterization)
+
+상태:
+
+- 완료 (커밋 안 함). 파서/앱 UI/SQL/Supabase 미변경, 8b 미착수.
+
+작업:
+
+- (신규) `web/src/lib/real-order-fixture.test.ts` — docs JSON 18건을 파서에 연결, **현재 동작 실측값으로 고정**
+  - 절차: 임시 discovery 테스트로 18건+무별칭 변형 실측 → CURRENT 표에 고정 → discovery 삭제
+  - 구성: fixture 무결성 1 + 문장별 18 + 한계 고정 3(t03 다중 포함 첫 매칭 rp01 / t04 변형: 별칭 미등록 시 1글자 '무' unmatched / t11: 1kg의 1을 수량 오인·단위 kg) = **22개 테스트**
+  - 단가 재현: rp07(감자) 전 거래처 미등록, (E카페, rp01) 미등록 — JSON priceGaps대로
+
+실측 vs JSON expectedStatus 대조(파서 수정 없이 분석만):
+
+- 그대로 일치 13건(t01·02·05·06·07·08·09·10·13·15·16·17·18)
+- 어긋남 5건 — 원인은 파서 버그가 아니라 **expectedStatus가 UX 예상까지 포함**한 것:
+  - t03 오매칭_위험 → 실측 rp01 '정상' 매칭(경고 없음) — 위험이 안 보이는 형태로 실재
+  - t04 별칭_필요 → 별칭 등록 상태(JSON 그대로)면 rp16 성공. "초기 상태" 전제였음 → 무별칭 변형 테스트로 분리 고정
+  - t11 오매칭_위험 → q=1 실측(규격 숫자 트랩 재현)
+  - t12·t14 단위_확인 → 파서에 '단위 확인' 상태가 없어 baseUnit으로 조용히 폴백(t14는 우연히 정답)
+
+제안(기대값 분리, Codex 승인 후):
+
+- JSON `expectedStatus` → `targetStatus`(개선 후 목표)로 개명만. "현재 동작"은 본 테스트의 CURRENT 표를 단일 소스로 유지(이중 기록 방지). 파서 개선 시 CURRENT 표 diff = 개선 내역.
+
+파서 개선 우선순위(실측 근거 확정):
+
+1. 규격 숫자 오인(t11: 1kg→수량 1) 2. 다중 포함 첫 매칭(t03: 경고 없음) 3. 단위 사전 부족(t12 키로/t14 장 — 폴백 의존) 4. 1글자 품목은 현행 유지(별칭 해결 검증됨)
+
+검증:
+
+- web `npm test` **54/54**(기존 32+신규 22) · 루트 5/5 · build 성공 · audit 0건
+- 민감 재스캔(테스트 파일+JSON): clean · order-parser.ts/web app/SQL diff 없음 확인
+
+다음 추천: A. 8a-검증 마무리(A/B 격리 실측) → B. 파서 개선 1·2순위(이 테스트의 CURRENT 표를 바꾸며 TDD로) → C. 8b 주문 저장/조회

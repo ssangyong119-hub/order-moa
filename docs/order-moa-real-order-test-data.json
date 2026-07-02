@@ -1,0 +1,82 @@
+{
+  "meta": {
+    "source": "실사용 이카운트 판매조회 엑셀(식당납품, 191건/거래처 12곳/고유 품목 71종)에서 패턴만 일반화",
+    "created": "2026-07-02",
+    "anonymization": "실거래처명→A식당~E마트 가명, 공급사명(괄호 안 상호)→'공급사S'류 일반화, 브랜드명→(브랜드) 표기, 실단가/실금액 미사용(테스트용 임의값), 전화/주소/사업자번호 원본에 없음·미수록",
+    "parserRulesRef": "web/src/lib/order-parser.ts 기준으로 예상 상태를 추정(코드 미수정). 상태: 성공 | 별칭_필요 | 수량_확인 | 단위_확인 | 단가_미등록 | 오매칭_위험"
+  },
+  "customers": [
+    { "id": "tc_a", "name": "A식당", "note": "채소·나물 위주 반복" },
+    { "id": "tc_b", "name": "B분식", "note": "숙주·단무지·떡 다량" },
+    { "id": "tc_c", "name": "C반찬", "note": "나물·버섯·두부" },
+    { "id": "tc_d", "name": "D마트", "note": "공산품 포함" },
+    { "id": "tc_e", "name": "E카페", "note": "소량 다품목" }
+  ],
+  "products": [
+    { "id": "rp01", "name": "세척숙주(3.5kg) [BOX]", "baseUnit": "박스", "aliases": ["세척숙주", "숙주박스"], "salePrice": 9000, "basePurchasePrice": 7500, "realNote": "최다 빈도(45회). 원본엔 괄호 안 공급사명 있었음→제거" },
+    { "id": "rp02", "name": "숙주 [1kg 수입]", "baseUnit": "봉", "aliases": ["숙주1키로"], "salePrice": 2000, "basePurchasePrice": null, "realNote": "'숙주' 토큰이 rp01과 충돌하는 실사례" },
+    { "id": "rp03", "name": "건취나물 [1kg 국산]", "baseUnit": "봉", "aliases": ["취나물", "건취"], "salePrice": 15000, "basePurchasePrice": 12000, "realNote": "빈도 16회" },
+    { "id": "rp04", "name": "청경채 [BOX]", "baseUnit": "박스", "aliases": [], "salePrice": 8000, "basePurchasePrice": 6500, "realNote": "" },
+    { "id": "rp05", "name": "팽이버섯", "baseUnit": "봉", "aliases": ["팽이"], "salePrice": 700, "basePurchasePrice": 500, "realNote": "" },
+    { "id": "rp06", "name": "단무지(깍둑,3kg)", "baseUnit": "개", "aliases": ["깍둑단무지", "단무지"], "salePrice": 6000, "basePurchasePrice": 4800, "realNote": "" },
+    { "id": "rp07", "name": "햇감자 [kg]", "baseUnit": "kg", "aliases": ["감자"], "salePrice": 2500, "basePurchasePrice": null, "realNote": "단가 미등록 테스트 대상(가격 변동 심한 품목)" },
+    { "id": "rp08", "name": "가시오이 [1kg 국산]", "baseUnit": "kg", "aliases": ["오이"], "salePrice": 4000, "basePurchasePrice": 3200, "realNote": "" },
+    { "id": "rp09", "name": "배추(5입) [망]", "baseUnit": "망", "aliases": ["배추"], "salePrice": 12000, "basePurchasePrice": 9500, "realNote": "망 단위 실사례" },
+    { "id": "rp10", "name": "알배기(알배추) [BOX]", "baseUnit": "박스", "aliases": ["알배추", "알배기"], "salePrice": 14000, "basePurchasePrice": 11000, "realNote": "괄호 병기 호칭 실사례" },
+    { "id": "rp11", "name": "맛느타리(벌크)", "baseUnit": "박스", "aliases": ["느타리"], "salePrice": 9000, "basePurchasePrice": null, "realNote": "벌크 표기" },
+    { "id": "rp12", "name": "우(국거리) [1kg]", "baseUnit": "팩", "aliases": ["국거리"], "salePrice": 16000, "basePurchasePrice": 13500, "realNote": "축산 팩 단위" },
+    { "id": "rp13", "name": "치커리 [2kg]", "baseUnit": "박스", "aliases": [], "salePrice": 11000, "basePurchasePrice": null, "realNote": "" },
+    { "id": "rp14", "name": "대파 [국산]", "baseUnit": "단", "aliases": ["파"], "salePrice": 3500, "basePurchasePrice": 2800, "realNote": "" },
+    { "id": "rp15", "name": "계란 [특]", "baseUnit": "판", "aliases": ["계란", "특란"], "salePrice": 7500, "basePurchasePrice": 6800, "realNote": "'특' 규격이 이름에 붙는 실사례" },
+    { "id": "rp16", "name": "무 [20kg 국산]", "baseUnit": "박스", "aliases": ["무"], "salePrice": 15000, "basePurchasePrice": 12000, "realNote": "1글자 품목 실사례(정확일치만 허용됨)" },
+    { "id": "rp17", "name": "메추리알 [20EA]", "baseUnit": "봉", "aliases": ["메추리"], "salePrice": 3000, "basePurchasePrice": null, "realNote": "이름에 숫자+EA 포함" },
+    { "id": "rp18", "name": "양상추 [국산]", "baseUnit": "박스", "aliases": [], "salePrice": 13000, "basePurchasePrice": 10500, "realNote": "" },
+    { "id": "rp19", "name": "부추 [외단]", "baseUnit": "단", "aliases": [], "salePrice": 2500, "basePurchasePrice": 2000, "realNote": "'외단' 규격 실사례" },
+    { "id": "rp20", "name": "무순 [EA]", "baseUnit": "개", "aliases": [], "salePrice": 1500, "basePurchasePrice": null, "realNote": "'무'와 혼동 위험 실사례" },
+    { "id": "rp21", "name": "팩두부 [3kg]", "baseUnit": "개", "aliases": ["두부"], "salePrice": 5500, "basePurchasePrice": 4500, "realNote": "" },
+    { "id": "rp22", "name": "양파 [4kg]", "baseUnit": "망", "aliases": [], "salePrice": 7000, "basePurchasePrice": 5800, "realNote": "" },
+    { "id": "rp23", "name": "청양고추 [1kg 국산]", "baseUnit": "봉", "aliases": ["청양"], "salePrice": 8000, "basePurchasePrice": 6500, "realNote": "이름에 1kg 포함 — 수량 오인 함정" },
+    { "id": "rp24", "name": "깐쪽파 [1kg 국산]", "baseUnit": "봉", "aliases": ["쪽파"], "salePrice": 9000, "basePurchasePrice": null, "realNote": "" },
+    { "id": "rp25", "name": "떡볶이떡(브랜드)", "baseUnit": "봉", "aliases": ["떡볶이떡"], "salePrice": 4000, "basePurchasePrice": 3200, "realNote": "원본은 브랜드명 호칭 — 브랜드 별칭 유형" },
+    { "id": "rp26", "name": "소불고기 [kg]", "baseUnit": "kg", "aliases": ["불고기"], "salePrice": 18000, "basePurchasePrice": 15000, "realNote": "" },
+    { "id": "rp27", "name": "락스", "baseUnit": "개", "aliases": [], "salePrice": 3500, "basePurchasePrice": null, "realNote": "비식자재(공산품) 실사례" },
+    { "id": "rp28", "name": "비닐(주황색) [100L]", "baseUnit": "장", "aliases": ["비닐"], "salePrice": 300, "basePurchasePrice": null, "realNote": "이름에 100L 포함 — 수량 오인 함정" }
+  ],
+  "priceGaps": [
+    { "customer": "E카페", "productId": "rp01", "note": "E카페는 세척숙주 단가 미등록 → 0원+즉석 저장 테스트" },
+    { "customer": "A식당", "productId": "rp07", "note": "햇감자 전 거래처 단가 미등록(시세 변동) → 즉석 입력 흐름" }
+  ],
+  "orderSentences": [
+    { "id": "t01", "customer": "A식당", "text": "세척숙주 3박스\n청경채 2박스\n팽이버섯 5봉", "expect": "3라인 전부 매칭·수량 확정", "expectedStatus": "성공", "why": "품목명/별칭 포함매칭 + 아라비아 숫자 + 단위 사전" },
+    { "id": "t02", "customer": "C반찬", "text": "취나물 2봉\n깍둑단무지 3개", "expect": "별칭으로 건취나물/단무지 매칭", "expectedStatus": "성공", "why": "등록 별칭 매칭" },
+    { "id": "t03", "customer": "B분식", "text": "숙주 3박스", "expect": "세척숙주(BOX)로 가야 하나 '숙주' 토큰이 rp01/rp02 둘 다 포함 → 등록 순서에 따라 결정", "expectedStatus": "오매칭_위험", "why": "포함매칭이 첫 일치 품목 반환(다중 후보 미제시)" },
+    { "id": "t04", "customer": "A식당", "text": "무 2개", "expect": "'무'는 1글자라 포함매칭 제외 → 품목명 '무 [20kg 국산]'과 정확일치 실패", "expectedStatus": "별칭_필요", "why": "1글자 토큰은 정확일치만 허용 → 별칭 '무' 등록 후 매칭" },
+    { "id": "t05", "customer": "A식당", "text": "무순 3개", "expect": "무순 [EA] 매칭(2글자 포함매칭)", "expectedStatus": "성공", "why": "'무순'은 2글자라 포함매칭 허용" },
+    { "id": "t06", "customer": "A식당", "text": "감자 조금\n대파 두 단", "expect": "품목 매칭되나 수량 null → 확정 차단", "expectedStatus": "수량_확인", "why": "모호 표현('조금')·한글 수사('두')" },
+    { "id": "t07", "customer": "D마트", "text": "계란 특 두판\n배추 한망", "expect": "계란[특]/배추(5입) 매칭 여부 + 한글 수사", "expectedStatus": "수량_확인", "why": "'두판','한망'은 수량 불확실. '계란 특' 토큰은 '계란' 별칭으로 흡수" },
+    { "id": "t08", "customer": "B분식", "text": "○○떡 5봉", "expect": "브랜드 호칭(○○떡)은 미매칭 → 품목 지정 후 별칭 등록으로 해결되는지 확인", "expectedStatus": "별칭_필요", "why": "브랜드명 호칭은 품목명/별칭 사전에 없음 — 실데이터에서 브랜드로 부르는 품목 존재(가명화)" },
+    { "id": "t09", "customer": "C반찬", "text": "치커리 2, 양상추 1, 부추 3단", "expect": "쉼표 분리 3라인, 단위 일부 생략(base_unit 추정)", "expectedStatus": "성공", "why": "한 줄 다품목 분리 + 숫자만 수량" },
+    { "id": "t10", "customer": "E카페", "text": "세척숙주 1박스", "expect": "매칭되지만 E카페 단가 미등록 → 0원+경고+즉석 저장", "expectedStatus": "단가_미등록", "why": "customer_prices 미등록 조합" },
+    { "id": "t11", "customer": "B분식", "text": "청양고추 1kg 2봉", "expect": "의도는 2봉인데 첫 숫자 '1'(1kg의 1)을 수량으로 잡을 위험", "expectedStatus": "오매칭_위험", "why": "파서가 첫 숫자를 수량으로 사용 — 규격 숫자와 수량 숫자 구분 없음" },
+    { "id": "t12", "customer": "D마트", "text": "소불고기 2키로", "expect": "품목 매칭, '키로'는 단위 사전에 없음 → 단위 비추정(빈 값/기본단위)", "expectedStatus": "단위_확인", "why": "단위 사전에 '키로' 없음(kg만)" },
+    { "id": "t13", "customer": "D마트", "text": "메추리알 2봉", "expect": "매칭+수량 2. 품목명 안 '20EA' 숫자는 발주문장에 없어 영향 없음", "expectedStatus": "성공", "why": "이름 내 숫자는 발주 원문이 아니면 무해" },
+    { "id": "t14", "customer": "D마트", "text": "락스 2개, 비닐 3장", "expect": "공산품 매칭. '장' 단위는 사전에 없음 → 단위 확인", "expectedStatus": "단위_확인", "why": "'장' 미등록(입/매는 있음)" },
+    { "id": "t15", "customer": "A식당", "text": "알배추 2박스", "expect": "알배기(알배추) 별칭 매칭", "expectedStatus": "성공", "why": "괄호 병기 호칭을 별칭으로 흡수" },
+    { "id": "t16", "customer": "C반찬", "text": "쪽파 2봉이랑 두부 3개 부탁해요", "expect": "연결어 분리 + 군말 제거 → 깐쪽파/팩두부", "expectedStatus": "성공", "why": "'이랑' 분리 + 별칭" },
+    { "id": "t17", "customer": "A식당", "text": "국거리 1팩", "expect": "우(국거리) 포함매칭", "expectedStatus": "성공", "why": "별칭 '국거리'" },
+    { "id": "t18", "customer": "B분식", "text": "양파1망", "expect": "공백 없어도 숫자/단위 분리", "expectedStatus": "성공", "why": "정규식이 공백 없이도 숫자+단위 추출" }
+  ],
+  "expectedSummary": { "성공": 9, "별칭_필요": 2, "수량_확인": 2, "단위_확인": 2, "단가_미등록": 1, "오매칭_위험": 2 },
+  "parserImprovementCandidates": [
+    { "rank": 1, "issue": "규격 숫자 vs 수량 숫자 구분 없음", "example": "청양고추 1kg 2봉 → 수량 1로 오인", "idea": "숫자+중량단위(kg/L/g) 결합은 규격 후보로 강등, 마지막 독립 숫자를 수량 우선" },
+    { "rank": 2, "issue": "동일 토큰 다중 품목 시 첫 매칭 반환", "example": "'숙주' → 세척숙주 vs 숙주(1kg) 중 등록순", "idea": "다중 후보면 사용자 선택 드롭다운 우선 노출(오매칭보다 확인이 안전)" },
+    { "rank": 3, "issue": "1글자 품목(무·파 등) 정확일치만 허용", "example": "'무 2개' 미매칭", "idea": "현행 유지가 안전(단무지 오매칭 방지). 대신 별칭 등록 안내 문구 강화" },
+    { "rank": 4, "issue": "단위 사전 부족", "example": "키로, 장, 마리, 모", "idea": "단위 사전에 키로/키로그람/장/마리/모 추가" },
+    { "rank": 5, "issue": "규격 포함 품목명 표기 표준", "example": "품목명(규격) [단위] 혼재", "idea": "1차는 이름에 포함 유지(스펙 §10.3), 표기 가이드만 문서화" }
+  ],
+  "testCodeCandidates": [
+    "order-parser.test.ts에 real-order fixture 추가: 본 JSON의 products/orderSentences를 로드해 expectedStatus와 대조",
+    "t03(다중 포함) / t04(1글자) / t11(규격 숫자) 3건은 현재 동작 고정(characterization) 테스트로 먼저 기록",
+    "단위 사전 확장 시 t12/t14가 성공으로 바뀌는지 회귀 확인"
+  ]
+}
