@@ -667,3 +667,36 @@ RLS 검증 방법(문서 기준, 실제 Supabase 미적용이라 코드검증만
 
 - 실제 `yangsan-inventory` Supabase SQL Editor 적용은 아직 하지 않음.
 - 적용 전 `web/.env.local`에 공유 프로젝트 URL/anon key 입력 필요.
+
+## 2026-06-30 Claude (마감 검수 — 8a 공유 Supabase 상태 확인 + 인수인계)
+
+상태:
+
+- 완료 (검수만, 새 기능/코드 변경 없음). 브랜치 `codex/integrate-mvp-docs-web`, 작업트리 clean
+
+확인:
+
+- 최신 커밋 3개 존재: `926bdc6 fix: prefix ordermoa supabase objects`, `48c2755 feat: add supabase auth company foundation`, `bd5a2df docs: prepare supabase persistence flow`
+- 검증 재실행 전부 통과: 루트 `npm test` 5/5, web `npm test` 32/32, web `npm run build` 성공, web `npm audit --audit-level=low` **0 vulnerabilities**(exit 0)
+- 마이그레이션 SQL(0001~0003) 접두사 점검: 비접두사 `public.<업무객체>` 0건, 모든 `public.<obj>` 참조가 `ordermoa_`, 생성 객체(table/index/function/trigger/policy) 전부 `ordermoa_` 접두사
+- 앱 코드 참조: `.from("ordermoa_companies")`, `rpc("ordermoa_create_company_with_owner")`만 존재
+
+주의(적용 시 혼동 방지):
+
+- `docs/db-schema-definition.md`·`docs/supabase-rls-policy.md`의 SQL은 **접두사 없는 설계 초안**(적용용 아님). 공유 프로젝트에 적용할 것은 오직 `web/supabase/migrations/000{1,2,3}.sql`(접두사 적용본)뿐. 설계 문서 SQL을 복사해 실행하지 말 것.
+
+다음 작업 인수인계 (사용자 → 적용):
+
+1. `yangsan-inventory` Supabase 프로젝트에서 **Project URL**과 **anon public key** 확보(Settings → API).
+2. `web/.env.local` 생성 후 입력(커밋 금지, .gitignore 처리됨):
+   - `NEXT_PUBLIC_SUPABASE_URL=<project url>`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon public key>`
+   - (service role key는 넣지 말 것 — 8a 미사용)
+3. Supabase SQL Editor에서 **0001_schema → 0002_rls → 0003_company_bootstrap** 순서로 실행.
+4. `cd web; npm run dev` 후: 로그인(이메일 매직링크) → 회사 생성(`ordermoa_create_company_with_owner`) → 데모 진입 확인.
+5. RLS 실측(`supabase-rls-policy.md` §9): 다른 계정/회사로 교차 접근 차단(select 0행, insert/update 거부) 확인.
+
+남은 이슈:
+
+- env 미설정 상태에선 앱이 데모 모드로 동작(정상). 실 인증/회사/RLS는 위 적용 후 실측 필요.
+- 커밋/머지/push는 Codex 판단(이번 검수는 worklog 한 줄만 추가).
