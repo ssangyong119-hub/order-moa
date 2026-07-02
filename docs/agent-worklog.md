@@ -700,3 +700,56 @@ RLS 검증 방법(문서 기준, 실제 Supabase 미적용이라 코드검증만
 
 - env 미설정 상태에선 앱이 데모 모드로 동작(정상). 실 인증/회사/RLS는 위 적용 후 실측 필요.
 - 커밋/머지/push는 Codex 판단(이번 검수는 worklog 한 줄만 추가).
+
+## 2026-06-30 Claude (진행현황 대시보드 — HTML/XLSX/JSON)
+
+상태:
+
+- 완료 (커밋 안 함). 브랜치 `codex/integrate-mvp-docs-web`. 앱 기능 변경 없음(8b 미착수).
+
+산출물:
+
+- `docs/order-moa-progress-dashboard.html` — 비개발자용 진행판(표 중심, 상태색 5종, 현재위치 표시, 반응형+인쇄 CSS, 외부 CDN 없음)
+- `docs/order-moa-progress-tracker.xlsx` — 시트 5개(전체 로드맵/현재 상태/검증 체크리스트/보류·제외 기능/다음 작업), 수식 0=수식오류 0
+- `docs/order-moa-progress-data.json` — 단일 원본 데이터(HTML/XLSX 재생성용)
+
+내용 요점:
+
+- 완료: 단위 1~7 + 8a(Supabase 적용·로그인·회사 '히든식품' 생성 성공)
+- 미완료: 주문 DB 저장/조회, 합산표·명세서 DB 연결, RLS 실측
+- 현재 위치: 8a 완료 ◀ 다음은 8a-검증 → 8b → 8c
+- 비개발자 설명 포함(예: 8a=문패와 출입문, 8b=실제 주문 장부 저장)
+
+검증:
+
+- XLSX 재로드: 시트 5개 한글명 정상, 수식 0/엑셀오류 0, 현재위치 마커 확인
+- HTML: 태그 균형 전부 OK(table/tr/td/div 등), 11.5KB 단일 파일, CDN 참조 없음, 미리보기 렌더 확인
+- 루트 `npm test` 통과, web `npm test` 32/32, web `npm run build` 성공
+- 금지사항 준수: 8b 코드/주문 저장/SQL 적용/service key/앱 기능 변경 없음
+
+다음 추천: **8a-검증 먼저**(30분~1시간) — Supabase Table Editor에서 ordermoa_companies/members에 히든식품 row 확인 + RLS 기본 확인(비로그인/타계정 차단) 후 8b(주문 저장/조회) 진행. 장부를 쌓기 전에 잠금 확인이 순서.
+
+## 2026-07-02 Codex (진행현황 대시보드 검수)
+
+상태:
+
+- 완료. Claude 산출물 검수 후 기준일을 2026-07-02로 보정하고 커밋 준비.
+
+검수/보정:
+
+- `docs/order-moa-progress-dashboard.html`, `docs/order-moa-progress-data.json`, `docs/order-moa-progress-tracker.xlsx` 기준일을 오늘 날짜로 통일.
+- HTML 태그 균형 검사 통과, 외부 CDN/비밀키 실제값 없음.
+- XLSX 재로드 확인: 시트 5개, 수식 0개, 엑셀 오류값 0개, 옛 날짜 0건.
+- 산출물 내용은 현재 위치를 8a-검증으로 표시하고, 8b/8c는 다음 단계로 유지.
+
+검증:
+
+- 루트 `npm test`: 5/5 통과
+- web `npm test`: 32/32 통과
+- web `npm run build`: 성공
+- web `npm audit --audit-level=low`: 0 vulnerabilities
+- `git diff --check`: 공백 오류 없음
+
+남은 이슈:
+
+- 다음 작업은 8a-검증: Supabase Table Editor에서 `ordermoa_companies`/`ordermoa_company_members` row 확인 및 RLS 실측.

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>오더모아 진행현황 대시보드 (2026-07-02)</title>
+<style>
+  :root{
+    --ink:#141413; --soft:#6b6960; --line:#e3e0d6; --bg:#faf9f5; --paper:#fff;
+    --green-bg:#e3f2e5; --green-fg:#22662e;
+    --blue-bg:#e2edf9; --blue-fg:#1d5a99;
+    --yellow-bg:#fdf3d0; --yellow-fg:#8a6d11;
+    --gray-bg:#ececea; --gray-fg:#5c5a54;
+    --red-bg:#fbe7e4; --red-fg:#a5473a;
+    --coral:#cc785c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
+    font-size:15px;line-height:1.55}
+  .wrap{max-width:960px;margin:0 auto;padding:20px 14px 60px}
+  h1{font-family:Georgia,serif;font-size:1.5rem;margin:0 0 2px}
+  h2{font-family:Georgia,serif;font-size:1.1rem;margin:28px 0 8px;border-bottom:2px solid var(--ink);padding-bottom:4px}
+  .sub{color:var(--soft);font-size:.85rem}
+  .purpose{background:var(--paper);border:1px solid var(--line);border-left:4px solid var(--coral);
+    padding:10px 14px;margin:14px 0;font-size:.95rem}
+  .flow{background:var(--paper);border:1px solid var(--line);padding:10px 14px;font-size:.85rem;color:var(--soft)}
+  .flow b{color:var(--ink)}
+  table{width:100%;border-collapse:collapse;background:var(--paper);border:1px solid var(--line)}
+  th,td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;font-size:.88rem}
+  th{background:#f3f1ea;font-size:.78rem;color:var(--soft);white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  .tbl-wrap{overflow-x:auto}
+  .pill{display:inline-block;padding:1px 10px;border-radius:999px;font-size:.75rem;font-weight:600;white-space:nowrap}
+  .s-done{background:var(--green-bg);color:var(--green-fg)}
+  .s-doing{background:var(--blue-bg);color:var(--blue-fg)}
+  .s-next{background:var(--yellow-bg);color:var(--yellow-fg)}
+  .s-hold{background:var(--gray-bg);color:var(--gray-fg)}
+  .s-out{background:var(--red-bg);color:var(--red-fg)}
+  .here{background:#fffbe8}
+  .here td:first-child{border-left:4px solid var(--coral)}
+  .here-tag{color:var(--coral);font-weight:700;font-size:.75rem;white-space:nowrap}
+  .plain{color:var(--soft);font-size:.82rem}
+  .ok{color:var(--green-fg);font-weight:600}
+  .todo{color:var(--yellow-fg);font-weight:600}
+  .legend{margin:10px 0 0;font-size:.8rem;color:var(--soft)}
+  .legend .pill{margin-right:4px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .foot{margin-top:30px;font-size:.78rem;color:var(--soft);border-top:1px solid var(--line);padding-top:10px}
+  code{background:#f3f1ea;padding:1px 5px;border-radius:4px;font-size:.82em}
+  @media(max-width:640px){ .two{grid-template-columns:1fr} th,td{padding:7px 8px} }
+  @media print{
+    body{background:#fff;font-size:12px}
+    .wrap{max-width:none;padding:0}
+    h2{page-break-after:avoid}
+    table{page-break-inside:auto}
+    tr{page-break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>오더모아 진행현황</h1>
+  <div class="sub">기준일 2026-07-02 · 브랜치 <code>codex/integrate-mvp-docs-web</code> · 운영용 관리표</div>
+
+  <div class="purpose">
+    <b>이 프로젝트는</b> 전체 ERP를 대체하는 게 아니라, 도소매/식당납품 사장님이
+    <b>카톡/문자 발주를 붙여넣으면 합산표·매입처 발주 문장·거래명세서까지 바로 나오게</b> 하는
+    좁은 웹 ERP MVP입니다.
+  </div>
+
+  <div class="flow">
+    <b>핵심 흐름</b> — 카톡/문자 발주 원문 → 품목/수량/단가 정제 → 거래처별 판매가 적용 →
+    예상 마진(참고값) → 주문 확정 → 품목별 합산표 → 매입처 발주 문장 복사 → 주문 목록 → 거래명세서 미리보기/인쇄
+  </div>
+
+  <h2>지금 어디까지 왔나 (한 줄 요약)</h2>
+  <table>
+    <tr>
+      <td>
+        앱 화면 흐름(단위 6·7)과 <b>로그인·회사·데이터 잠금 기반(단위 8a)</b>까지 끝났고,
+        실제 Supabase에 설치해 <b>로그인 → 회사 '히든식품' 생성 → 앱 진입까지 성공</b>했습니다.<br>
+        <span class="plain">비유: <b>8a는 문패와 출입문을 단 단계</b>입니다. 다음 8b가 <b>실제 주문 장부를 저장</b>하는 단계라,
+        지금은 주문을 확정해도 새로고침하면 사라집니다(의도된 데모 상태).</span>
+      </td>
+    </tr>
+  </table>
+
+  <h2>전체 로드맵</h2>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>단위</th><th>이름</th><th>무슨 뜻인가</th><th>상태</th><th>비고</th></tr></thead>
+    <tbody>
+      <tr><td>단위 1</td><td>web 스캐폴드</td><td class="plain">앱의 뼈대(빈 집) 만들기</td><td><span class="pill s-done">완료</span></td><td class="plain">c2b5479</td></tr>
+      <tr><td>단위 2</td><td>DB 스키마/RLS 설계 문서</td><td class="plain">장부 양식과 잠금 규칙을 종이에 설계</td><td><span class="pill s-done">완료</span></td><td class="plain">설계 문서</td></tr>
+      <tr><td>단위 3</td><td>화면 설계·샘플 데이터</td><td class="plain">필요한 화면과 시연용 가짜 데이터 정의</td><td><span class="pill s-done">완료</span></td><td class="plain">설계 문서</td></tr>
+      <tr><td>단위 4</td><td>HTML 프로토타입</td><td class="plain">영업/검증용 정적 데모 한 장</td><td><span class="pill s-done">완료</span></td><td class="plain">prototype/</td></tr>
+      <tr><td>단위 5</td><td>이카운트 벤치마크 반영</td><td class="plain">실사용 ERP를 관찰해 설계를 현실에 맞게 보정</td><td><span class="pill s-done">완료</span></td><td class="plain">매입단가·마진·명세서 양식</td></tr>
+      <tr><td>단위 6</td><td>Next.js 데모 핵심 흐름</td><td class="plain">붙여넣기→파싱→합산표→명세서를 실제 앱 화면으로</td><td><span class="pill s-done">완료</span></td><td class="plain">6736b48</td></tr>
+      <tr><td>단위 7</td><td>합산 + 발주 문장 복사</td><td class="plain">품목별 총수량과 매입처에 보낼 문장까지</td><td><span class="pill s-done">완료</span></td><td class="plain">0c4472b</td></tr>
+      <tr><td>단위 8a</td><td>Supabase 인증/회사/RLS 기반</td><td class="plain"><b>문패와 출입문</b> — 로그인, 회사 만들기, 회사별 잠금</td><td><span class="pill s-done">완료</span></td><td class="plain">SQL 3개 적용·히든식품 생성 성공</td></tr>
+      <tr class="here"><td>8a-검증 <div class="here-tag">◀ 현재 위치(다음 할 일)</div></td><td>RLS/데이터 실측</td><td class="plain">잠금이 진짜 잠기는지 확인 — 회사/멤버 row, 타 회사 차단</td><td><span class="pill s-next">다음</span></td><td class="plain">rls-policy §9</td></tr>
+      <tr><td>단위 8b</td><td>주문 저장/조회/기간 집계</td><td class="plain"><b>실제 주문 장부 저장</b> — 새로고침해도 주문이 남음</td><td><span class="pill s-next">다음</span></td><td class="plain">task-prompt-unit-8</td></tr>
+      <tr><td>단위 8c</td><td>합산표/명세서 DB 연결</td><td class="plain">저장된 장부에서 합산표·명세서를 다시 꺼내 쓰기</td><td><span class="pill s-next">다음</span></td><td class="plain">재출력</td></tr>
+      <tr><td>2차</td><td>미수금·세금계산서·PDF·OCR 등</td><td class="plain">지금은 일부러 안 만드는 것들(아래 표)</td><td><span class="pill s-out">제외/2차</span></td><td class="plain">1차 검증 후</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="legend">상태:
+    <span class="pill s-done">완료</span>
+    <span class="pill s-doing">진행 중</span>
+    <span class="pill s-next">다음</span>
+    <span class="pill s-hold">보류</span>
+    <span class="pill s-out">제외/2차</span>
+  </p>
+
+  <h2>현재 상태 — 되는 것 / 아직 안 되는 것</h2>
+  <div class="two">
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th colspan="2">✅ 지금 되는 것</th></tr></thead>
+        <tbody>
+          <tr><td>데모 핵심 흐름</td><td class="plain">붙여넣기→파싱수정→확정→합산표→명세서</td></tr>
+          <tr><td>합산/발주 문장 복사</td><td class="plain">"콩나물 7박스, 양파 3망" 버튼 한 번에 복사</td></tr>
+          <tr><td>로그인</td><td class="plain">이메일 매직링크 입장 성공</td></tr>
+          <tr><td>회사 생성</td><td class="plain">'히든식품' 생성 성공(부트스트랩 RPC)</td></tr>
+          <tr><td>Supabase 설치</td><td class="plain">공유 프로젝트에 SQL 3개 적용 성공(ordermoa_ 접두사)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th colspan="2">⏳ 아직 안 되는 것</th></tr></thead>
+        <tbody>
+          <tr><td>주문 DB 저장</td><td class="plain">확정해도 새로고침하면 사라짐(메모리뿐)</td></tr>
+          <tr><td>주문 목록 DB 조회</td><td class="plain">저장 장부에서 불러오기</td></tr>
+          <tr><td>합산표 DB 연결</td><td class="plain">저장 주문으로 합산</td></tr>
+          <tr><td>명세서 DB 재출력</td><td class="plain">지난 주문 명세서 다시 인쇄</td></tr>
+          <tr><td>RLS 실측</td><td class="plain">타 회사 차단 실제 확인(8a-검증)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h2>검증 체크리스트</h2>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>항목</th><th>무슨 뜻인가</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td>root <code>npm test</code></td><td class="plain">옛 정적 데모 회귀 테스트</td><td class="ok">통과 5/5</td></tr>
+      <tr><td>web <code>npm test</code></td><td class="plain">계산/파싱/합산 자동 테스트</td><td class="ok">통과 32/32</td></tr>
+      <tr><td>web <code>npm run build</code></td><td class="plain">배포용 빌드가 깨지지 않는지</td><td class="ok">성공</td></tr>
+      <tr><td>web <code>npm audit --audit-level=low</code></td><td class="plain">알려진 보안 취약점 검사</td><td class="ok">0건</td></tr>
+      <tr><td><code>.env.local</code> Git 미추적</td><td class="plain">비밀키가 저장소에 안 올라가는지</td><td class="ok">확인</td></tr>
+      <tr><td>Supabase SQL 0001/0002/0003</td><td class="plain">장부 테이블·잠금·회사생성 함수 설치</td><td class="ok">적용 성공</td></tr>
+      <tr><td>로그인</td><td class="plain">이메일 매직링크 입장</td><td class="ok">성공</td></tr>
+      <tr><td>회사 생성</td><td class="plain">'히든식품' 등록</td><td class="ok">성공</td></tr>
+      <tr><td>데모 진입</td><td class="plain">로그인+회사 후 앱 화면 진입</td><td class="ok">성공</td></tr>
+      <tr><td>RLS 실측</td><td class="plain">타 회사 데이터 차단 실제 확인</td><td class="todo">미실측 — 다음(8a-검증)</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>보류 / 제외 (일부러 안 만드는 것)</h2>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>기능</th><th>구분</th><th>이유</th></tr></thead>
+    <tbody>
+      <tr><td>미수금/입금 본격 관리</td><td><span class="pill s-out">2차</span></td><td class="plain">1차는 수동 체크 개념만</td></tr>
+      <tr><td>세금계산서 발행(홈택스)</td><td><span class="pill s-out">2차</span></td><td class="plain">근거 금액 데이터만 1차에 보존</td></tr>
+      <tr><td>PDF 파일 생성</td><td><span class="pill s-out">2차</span></td><td class="plain">1차는 브라우저 인쇄로 충분</td></tr>
+      <tr><td>OCR/사진 인식</td><td><span class="pill s-out">제외</span></td><td class="plain">정확도 리스크</td></tr>
+      <tr><td>카카오톡 자동 읽기</td><td><span class="pill s-out">제외</span></td><td class="plain">정책/권한 리스크</td></tr>
+      <tr><td>이카운트 연동</td><td><span class="pill s-out">제외</span></td><td class="plain">대체가 아니라 보조로 시작</td></tr>
+      <tr><td>매입처별 발주 저장/기본 매입처</td><td><span class="pill s-out">2차</span></td><td class="plain">1차는 합산표+복사 문장까지</td></tr>
+      <tr><td>정확한 회계 마진(원가/재고/세무)</td><td><span class="pill s-out">2차</span></td><td class="plain">1차는 기준 매입단가 참고 마진만</td></tr>
+      <tr><td>단가 변경 이력</td><td><span class="pill s-out">2차</span></td><td class="plain">현재 단가만 관리</td></tr>
+      <tr><td>직원 권한 UI(staff)</td><td><span class="pill s-out">2차</span></td><td class="plain">스키마만 준비됨</td></tr>
+      <tr><td>거래처 주문 링크</td><td><span class="pill s-hold">보류</span></td><td class="plain">MVP 검증 후 실험</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>다음 작업 (추천 순서)</h2>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>순서</th><th>단위</th><th>내용</th><th>왜 이 순서인가</th><th>예상 크기</th></tr></thead>
+    <tbody>
+      <tr class="here">
+        <td>1</td><td><b>8a-검증</b></td>
+        <td>히든식품 회사/멤버 row 실제 확인 + RLS 기본 확인</td>
+        <td class="plain">8b에서 주문을 저장하기 전에, 잠금이 진짜 잠기는지 먼저 확인해야 안전</td>
+        <td class="plain">짧음 (30분~1시간)</td>
+      </tr>
+      <tr>
+        <td>2</td><td><b>8b</b></td>
+        <td>주문 저장/조회/기간 집계</td>
+        <td class="plain">"기록이 남는다"로 핵심 가치가 완성되는 단계</td>
+        <td class="plain">중간 (1세션)</td>
+      </tr>
+      <tr>
+        <td>3</td><td><b>8c</b></td>
+        <td>합산표/거래명세서 DB 연결</td>
+        <td class="plain">저장된 주문으로 재출력 — 8b 위에 얹는 조회 작업</td>
+        <td class="plain">중간</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="foot">
+    Supabase: 신규 프로젝트 한도로 <code>yangsan-inventory</code> 공유 사용 · 오더모아 객체는 전부 <code>ordermoa_</code> 접두사<br>
+    최근 커밋: fff449b(인수인계) · 926bdc6(접두사) · 48c2755(인증/회사 기반) · bd5a2df(저장 흐름 설계)<br>
+    원본 데이터: <code>docs/order-moa-progress-data.json</code> — 이 파일을 고친 뒤 HTML/엑셀을 다시 만들면 됩니다.
+  </div>
+
+</div>
+</body>
+</html>

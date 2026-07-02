@@ -1,0 +1,93 @@
+{
+  "meta": {
+    "project": "오더모아 (Order-Moa)",
+    "purpose": "전체 ERP 대체가 아니라, 도소매/식당납품 사장님용 좁은 웹 ERP MVP. 핵심 가치: \"카톡 발주를 붙여넣으면 합산표·발주 문장·거래명세서가 나온다\"",
+    "updated": "2026-07-02",
+    "branch": "codex/integrate-mvp-docs-web",
+    "recentCommits": [
+      "fff449b docs: record handoff verification",
+      "926bdc6 fix: prefix ordermoa supabase objects",
+      "48c2755 feat: add supabase auth company foundation",
+      "bd5a2df docs: prepare supabase persistence flow"
+    ],
+    "supabase": "신규 프로젝트 한도로 기존 yangsan-inventory 프로젝트 공유. 충돌 방지 위해 모든 오더모아 DB 객체에 ordermoa_ 접두사.",
+    "statusLegend": {
+      "완료": "green",
+      "진행 중": "blue",
+      "다음": "yellow",
+      "보류": "gray",
+      "제외/2차": "lightred"
+    }
+  },
+  "coreFlow": [
+    "카톡/문자 발주 원문 붙여넣기",
+    "품목/수량/단가 정제(파싱+수정)",
+    "거래처별 판매가 자동 적용",
+    "예상 마진 참고값 표시",
+    "주문 확정",
+    "품목별 합산표",
+    "매입처 발주 문장 복사",
+    "주문 목록(판매조회형)",
+    "거래명세서 미리보기/인쇄"
+  ],
+  "roadmap": [
+    { "unit": "단위 1", "name": "web 스캐폴드", "plain": "앱의 뼈대(빈 집) 만들기 — Next.js + 테스트 틀", "status": "완료", "note": "커밋 c2b5479" },
+    { "unit": "단위 2", "name": "DB 스키마/RLS 설계 문서", "plain": "장부 양식과 잠금 규칙을 종이에 설계(문서만)", "status": "완료", "note": "db-schema-definition / supabase-rls-policy" },
+    { "unit": "단위 3", "name": "화면 설계·샘플 데이터 정의", "plain": "어떤 화면이 필요한지, 시연용 가짜 데이터 정의", "status": "완료", "note": "screen-specification / sample-data-definition" },
+    { "unit": "단위 4", "name": "HTML 프로토타입", "plain": "영업/검증용 정적 데모 한 장(DB 없음)", "status": "완료", "note": "prototype/order-moa-demo.html" },
+    { "unit": "단위 5", "name": "이카운트 벤치마크 반영", "plain": "실사용 ERP를 관찰해 설계 문서를 현실에 맞게 보정", "status": "완료", "note": "매입단가·예상마진·명세서 양식 등" },
+    { "unit": "단위 6", "name": "Next.js 데모 핵심 흐름", "plain": "붙여넣기→파싱→합산표→명세서를 실제 앱 화면으로(저장은 아직 메모리)", "status": "완료", "note": "커밋 6736b48" },
+    { "unit": "단위 7", "name": "매입처 발주용 합산+복사 문장", "plain": "여러 거래처 주문을 품목별로 합쳐 매입처에 보낼 문장까지", "status": "완료", "note": "커밋 0c4472b" },
+    { "unit": "단위 8a", "name": "Supabase 인증/회사/RLS 기반", "plain": "문패와 출입문 — 로그인, 회사 만들기, 회사별 데이터 잠금 기반", "status": "완료", "note": "SQL 3개 적용 성공, 로그인+회사(히든식품) 생성 성공" },
+    { "unit": "8a-검증", "name": "RLS/데이터 실측", "plain": "잠금이 진짜 잠기는지 확인 — 회사/멤버 row 확인, 타 회사 접근 차단 실측", "status": "다음", "note": "supabase-rls-policy §9 시나리오", "current": true },
+    { "unit": "단위 8b", "name": "주문 저장/조회/기간 집계", "plain": "실제 주문 장부 저장 — 새로고침해도 주문이 남고, 거래처별 일/월 합계가 나옴", "status": "다음", "note": "task-prompt-unit-8 §5/§6" },
+    { "unit": "단위 8c", "name": "합산표/거래명세서 DB 연결", "plain": "저장된 장부에서 합산표·명세서를 다시 꺼내 쓰기(재출력)", "status": "다음", "note": "task-prompt-unit-8 §7/§8" },
+    { "unit": "2차", "name": "미수금·세금계산서·PDF·OCR·연동 등", "plain": "지금은 일부러 안 만드는 것들(아래 보류/제외 표 참조)", "status": "제외/2차", "note": "1차 검증 후 결정" }
+  ],
+  "currentState": {
+    "done": [
+      { "item": "Next.js 데모 핵심 흐름(단위 6)", "plain": "붙여넣기→파싱수정→확정→합산표→명세서가 화면에서 동작" },
+      { "item": "품목별 합산/발주 문장 복사(단위 7)", "plain": "\"콩나물 7박스, 양파 3망\"을 버튼 한 번에 복사" },
+      { "item": "Supabase 인증/회사/RLS 기반(단위 8a)", "plain": "로그인(이메일 링크)과 회사 만들기, 회사별 잠금 규칙 준비" },
+      { "item": "Supabase 실제 적용", "plain": "yangsan-inventory 공유 프로젝트에 SQL 3개(0001/0002/0003) 적용 성공" },
+      { "item": "로그인/회사 생성 실동작", "plain": "매직링크 로그인 성공, 회사 '히든식품' 생성, 데모 진입 성공" }
+    ],
+    "notDone": [
+      { "item": "주문 DB 저장", "plain": "주문 확정해도 아직 브라우저 메모리에만 있음(새로고침하면 사라짐)" },
+      { "item": "주문 목록 DB 조회", "plain": "저장된 장부에서 주문 목록 불러오기" },
+      { "item": "합산표 DB 연결", "plain": "저장된 주문으로 합산표 만들기" },
+      { "item": "거래명세서 DB 재출력", "plain": "지난 주문의 명세서를 언제든 다시 인쇄" },
+      { "item": "RLS A/B 회사 격리 실측", "plain": "다른 회사 계정으로 내 데이터가 진짜 안 보이는지 실제 확인" }
+    ]
+  },
+  "checklist": [
+    { "item": "root npm test", "plain": "옛 정적 데모 회귀 테스트", "result": "통과 5/5" },
+    { "item": "web npm test", "plain": "앱 계산/파싱/합산 자동 테스트", "result": "통과 32/32" },
+    { "item": "web npm run build", "plain": "배포용 빌드가 깨지지 않는지", "result": "성공" },
+    { "item": "web npm audit --audit-level=low", "plain": "알려진 보안 취약점 검사", "result": "0건" },
+    { "item": ".env.local Git 미추적", "plain": "비밀키가 저장소에 안 올라가는지", "result": "확인(미추적)" },
+    { "item": "Supabase SQL 0001/0002/0003 적용", "plain": "장부 테이블/잠금/회사생성 함수 설치", "result": "적용 성공" },
+    { "item": "로그인 성공", "plain": "이메일 매직링크로 입장", "result": "성공" },
+    { "item": "회사 생성 성공", "plain": "'히든식품' 회사 등록", "result": "성공" },
+    { "item": "데모 진입 성공", "plain": "로그인+회사 후 앱 화면 진입", "result": "성공" },
+    { "item": "RLS 실측", "plain": "타 회사 데이터 차단 실제 확인", "result": "미실측 — 다음(8a-검증)" }
+  ],
+  "deferred": [
+    { "item": "미수금/입금 본격 관리", "category": "2차", "plain": "1차는 수동 체크 개념만" },
+    { "item": "세금계산서 발행(홈택스)", "category": "2차", "plain": "근거 금액 데이터만 1차에 보존" },
+    { "item": "PDF 파일 생성", "category": "2차", "plain": "1차는 브라우저 인쇄로 충분" },
+    { "item": "OCR/사진 인식", "category": "제외", "plain": "정확도 리스크" },
+    { "item": "카카오톡 자동 읽기", "category": "제외", "plain": "정책/권한 리스크" },
+    { "item": "이카운트 연동", "category": "제외", "plain": "대체가 아니라 보조로 시작" },
+    { "item": "매입처별 발주 저장/기본 매입처", "category": "2차", "plain": "1차는 합산표+복사 문장까지" },
+    { "item": "정확한 회계 마진(원가/재고/세무)", "category": "2차", "plain": "1차는 기준 매입단가 참고 마진만" },
+    { "item": "단가 변경 이력", "category": "2차", "plain": "현재 단가만 관리" },
+    { "item": "직원 권한 UI(staff)", "category": "2차", "plain": "스키마만 준비됨" },
+    { "item": "거래처 주문 링크", "category": "보류", "plain": "MVP 검증 후 실험" }
+  ],
+  "next": [
+    { "id": "8a-검증", "name": "Supabase 실측 검증", "why": "히든식품 회사/멤버 row 실제 확인 + RLS 기본 확인(타 계정 차단). 8b에서 주문을 저장하기 전에 잠금이 진짜 잠기는지 먼저 확인해야 안전.", "effort": "짧음(30분~1시간)" },
+    { "id": "8b", "name": "주문 저장/조회/기간 집계", "why": "핵심 가치가 '기록이 남는다'로 완성되는 단계. 주문 확정→ordermoa_orders/items 저장→새로고침 후에도 유지.", "effort": "중간(1세션)" },
+    { "id": "8c", "name": "합산표/거래명세서 DB 연결", "why": "저장된 주문으로 합산표·명세서 재출력. 8b 위에 얹는 조회 작업.", "effort": "중간" }
+  ]
+}
