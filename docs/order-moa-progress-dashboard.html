@@ -81,10 +81,9 @@
       <td>
         앱 화면 흐름(단위 6·7)과 <b>로그인·회사·데이터 잠금 기반(단위 8a)</b>까지 끝났고,
         실제 Supabase에서 <b>로그인 → 회사 '히든식품' 생성 → 앱 진입 성공</b>,
-        이어서 <b>잠금 검증도 대부분 통과</b>했습니다(회사/멤버 기록 확인 · 비로그인 차단 · 잠금 규칙 설치 확인).
-        남은 검증은 <b>다른 계정으로 남의 회사 데이터가 안 보이는지(A/B 격리)</b> 하나뿐입니다.<br>
-        <span class="plain">비유: <b>8a는 문패와 출입문을 단 단계</b> — 문이 잠기는 것까지 확인했고, 이제 <b>옆집 열쇠로 우리 집이 안 열리는지</b>만 확인하면 됩니다.
-        다음 8b가 <b>실제 주문 장부를 저장</b>하는 단계라, 지금은 주문을 확정해도 새로고침하면 사라집니다(의도된 데모 상태).</span>
+        이어서 <b>잠금 검증(8a-검증) 전부 통과</b>했습니다: 다른 회사 사용자에겐 히든식품 데이터가 <b>0/0/0으로 안 보이고</b>, 몰래 넣기(위조 insert)도 <b>DB가 막았습니다</b>.<br>
+        <span class="plain">비유: <b>8a는 문패와 출입문을 단 단계</b> — 문이 잠기고, <b>옆집 열쇠로 우리 집이 안 열리는 것까지</b> 확인했습니다.
+        다음 <b>8b가 실제 주문 장부를 저장</b>하는 단계라, 지금은 주문을 확정해도 새로고침하면 사라집니다(의도된 데모 상태).</span>
       </td>
     </tr>
   </table>
@@ -102,8 +101,8 @@
       <tr><td>단위 6</td><td>Next.js 데모 핵심 흐름</td><td class="plain">붙여넣기→파싱→합산표→명세서를 실제 앱 화면으로</td><td><span class="pill s-done">완료</span></td><td class="plain">6736b48</td></tr>
       <tr><td>단위 7</td><td>합산 + 발주 문장 복사</td><td class="plain">품목별 총수량과 매입처에 보낼 문장까지</td><td><span class="pill s-done">완료</span></td><td class="plain">0c4472b</td></tr>
       <tr><td>단위 8a</td><td>Supabase 인증/회사/RLS 기반</td><td class="plain"><b>문패와 출입문</b> — 로그인, 회사 만들기, 회사별 잠금</td><td><span class="pill s-done">완료</span></td><td class="plain">SQL 3개 적용·히든식품 생성 성공</td></tr>
-      <tr class="here"><td>8a-검증 <div class="here-tag">◀ 현재 위치(진행 중)</div></td><td>RLS/데이터 실측</td><td class="plain">회사/멤버 row · anon 차단 · policy 확인 <b>완료</b>. 타 계정 A/B 격리 실측만 남음</td><td><span class="pill s-doing">진행 중</span></td><td class="plain">2026-07-02 부분 완료</td></tr>
-      <tr><td>단위 8b</td><td>주문 저장/조회/기간 집계</td><td class="plain"><b>실제 주문 장부 저장</b> — 새로고침해도 주문이 남음</td><td><span class="pill s-next">다음</span></td><td class="plain">task-prompt-unit-8</td></tr>
+      <tr><td>8a-검증</td><td>RLS/데이터 실측</td><td class="plain">잠금 실측 <b>전부 통과</b> — A/B 격리 0/0/0 · 위조 insert 거부(RLS 42501)</td><td><span class="pill s-done">완료</span></td><td class="plain">2026-07-02</td></tr>
+      <tr class="here"><td>단위 8b <div class="here-tag">◀ 현재 위치(다음 할 일)</div></td><td>주문 저장/조회/기간 집계</td><td class="plain"><b>실제 주문 장부 저장</b> — 새로고침해도 주문이 남음</td><td><span class="pill s-next">다음</span></td><td class="plain">task-prompt-unit-8</td></tr>
       <tr><td>단위 8c</td><td>합산표/명세서 DB 연결</td><td class="plain">저장된 장부에서 합산표·명세서를 다시 꺼내 쓰기</td><td><span class="pill s-next">다음</span></td><td class="plain">재출력</td></tr>
       <tr><td>2차</td><td>미수금·세금계산서·PDF·OCR 등</td><td class="plain">지금은 일부러 안 만드는 것들(아래 표)</td><td><span class="pill s-out">제외/2차</span></td><td class="plain">1차 검증 후</td></tr>
     </tbody>
@@ -128,7 +127,7 @@
           <tr><td>로그인</td><td class="plain">이메일 매직링크 입장 성공</td></tr>
           <tr><td>회사 생성</td><td class="plain">'히든식품' 생성 성공(부트스트랩 RPC)</td></tr>
           <tr><td>Supabase 설치</td><td class="plain">공유 프로젝트에 SQL 3개 적용 성공(ordermoa_ 접두사)</td></tr>
-          <tr><td>8a-검증(부분)</td><td class="plain">회사/멤버 row(히든식품·owner)·anon 차단([])·policy 존재 확인</td></tr>
+          <tr><td>8a-검증(완료)</td><td class="plain">회사/멤버 row·anon 차단·policy + A/B 격리 0/0/0 · 위조 insert 거부</td></tr>
         </tbody>
       </table>
     </div>
@@ -140,7 +139,6 @@
           <tr><td>주문 목록 DB 조회</td><td class="plain">저장 장부에서 불러오기</td></tr>
           <tr><td>합산표 DB 연결</td><td class="plain">저장 주문으로 합산</td></tr>
           <tr><td>명세서 DB 재출력</td><td class="plain">지난 주문 명세서 다시 인쇄</td></tr>
-          <tr><td>A/B 격리 실측</td><td class="plain">타 계정(B회사)으로 히든식품 데이터 차단 확인 — 8a-검증 마지막 항목</td></tr>
         </tbody>
       </table>
     </div>
@@ -163,7 +161,8 @@
       <tr><td>Supabase 회사/멤버 row 확인</td><td class="plain">장부에 회사가 진짜 기록됐는지 SQL로 확인</td><td class="ok">성공 — 히든식품 / role=owner</td></tr>
       <tr><td>비로그인(anon) 조회 차단</td><td class="plain">로그인 없이 공개 키로 회사 데이터가 보이는지</td><td class="ok">차단 확인 — [] 반환</td></tr>
       <tr><td>RLS policy 존재 확인</td><td class="plain">ordermoa_* 테이블마다 잠금 규칙이 설치됐는지</td><td class="ok">확인 — 테이블별 policy 존재</td></tr>
-      <tr><td>타 계정 A/B 회사 격리 실측</td><td class="plain">다른 계정/다른 회사로 히든식품 데이터 차단 확인</td><td class="todo">미실측 — 8a-검증 남은 항목</td></tr>
+      <tr><td>A/B 회사 격리 select 실측</td><td class="plain">다른 회사 사용자엔 히든식품 데이터가 안 보이는지</td><td class="ok">성공 — 회사/멤버/거래처 0/0/0</td></tr>
+      <tr><td>A회사 위조 insert 차단</td><td class="plain">다른 회사 사용자가 히든식품에 몰래 넣기 시도</td><td class="ok">차단 성공 — RLS 오류 42501</td></tr>
     </tbody>
   </table>
   </div>
@@ -194,22 +193,22 @@
     <thead><tr><th>순서</th><th>단위</th><th>내용</th><th>왜 이 순서인가</th><th>예상 크기</th></tr></thead>
     <tbody>
       <tr class="here">
-        <td>1</td><td><b>8a-검증 마무리</b></td>
-        <td>타 계정 A/B 회사 격리 실측</td>
-        <td class="plain">회사 row·anon 차단·policy 확인은 끝. 두 번째 계정(B회사)으로 히든식품(A) 데이터가 select 0행/insert 거부되는지만 확인하면 잠금 검증 완료</td>
-        <td class="plain">짧음 (30분 내)</td>
-      </tr>
-      <tr>
-        <td>2</td><td><b>8b</b></td>
+        <td>1</td><td><b>8b</b></td>
         <td>주문 저장/조회/기간 집계</td>
-        <td class="plain">"기록이 남는다"로 핵심 가치가 완성되는 단계</td>
+        <td class="plain">8a-검증(잠금)이 전부 통과돼 이제 안전하게 데이터를 쌓을 수 있음. "기록이 남는다"로 핵심 가치가 완성되는 단계</td>
         <td class="plain">중간 (1세션)</td>
       </tr>
       <tr>
-        <td>3</td><td><b>8c</b></td>
+        <td>2</td><td><b>8c</b></td>
         <td>합산표/거래명세서 DB 연결</td>
         <td class="plain">저장된 주문으로 재출력 — 8b 위에 얹는 조회 작업</td>
         <td class="plain">중간</td>
+      </tr>
+      <tr>
+        <td>(옵션)</td><td><b>파서 개선</b></td>
+        <td>다중 후보 선택(2순위)·단위 사전 확장(3순위)</td>
+        <td class="plain">현장 발주 인식률 향상. 8b와 독립적이라 언제든 병행 가능</td>
+        <td class="plain">작음~중간</td>
       </tr>
     </tbody>
   </table>

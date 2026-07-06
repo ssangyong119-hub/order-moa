@@ -906,3 +906,188 @@ TDD 절차:
 - 1글자 품목 정확일치 — 현행 유지(별칭 해결 검증됨)
 
 다음 추천: A. 8a-검증 마무리(A/B 격리 실측) → B. 파서 개선 3순위(단위 사전 확장 — 저위험) → C. 2순위(다중 후보 UI, 화면 작업 포함) → D. 8b
+
+## 2026-07-02 Claude (8a-검증 마무리 — A/B 회사 격리 실측 통과)
+
+상태:
+
+- 완료 (커밋 안 함). 앱 코드/SQL/Supabase 스키마 미변경(읽기 검증만), 8b 미착수.
+
+실측(사용자 수행, 경로 0 = SQL Editor 임퍼서네이션, 두 번째 계정 불필요):
+
+- select 격리: `set local role authenticated` + 가짜 B uid로 `ordermoa_companies/company_members/customers` count → **0 / 0 / 0** (히든식품 있는데도 안 보임 = 격리 성공)
+- 위조 insert: A회사 company_id로 `ordermoa_customers` insert → **ERROR 42501 new row violates row-level security policy (거부)**
+- 둘 다 begin…rollback → yangsan-inventory 데이터 무변경
+
+→ **8a-검증 전 항목 통과**(회사/멤버 row·anon 차단·policy 존재 + A/B select 격리 + 위조 insert 차단). 8b 안전하게 진행 가능.
+
+반영:
+
+- (신규) `docs/order-moa-rls-ab-verification.md` — 비개발자용 실측 절차서(경로 0 SQL Editor 우선 + 결과 통과 기록)
+- 진행현황 3종 갱신: 8a-검증 진행중→**완료**, 현재 위치 8b로 이동, 체크리스트 A/B 2행(격리 0/0/0·위조 거부 42501), 되는 것/안 되는 것/다음 작업 정리, XLSX 재생성
+
+검증:
+
+- HTML 태그 균형 OK · XLSX 시트 5개 수식 0/오류 0 · JSON 파싱 OK
+- 루트 npm test 5/5 · web 56/56 · build 성공 · audit 0건 · 민감 스캔 clean
+
+남은 위험:
+
+- 앱(웹) 클라이언트 경유 RLS는 anon 차단([])으로 이미 확인. select/insert 격리는 SQL 레벨에서 실측 완료. update/delete 위조는 동일 policy 패턴이라 논리적으로 동일 보장(원하면 8b 착수 시 1건 추가 실측 가능).
+- 임퍼서네이션 uid는 가짜(FK 없음) — select/insert 거부 검증엔 무해. 실제 2계정 E2E는 8b 이후 앱에서 자연 검증됨.
+
+다음 추천: **8b 주문 저장/조회/기간 집계**(task-prompt-unit-8 §5/§6). 병행 옵션: 파서 개선 2·3순위(8b와 독립).
+
+## 2026-07-06 Claude (UI/UX 리디자인 — 관리자형 사이드바 레이아웃)
+
+상태:
+
+- 완료 (커밋 안 함). 로직/파서/DB/SQL 무변경 — 표현(JSX/CSS)만. 8b 미착수.
+
+배경:
+
+- 사용자가 관리자형 ERP 화면 스크린샷(그룹 사이드바 + "준비 중" 배지 + 정돈된 표/필) 제시, 현 UI 개선 요청.
+- 제품 원칙 준수: 메뉴는 오더모아 범위만(마감/세무/원가 등 2차 기능 메뉴 미추가). 예정 화면은 "준비 중" 배지로만 표시.
+
+구현:
+
+- `globals.css` 전면 교체: 셸 레이아웃(고정 사이드바 224px + 헤더 + 콘텐츠), 라이트 관리자 톤(코랄 액센트 유지), nav 그룹/active/준비중 배지, stat 카드, 표 스타일(테두리 라운드+호버), 게이트(.gate) 중앙 카드, 모바일(<900px: 사이드바→가로 스크롤 바, 준비중 숨김), 인쇄(@media print: 사이드바/헤더 숨김+명세서만 A4) 유지
+- `page.tsx`: Shell 컴포넌트 + NAV_GROUPS(홈/발주/조회/기준정보·자금·설정=준비중) + VIEW_TITLES(헤더 제목 = 현재 화면), 대시보드 인사말("〈회사명〉님, 안녕하세요")+stat 카드, 사이드바 푸터에 연결 상태(Supabase 연결됨/데모 모드) 표시. 리뷰/명세서 화면은 부모 메뉴(발주/주문 목록) active 유지
+- `auth-gate.tsx`: 로그인/회사 생성 화면 게이트 스타일 적용, AuthBar 제거(헤더로 통합)
+
+검증:
+
+- web `npm test` 56/56 · 루트 5/5 · build 성공 · audit 0건
+- 브라우저 실측(데모 모드, env 임시 이동 후 **복원 확인**): 사이드바 그룹 6/준비중 5/푸터 상태 표시, 대시보드 인사말·stat, 붙여넣기→파싱(헤더 '파싱 결과 확인')→확정→주문 목록→명세서(.note-doc)→합산표 전 흐름 정상, active nav 매핑 정상
+- 모바일 390px: 사이드바 가로 바 전환, 준비중 숨김, overflow 없음(scrollWidth=390), 콘솔 오류 0
+- env: `.env.local` 검증용 임시 이동 → 원위치 복원 + git 미추적 재확인. (스크린샷 캡처는 preview 렌더러 타임아웃 — DOM 검증으로 대체, 기지 환경 이슈)
+
+남은 이슈:
+
+- 다크 모드(스크린샷 1 톤)는 후보로만 — 1차는 라이트(인쇄 친화)
+- 로그인 상태 셸(Supabase 연결됨 + 회사명 헤더)은 사용자 실브라우저에서 확인 권장
+- 다음: 8b 주문 저장/조회/기간 집계(현재 위치). 커밋/push는 Codex 판단
+
+## 2026-07-06 Codex (UI 리디자인 2차 — 업무판 대시보드 보강)
+
+상태:
+
+- 완료 (커밋 안 함). DB/파서/저장 로직 미변경 — `page.tsx` 대시보드/사이드바 JSX와 `globals.css` 표현만 보강.
+
+배경:
+
+- 사용자가 참고 이미지 2장처럼 더 ERP/관리자 화면 느낌을 원한다고 피드백.
+- 기존 1차 리디자인은 사이드바 껍데기는 생겼지만, 좁은 화면에서 준비 중 메뉴가 숨겨지고 오른쪽 대시보드가 단순해 이미지 방향성이 약했음.
+
+구현:
+
+- 좌측 메뉴에 그룹/항목 아이콘형 기호 추가, `1차`/`2차` 배지 구분, 준비 중 메뉴를 모바일에서도 숨기지 않도록 조정.
+- 오른쪽 대시보드를 "오늘 업무" 업무판으로 재구성:
+  - 큰 발주 붙여넣기 CTA
+  - 오늘 확정 주문 / 합산 품목 종류 / 저장 상태 / 다음 단계 카드
+  - 현재 가능한 업무 표
+  - 준비 중인 업무 목록(1차/8c/2차 구분)
+- `page.tsx` 상단 주석을 현재 상태에 맞게 수정: Supabase 설정 시 DB 저장·조회(8b), 미설정 시 데모 메모리 모드.
+
+검증:
+
+- 데모 전용 서버 `3003`에서 실측: 샘플 로딩 → 발주 붙여넣기 → 파싱 → 주문 확정 → 주문 목록 → 대시보드 수치(1건/3종) 반영 확인.
+- 데스크톱 1500px: 좌측 그룹 메뉴/준비 중 배지/업무판 표시, 가로 overflow 없음.
+- 모바일 390px: 준비 중 메뉴 유지, 가로 overflow 없음(`scrollWidth=390`).
+- 루트 npm test 5/5 · web npm test 64/64 · web build 성공 · audit 0건.
+- `.env.local`은 데모 확인을 위해 임시 이동 후 원위치 복원 완료.
+
+## 2026-07-06 Claude (Codex 리뷰 반영 — UI 리디자인 후속)
+
+상태:
+
+- 완료 (커밋 안 함). 로직 무변경.
+
+반영:
+
+1. `globals.css` 음수 letter-spacing 3곳(-0.01em×2, -0.02em×1) → 0. 양수(.02em 그룹라벨, .4em 명세서 제목)는 유지
+2. `page.tsx` 상단 주석 현행화: "Supabase/DB/로그인 없음" 문구 제거 → 8a 게이트 동작·데모 폴백·8b에서 DB 연결 예정으로 수정
+
+검증:
+
+- 잔여 음수 letter-spacing grep 0건 · 루트 npm test 5/5 · web 56/56 · build 성공 · audit 0건
+- 브라우저 실측: h2/.brand computed letter-spacing = normal(0 적용), 콘솔 오류 0
+
+UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
+
+- [즉시 반영 가능(소형·로직 무변경)] ① 확정 직후 안내에 [합산표 보기] 바로가기 ② 빈 상태 CTA 통일(주문 목록 빈 화면에 [발주 붙여넣기]) ③ 대시보드 stat 카드 클릭→해당 화면 이동 ④ 파싱 확인 상단 단계 표시(붙여넣기→확인→확정) ⑤ 준비 중 메뉴 title 툴팁
+- [8b 이후] 기준정보 3화면 실구현(DB CRUD와 세트) · 주문 목록 날짜/거래처 필터(DB 조회와 세트) · 다중 후보 선택 UI(파서 2순위와 세트) · 다크 모드 토글 · 모바일 하단 탭바(사용 피드백 후) · 회사 전환 드롭다운(다회사 생기면)
+- [2차 분리(추가 안 함)] 마감/세무/원가/리포트 메뉴
+
+다음: 8b 주문 저장/조회/기간 집계(Codex 승인 시 착수). 커밋/push는 Codex 판단.
+
+## 2026-07-06 Claude (단위 8b — 주문 저장/조회 DB 연결)
+
+상태:
+
+- 완료 (커밋 안 함). UI 리디자인 유지, 스코프=주문 저장/조회(전체 ERP 확장 없음).
+
+핵심 설계:
+
+- FK/교차회사 트리거 제약상 주문 저장에는 DB의 실제 거래처/품목 row 필요 → **DB 모드 최초 진입 시 샘플 세팅 데이터(거래처5/품목30/별칭/단가)를 1회 시드**(비어 있을 때만), 이후 DB에서 로드
+- `order_items.amount`는 generated 컬럼 → **insert payload에서 제외**(빌더 테스트로 고정). unit_price=확정 시점 스냅샷
+- 저장 실패 보상: items 실패 시 orders를 `status='cancelled'`(delete 정책 없음) → 목록(status=confirmed 필터)에서 숨김
+- 예상 마진은 저장하지 않고 표시 시점 계산(원칙 유지). 거래처별 일/월 합계는 order_date+customer_id+Σamount로 산출 가능한 형태로 저장됨
+- 데모 모드(env 미설정)는 기존 메모리 흐름 그대로(분기)
+
+변경/신규 파일:
+
+- (신규) `web/src/lib/order-store.ts` — 타입(OrderLine/ConfirmedOrder)+순수 빌더(toOrderInsert/toItemInserts/mapDbOrder/buildSeedRows)+repo(loadCompanyData 시드 포함/loadOrders/saveOrder 보상 포함)
+- (신규) `web/src/lib/order-store.test.ts` — 빌더 5건(amount 미포함/스냅샷/total·마진·폴백/시드 참조 일관성)
+- (수정) `web/src/app/page.tsx` — AppData 타입, DB 로드 effect(시드→로드→주문 목록), confirmOrder DB 분기(저장 중… 상태), 단가/별칭 편집 DB upsert, DB 로딩/오류 카드
+- (수정) worklog
+
+포함/제외:
+
+- 포함(정합성 필수): 단가 즉석 저장·별칭 등록의 DB upsert(새로고침 후 유지)
+- 미룸: order_imports(raw_text) 저장(8c), 저장 RPC 원자화, 주문 취소 UI, 목록 필터, 기준정보 CRUD 화면, 월합계 화면(8c), 샘플 재시드/초기화
+
+검증:
+
+- 루트 npm test 5/5 · web **61/61**(+order-store 5) · build 성공(타입 오류 2건 발견→수정: AppData 타입/upsert then 타입) · audit 0건
+- 데모 모드 브라우저 회귀(env 임시 이동→**복원 확인**, git 미추적 재확인): 랜딩→붙여넣기→파싱→확정("데모 모드 — 새로고침 시 초기화" 안내)→주문 목록 1행, 콘솔 오류 0
+- DB 모드 실측은 프리뷰에서 불가(매직링크) → **사용자 확인 절차**: `cd web; npm run dev` → 로그인 → (최초) "샘플 데이터를 설치했습니다" → 발주 확정 → "주문이 저장되었습니다. 새로고침해도 유지됩니다." → **F5 후 주문 목록에 남아 있으면 8b 성공**. Supabase Table Editor에서 ordermoa_orders/ordermoa_order_items row 확인 가능
+
+남은 이슈:
+
+- DB 모드 실측(위 절차) 결과 공유 필요 — 성공 시 진행현황 3종 8b 완료 처리
+- 커밋/push는 Codex 판단
+
+## 2026-07-06 Claude (Codex 리뷰 반영 — 8b 시드 부분 실패 오판 수정)
+
+상태:
+
+- 완료 (커밋 안 함). DB 실측은 아직 안 함(코드 안정화 우선, Codex 지시).
+
+문제(Codex 지적):
+
+- loadCompanyData가 customers count만으로 시드 완료를 판정 → customers insert 후 products/prices 중간 실패 시, 다음 접속에서 "시드 완료"로 오판해 품목/단가가 빈 깨진 초기 상태 고착.
+
+수정:
+
+1. 판정 확대: customers/products/customer_prices **3개 테이블 count**를 모두 확인, 하나라도 0이면 보충 실행
+2. 안전 재시도(삭제 없음): `ensureSeed()` 신설 — 기존 거래처/품목을 **이름 기준으로 재사용**하고 누락분만 insert, aliases/prices는 unique 키 **upsert(ignoreDuplicates)** 로 멱등(사용자 수정 단가 보존). 실패 시 [다시 시도]가 중단 지점부터 이어짐
+3. 순수 함수 분리: `diffSeedRows(companyId, 기존cust, 기존prod, makeId)` — buildSeedRows는 빈 상태 특수형으로 위임(기존 테스트 호환)
+4. page.tsx 문구: 설치 안내("최초 설치 또는 누락분 복구") / 오류 안내("[다시 시도]를 누르면 중단된 지점부터 안전하게 이어집니다")
+
+테스트 추가(+3, 총 64):
+
+- 부분 시드(customers만 존재): 재생성 0 + products/prices 전량 보충 + **기존 거래처 id 재사용**(참조 안 끊김)
+- 완전 시드: insert 대상 0 + makeId 호출 시 throw로 "새 id 생성 없음" 보장
+- 역방향 부분 시드(products만 존재): customers/prices 보충 + 기존 품목 id 재사용
+
+검증:
+
+- 루트 npm test 5/5 · web **64/64** · build 성공 · audit 0건
+- 프리뷰 생략 사유: 변경이 DB 모드 전용 경로(데모 모드는 order-store 미사용)라 관찰 불가 — 순수 함수 테스트로 대체
+
+위험/나중:
+
+- [남은 위험] 이름 기준 재사용은 "샘플과 동일 이름" 전제 — 사용자가 시드 후 거래처명을 바꾸면 보충 시 같은 이름이 새로 생길 수 있음(1차 허용, 기준정보 CRUD에서 정리 가능). ensureSeed 자체의 동시 실행(두 탭 동시 최초 접속)은 products 중복 생성 가능성 — 낮은 확률, 후순위(유니크 제약 또는 RPC 직렬화로 2차 보강)
+- [나중] order_imports(raw_text) 저장(8c) · 저장 RPC 원자화 · 샘플 초기화/재설치 버튼(설정 화면) · unique(company_id,name) 제약 검토
+- [다음] 사용자 DB 실측(로그인→시드→확정→F5 유지) → 성공 시 진행현황 8b 완료 처리

@@ -1,122 +1,229 @@
-/* 오더모아 데모 스타일 — warm cream/coral/ink (prototype 톤 참고).
-   외부 폰트/CDN 없음. 모바일/인쇄 고려. */
-:root {
-  --cream: #faf9f5;
-  --paper: #ffffff;
-  --ink: #141413;
-  --ink-soft: #54524c;
-  --coral: #cc785c;
-  --coral-dark: #b5634a;
-  --line: #e7e4da;
-  --ok-bg: #e7f3e8; --ok-fg: #2f6b3a;
-  --warn-bg: #fbf3d9; --warn-fg: #8a6d11;
-  --err-bg: #fbe4e0; --err-fg: #b23c28;
-  --amber-bg: #fdeccf; --amber-fg: #9a6b14;
-  --radius: 12px;
+/* 오더모아 — 관리자형 레이아웃(사이드바+헤더).
+   스크린샷 벤치마크: 라이트 관리자 UI, 그룹 사이드바, "준비 중" 배지, 정돈된 표.
+   외부 폰트/CDN 없음. 모바일/인쇄 고려. 로직 无관 — 표현만. */
+:root{
+  --bg:#f5f7fa; --paper:#ffffff; --ink:#1c2430; --soft:#68727f;
+  --line:#dfe5ed; --line-soft:#edf1f6;
+  --accent:#cc785c; --accent-dark:#b5634a; --accent-soft:#faf1ed;
+  --sidebar-bg:#f9fbfd; --sidebar-line:#dfe5ed;
+  --ok-bg:#e6f4ea; --ok-fg:#1e7d3c;
+  --warn-bg:#fdf3d0; --warn-fg:#8a6d11;
+  --err-bg:#fde8e4; --err-fg:#b23c28;
+  --amber-bg:#fdeccf; --amber-fg:#9a6b14;
+  --info-bg:#e6eef8; --info-fg:#1d5a99;
+  --radius:10px;
 }
 
-* { box-sizing: border-box; }
+*{box-sizing:border-box}
+html,body{
+  margin:0;padding:0;background:var(--bg);color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;
+  font-size:15px;line-height:1.55;overflow-x:hidden;
+}
+h1,h2,h3{font-weight:650;letter-spacing:0}
+h1{font-size:1.25rem;margin:0}
+h2{font-size:1.05rem;margin:0 0 4px}
+h3{font-size:.95rem}
+a{color:var(--accent)}
+code{background:var(--line-soft);padding:1px 6px;border-radius:6px;font-size:.82em}
 
-html, body {
-  margin: 0;
-  padding: 0;
-  background: var(--cream);
-  color: var(--ink);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Malgun Gothic", sans-serif;
-  line-height: 1.55;
-  overflow-x: hidden; /* 가로 넘침 격리 */
+/* ── 셸: 사이드바 + 메인 ── */
+.shell{display:flex;min-height:100vh}
+.sidebar{
+  width:248px;flex:0 0 248px;background:var(--sidebar-bg);
+  border-right:1px solid var(--sidebar-line);
+  padding:14px 12px;display:flex;flex-direction:column;gap:4px;
+  position:sticky;top:0;height:100vh;overflow-y:auto;
+}
+.brand{font-weight:750;font-size:1.08rem;padding:6px 10px 12px;letter-spacing:0}
+.brand small{display:block;font-weight:400;font-size:.72rem;color:var(--soft)}
+.nav-group{margin-top:8px}
+.nav-group-label{
+  font-size:.72rem;color:var(--soft);padding:4px 8px;letter-spacing:.02em;
+  display:flex;align-items:center;gap:6px;
+}
+.nav-item{
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  width:100%;text-align:left;border:none;background:none;cursor:pointer;
+  padding:7px 8px;border-radius:7px;font-size:.88rem;color:var(--ink);
+  min-height:36px;
+}
+.nav-item:hover{background:#f0f2f6}
+.nav-item.active{background:var(--accent-soft);color:var(--accent-dark);font-weight:650}
+.nav-item:disabled{color:#9aa3ae;cursor:default}
+.nav-item:disabled:hover{background:none}
+.nav-main{display:flex;align-items:center;gap:8px;min-width:0}
+.nav-glyph{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;border-radius:5px;
+  color:#7b8796;background:#eef2f7;font-size:.78rem;line-height:1;flex:0 0 18px;
+}
+.nav-item.active .nav-glyph{background:#fff;color:var(--accent-dark)}
+.nav-group-label .nav-glyph{background:transparent;color:#8b95a3}
+.soon{
+  font-size:.66rem;color:#6d7886;background:#eef0f4;border-radius:999px;
+  padding:1px 7px;white-space:nowrap;font-weight:500;
+}
+.soon.later{background:#f6e8e4;color:#9a5c48}
+.sidebar-foot{
+  margin-top:auto;padding:10px;font-size:.72rem;color:var(--soft);
+  border-top:1px solid var(--sidebar-line);
+}
+.dot{display:inline-block;width:7px;height:7px;border-radius:99px;margin-right:5px;vertical-align:1px}
+.dot.on{background:#2fa356}.dot.off{background:#b8bfc9}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:12px 22px;background:var(--paper);border-bottom:1px solid var(--line);
+  position:sticky;top:0;z-index:5;
+}
+.topbar .who{font-size:.82rem;color:var(--soft);display:flex;align-items:center;gap:10px}
+.content{padding:22px 24px 60px;max-width:1180px;width:100%}
+
+/* ── 카드/버튼/입력 ── */
+.card{
+  background:var(--paper);border:1px solid var(--line);
+  border-radius:var(--radius);padding:16px 18px;margin-bottom:14px;
+}
+.card h2{margin-bottom:10px}
+button{
+  font-size:15px;min-height:42px;padding:8px 16px;
+  border:1px solid var(--line);border-radius:8px;
+  background:var(--paper);color:var(--ink);cursor:pointer;
+}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+button.primary:hover{background:var(--accent-dark)}
+button.big{font-size:1rem;min-height:52px;width:100%}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.link{border:none;background:none;color:var(--accent);min-height:auto;padding:4px;font-size:.85rem}
+
+input,select,textarea{
+  font-size:16px;padding:8px 10px;min-height:42px;
+  border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);
+  width:100%;font-family:inherit;
+}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+textarea{min-height:150px;resize:vertical;line-height:1.6}
+label{display:block;font-size:.8rem;color:var(--soft);margin:10px 0 4px;font-weight:550}
+
+.muted{color:var(--soft);font-size:.85rem}
+.notice{background:var(--warn-bg);color:var(--warn-fg);padding:8px 12px;border-radius:8px;font-size:.85rem}
+
+/* ── 배지/필 ── */
+.badge{display:inline-block;font-size:.74rem;padding:2px 9px;border-radius:999px;white-space:nowrap;font-weight:600}
+.badge.ok{background:var(--ok-bg);color:var(--ok-fg)}
+.badge.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.badge.err{background:var(--err-bg);color:var(--err-fg)}
+.badge.amber{background:var(--amber-bg);color:var(--amber-fg)}
+.badge.info{background:var(--info-bg);color:var(--info-fg)}
+
+/* ── 표 ── */
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:var(--radius);background:var(--paper)}
+table{width:100%;border-collapse:collapse;min-width:560px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line-soft);font-size:.88rem;vertical-align:middle}
+th{color:var(--soft);font-weight:600;font-size:.76rem;background:#fafbfc;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:#fafbfd}
+td.num,th.num{text-align:right}
+td input,td select{min-height:38px}
+td input.qty,td input.price{max-width:96px}
+
+/* 카드 내 표는 이중 테두리 방지 */
+.card .table-wrap{border:none;border-radius:0;background:none}
+.card table{min-width:520px}
+.card th{background:none}
+
+.summary-grid,.ops-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+.ops-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.stat-card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;text-align:left}
+.stat-card .stat{font-size:1.7rem;font-weight:750;letter-spacing:0}
+.stat-card.clickable{cursor:pointer}
+.stat-card.clickable:hover{border-color:var(--accent);background:#fffdfc}
+.stat-label{display:block;color:var(--soft);font-size:.78rem;font-weight:650;margin-bottom:4px}
+.stat-note{display:block;color:var(--soft);font-size:.74rem;margin-top:4px}
+.status-text{display:block;font-weight:750;font-size:1.05rem}
+.status-text.ok{color:var(--ok-fg)}
+.status-text.warn{color:var(--warn-fg)}
+.row-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* ── 대시보드 업무판 ── */
+.workbench-head{
+  display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:18px;align-items:center;
+  background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px;margin-bottom:14px;
+}
+.workbench-head h2{font-size:1.25rem;margin-bottom:6px}
+.eyebrow{margin:0 0 4px;color:var(--accent-dark);font-size:.78rem;font-weight:750}
+.cta-main{align-self:stretch}
+.dashboard-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr);gap:14px}
+.panel{
+  background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);
+  padding:14px 16px;
+}
+.panel h3{margin:0 0 10px}
+.table-wrap.compact table{min-width:0}
+.table-wrap.compact th,.table-wrap.compact td{padding:9px 10px}
+.ready-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.ready-list li{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:.88rem;
+}
+.ready-list li:last-child{border-bottom:none}
+
+/* ── 거래명세서(인쇄 문서) — 앱 테마와 분리된 문서 스타일 유지 ── */
+.note-doc{background:#fff;color:#000;border:1px solid #999;padding:20px}
+.note-head{display:flex;justify-content:space-between;gap:16px;border-bottom:2px solid #000;padding-bottom:10px}
+.note-title{font-size:1.6rem;letter-spacing:.4em;font-weight:650}
+.note-block{font-size:.85rem}
+.note-block b{display:inline-block;min-width:56px;color:#333}
+.note-doc .table-wrap{border:none;border-radius:0}
+.note-table th,.note-table td{border:1px solid #999;padding:6px 8px;background:none}
+.note-total{text-align:right;font-weight:700;padding-top:8px}
+.note-hanja{font-size:.9rem}
+
+/* ── 게이트(로그인/회사 생성/로딩) — 셸 밖 중앙 카드 ── */
+.gate{min-height:100vh;display:flex;justify-content:center;align-items:flex-start;padding:9vh 16px 40px}
+.gate-box{width:100%;max-width:430px}
+.gate .brand{font-weight:750;font-size:1.15rem}
+.gate .brand small{display:block;font-weight:400;font-size:.74rem;color:var(--soft)}
+
+/* ── 모바일 ── */
+@media (max-width:900px){
+  .shell{flex-direction:column}
+  .sidebar{
+    position:static;width:100%;flex:none;height:auto;
+    flex-direction:row;align-items:center;gap:2px;overflow-x:auto;
+    padding:8px 10px;border-right:none;border-bottom:1px solid var(--sidebar-line);
+  }
+  .brand{padding:0 10px 0 4px;white-space:nowrap}
+  .brand small{display:none}
+  .nav-group{margin:0;display:flex;align-items:center}
+  .nav-group-label{display:none}
+  .nav-item{white-space:nowrap;padding:8px 10px}
+  .nav-item:disabled{display:flex}
+  .nav-item:disabled .soon{display:none}
+  .sidebar-foot{display:none}
+  .content{padding:14px 12px 60px}
+  .summary-grid,.ops-grid{grid-template-columns:1fr 1fr}
+  .workbench-head{grid-template-columns:1fr}
+  .cta-main{min-height:48px}
+  .dashboard-grid{grid-template-columns:1fr}
+}
+@media (max-width:480px){
+  .summary-grid,.ops-grid{grid-template-columns:1fr}
+  .nav-glyph{display:none}
 }
 
-h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; font-weight: 600; }
-h1 { font-size: 1.5rem; margin: 0; }
-h2 { font-size: 1.2rem; }
-
-a { color: var(--coral); }
-
-.app { max-width: 920px; margin: 0 auto; padding: 16px; }
-
-.topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); margin-bottom: 16px;
-}
-.topbar .company { font-size: 0.85rem; color: var(--ink-soft); }
-
-.nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-.nav button { font-size: 0.9rem; }
-
-.card {
-  background: var(--paper); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 16px; margin-bottom: 14px;
-}
-
-/* 버튼 — 터치 44px 이상 */
-button {
-  font-size: 16px; min-height: 44px; padding: 8px 16px;
-  border: 1px solid var(--line); border-radius: 10px;
-  background: var(--paper); color: var(--ink); cursor: pointer;
-}
-button:hover { border-color: var(--coral); }
-button.primary { background: var(--coral); color: #fff; border-color: var(--coral); }
-button.primary:hover { background: var(--coral-dark); }
-button.big { font-size: 1.05rem; min-height: 56px; width: 100%; }
-button:disabled { opacity: 0.5; cursor: not-allowed; }
-button.link { border: none; background: none; color: var(--coral); min-height: auto; padding: 4px; }
-
-/* 입력 — 16px (iOS 줌 방지) */
-input, select, textarea {
-  font-size: 16px; padding: 8px 10px; min-height: 44px;
-  border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink);
-  width: 100%; font-family: inherit;
-}
-textarea { min-height: 140px; resize: vertical; line-height: 1.6; }
-label { display: block; font-size: 0.85rem; color: var(--ink-soft); margin: 8px 0 4px; }
-
-.muted { color: var(--ink-soft); font-size: 0.85rem; }
-.notice { background: var(--warn-bg); color: var(--warn-fg); padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; }
-
-/* 상태 배지 */
-.badge { display: inline-block; font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
-.badge.ok { background: var(--ok-bg); color: var(--ok-fg); }
-.badge.warn { background: var(--warn-bg); color: var(--warn-fg); }
-.badge.err { background: var(--err-bg); color: var(--err-fg); }
-.badge.amber { background: var(--amber-bg); color: var(--amber-fg); }
-
-/* 표 — 모바일 가로 스크롤 */
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-table { width: 100%; border-collapse: collapse; min-width: 520px; }
-th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); font-size: 0.9rem; vertical-align: middle; }
-th { color: var(--ink-soft); font-weight: 600; font-size: 0.8rem; }
-td.num, th.num { text-align: right; }
-td input, td select { min-height: 40px; }
-td input.qty, td input.price { max-width: 96px; }
-
-.summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-.summary-grid .stat { font-size: 1.6rem; font-weight: 700; }
-
-.row-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-
-/* 거래명세서 */
-.note-doc { background: #fff; color: #000; border: 1px solid #999; padding: 20px; }
-.note-head { display: flex; justify-content: space-between; gap: 16px; border-bottom: 2px solid #000; padding-bottom: 10px; }
-.note-title { font-family: Georgia, serif; font-size: 1.6rem; letter-spacing: 0.4em; }
-.note-block { font-size: 0.85rem; }
-.note-block b { display: inline-block; min-width: 56px; color: #333; }
-.note-table th, .note-table td { border: 1px solid #999; padding: 6px 8px; }
-.note-total { text-align: right; font-weight: 700; padding-top: 8px; }
-.note-hanja { font-size: 0.9rem; }
-
-@media (max-width: 480px) {
-  .summary-grid { grid-template-columns: 1fr; }
-  .note-head { flex-direction: column; }
-  h1 { font-size: 1.3rem; }
-}
-
-/* 인쇄: 앱 UI 숨기고 명세서만 A4 */
-@media print {
-  @page { size: A4; margin: 12mm; }
-  body { background: #fff; }
-  .no-print { display: none !important; }
-  .app { max-width: none; padding: 0; }
-  table { min-width: 0; }
-  .note-doc { border: none; padding: 0; }
+/* ── 인쇄: 앱 UI 숨기고 명세서만 A4 ── */
+@media print{
+  @page{size:A4;margin:12mm}
+  body{background:#fff}
+  .no-print{display:none !important}
+  .sidebar,.topbar{display:none !important}
+  .shell{display:block}
+  .content{padding:0;max-width:none}
+  table{min-width:0}
+  .note-doc{border:none;padding:0}
 }

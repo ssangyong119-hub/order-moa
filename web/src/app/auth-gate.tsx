@@ -8,6 +8,7 @@ import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 
 const COMPANY_KEY = "order-moa.companyId";
+const AUTH_WAIT_MS = 6000;
 
 export type GateStatus = "disabled" | "loading" | "signed_out" | "no_company" | "ready";
 
@@ -70,11 +71,17 @@ export function useCompanySession(): CompanySession {
   useEffect(() => {
     mounted.current = true;
     if (!supabase) return;
+    const timer = window.setTimeout(() => {
+      if (!mounted.current) return;
+      setError("로그인 상태 확인이 지연되어 로그인 화면으로 전환했습니다. 다시 시도해주세요.");
+      setStatus("signed_out");
+    }, AUTH_WAIT_MS);
     (async () => {
       const {
         data: { session },
       } = await supabase.auth.getSession();
       if (!mounted.current) return;
+      window.clearTimeout(timer);
       if (!session) {
         setStatus("signed_out");
         return;
@@ -98,6 +105,7 @@ export function useCompanySession(): CompanySession {
     });
     return () => {
       mounted.current = false;
+      window.clearTimeout(timer);
       subscription.unsubscribe();
     };
   }, [supabase, loadCompanies]);
@@ -116,7 +124,7 @@ export function useCompanySession(): CompanySession {
       });
       if (!mounted.current) return;
       setBusy(false);
-      if (aErr) setError("로그인 메일 전송에 실패했습니다. 이메일을 확인해주세요.");
+      if (aErr) setError(`로그인 메일 전송에 실패했습니다: ${aErr.message}`);
       else setInfo("로그인 링크를 메일로 보냈습니다. 메일함을 확인해주세요.");
     },
     [supabase],
@@ -174,12 +182,12 @@ export function useCompanySession(): CompanySession {
 export function LoginView({ session }: { session: CompanySession }) {
   const [email, setEmail] = useState("");
   return (
-    <main className="app">
-      <div className="topbar">
-        <h1>오더모아</h1>
-        <span className="company">로그인</span>
-      </div>
-      <div className="card">
+    <main className="gate">
+      <div className="gate-box">
+        <div className="brand" style={{ padding: 0, marginBottom: 14 }}>
+          오더모아<small>발주 취합 MVP</small>
+        </div>
+        <div className="card">
         <h2>이메일로 로그인</h2>
         <p className="muted">
           이메일을 입력하면 로그인 링크를 보내드립니다. 비밀번호는 저장하지 않습니다.
@@ -202,6 +210,7 @@ export function LoginView({ session }: { session: CompanySession }) {
         </div>
         {session.info && <p className="notice" style={{ marginTop: 10 }}>{session.info}</p>}
         {session.error && <p className="notice" style={{ marginTop: 10 }}>{session.error}</p>}
+        </div>
       </div>
     </main>
   );
@@ -210,16 +219,17 @@ export function LoginView({ session }: { session: CompanySession }) {
 export function CompanySetupView({ session }: { session: CompanySession }) {
   const [name, setName] = useState("");
   return (
-    <main className="app">
-      <div className="topbar">
-        <h1>오더모아</h1>
-        <span className="company">
-          {session.email ?? ""}{" "}
-          <button className="link" onClick={() => session.signOut()}>
-            로그아웃
-          </button>
-        </span>
+    <main className="gate">
+      <div className="gate-box">
+      <div className="brand" style={{ padding: 0, marginBottom: 14 }}>
+        오더모아<small>발주 취합 MVP</small>
       </div>
+      <p className="muted" style={{ marginTop: 0 }}>
+        {session.email ?? ""}{" "}
+        <button className="link" onClick={() => session.signOut()}>
+          로그아웃
+        </button>
+      </p>
 
       {session.companies.length > 0 && (
         <div className="card">
@@ -250,31 +260,7 @@ export function CompanySetupView({ session }: { session: CompanySession }) {
         </div>
         {session.error && <p className="notice" style={{ marginTop: 10 }}>{session.error}</p>}
       </div>
+      </div>
     </main>
-  );
-}
-
-export function AuthBar({ session }: { session: CompanySession }) {
-  if (session.status !== "ready") return null;
-  return (
-    <div
-      className="no-print"
-      style={{
-        display: "flex",
-        justifyContent: "flex-end",
-        alignItems: "center",
-        gap: 8,
-        fontSize: "0.8rem",
-        color: "var(--ink-soft)",
-        padding: "4px 0",
-      }}
-    >
-      <span>
-        {session.companyName} · {session.email}
-      </span>
-      <button className="link" onClick={() => session.signOut()}>
-        로그아웃
-      </button>
-    </div>
   );
 }

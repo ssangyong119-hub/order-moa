@@ -1,8 +1,9 @@
 "use client";
 
-// 오더모아 단위 6 데모 — 샘플 데이터 기반 핵심 흐름.
-// 클라이언트 메모리 상태만 사용(새로고침 시 초기화). Supabase/DB/로그인/PDF 없음.
-import { useMemo, useState } from "react";
+// 오더모아 웹 MVP 메인 — 관리자형 셸(사이드바+헤더) + 핵심 흐름(붙여넣기→파싱→합산표→명세서).
+// 인증/회사는 Supabase 게이트(8a)로 동작하며, env 미설정 시 데모 모드로 폴백.
+// 주문/샘플 데이터는 Supabase 설정 시 DB 저장·조회(8b), 미설정 시 데모 메모리 모드. PDF 없음(브라우저 인쇄).
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { Customer, CustomerPrice, Product } from "@/lib/domain/types";
 import {
   canConfirm,
@@ -20,49 +21,149 @@ import {
   lineAmount,
   sumAmounts,
 } from "@/lib/calculations";
-import { loadSampleData, type SampleOrderExample } from "@/lib/sample-data";
+import { loadSampleData, sampleCustomers, type SampleOrderExample } from "@/lib/sample-data";
+import { getBrowserSupabase } from "@/lib/supabase/client";
+import {
+  loadCompanyData,
+  loadOrders,
+  saveOrder,
+  type ConfirmedOrder,
+  type OrderLine,
+} from "@/lib/order-store";
 import {
   buildAggregateRows,
   buildContributionText,
   formatPurchaseOrderText,
 } from "@/lib/aggregate";
 import {
-  AuthBar,
   CompanySetupView,
   LoginView,
   useCompanySession,
+  type CompanySession,
 } from "./auth-gate";
 
 type View = "dashboard" | "paste" | "review" | "aggregate" | "orders" | "note";
 
-interface OrderLine {
-  productId: string;
-  productName: string;
-  quantity: number;
-  unit: string;
-  unitPrice: number;
-  amount: number;
-  basePurchasePrice: number | null;
-}
-interface ConfirmedOrder {
-  id: string;
-  date: string;
-  customerId: string;
-  customerName: string;
-  lines: OrderLine[];
-  total: number;
-  margin: number | null;
+/** 앱 데이터 묶음 — 데모 모드(샘플)와 DB 모드(Supabase 로드) 공용 형태 */
+interface AppData {
+  company: { name: string; businessNumber: string; phone: string; address: string };
+  customers: Customer[];
+  products: Product[];
+  customerPrices: CustomerPrice[];
+  orderExamples: SampleOrderExample[];
 }
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// ── 사이드바 메뉴 (오더모아 범위만 — 마감/세무 등 2차 기능은 넣지 않음. 예정 화면은 "준비 중") ──
+const NAV_GROUPS: Array<{
+  label: string;
+  icon: string;
+  items: Array<{ view?: View; label: string; icon: string; soon?: boolean; phase?: "1차" | "2차" }>;
+}> = [
+  { label: "홈", icon: "⌂", items: [{ view: "dashboard", label: "대시보드", icon: "⌂" }] },
+  { label: "발주", icon: "▤", items: [{ view: "paste", label: "발주 붙여넣기", icon: "＋" }] },
+  {
+    label: "조회",
+    icon: "▦",
+    items: [
+      { view: "aggregate", label: "품목별 합산표", icon: "Σ" },
+      { view: "orders", label: "주문 목록", icon: "≡" },
+    ],
+  },
+  {
+    label: "기준정보",
+    icon: "◇",
+    items: [
+      { label: "거래처 관리", icon: "□", soon: true, phase: "1차" },
+      { label: "품목·별칭 관리", icon: "◇", soon: true, phase: "1차" },
+      { label: "단가 관리", icon: "₩", soon: true, phase: "1차" },
+    ],
+  },
+  { label: "자금", icon: "₩", items: [{ label: "미수금", icon: "◌", soon: true, phase: "2차" }] },
+  { label: "설정", icon: "⚙", items: [{ label: "데이터 관리", icon: "⚙", soon: true, phase: "1차" }] },
+];
+
+const VIEW_TITLES: Record<View, string> = {
+  dashboard: "대시보드",
+  paste: "발주 붙여넣기",
+  review: "파싱 결과 확인",
+  aggregate: "품목별 합산표",
+  orders: "주문 목록",
+  note: "거래명세서",
+};
+
+function Shell(props: {
+  view: View;
+  onNav: (v: View) => void;
+  session: CompanySession;
+  headerRight: ReactNode;
+  children: ReactNode;
+}) {
+  const { view, session } = props;
+  const isActive = (v?: View) =>
+    v === view ||
+    (v === "paste" && view === "review") ||
+    (v === "orders" && view === "note");
+  return (
+    <div className="shell">
+      <aside className="sidebar no-print">
+        <div className="brand">
+          오더모아<small>발주 취합 MVP</small>
+        </div>
+        {NAV_GROUPS.map((g) => (
+          <div className="nav-group" key={g.label}>
+            <div className="nav-group-label">
+              <span className="nav-glyph" aria-hidden="true">{g.icon}</span>
+              {g.label}
+            </div>
+            {g.items.map((it) =>
+              it.soon ? (
+                <button key={it.label} className="nav-item" disabled>
+                  <span className="nav-main">
+                    <span className="nav-glyph" aria-hidden="true">{it.icon}</span>
+                    <span>{it.label}</span>
+                  </span>
+                  <span className={it.phase === "2차" ? "soon later" : "soon"}>{it.phase ?? "준비 중"}</span>
+                </button>
+              ) : (
+                <button
+                  key={it.label}
+                  className={isActive(it.view) ? "nav-item active" : "nav-item"}
+                  onClick={() => it.view && props.onNav(it.view)}
+                >
+                  <span className="nav-main">
+                    <span className="nav-glyph" aria-hidden="true">{it.icon}</span>
+                    <span>{it.label}</span>
+                  </span>
+                </button>
+              ),
+            )}
+          </div>
+        ))}
+        <div className="sidebar-foot">
+          <span className={session.status === "ready" ? "dot on" : "dot off"} />
+          {session.status === "ready" ? "Supabase 연결됨" : "데모 모드 · 저장 안 됨"}
+        </div>
+      </aside>
+      <div className="main">
+        <header className="topbar no-print">
+          <h1>{VIEW_TITLES[view]}</h1>
+          <div className="who">{props.headerRight}</div>
+        </header>
+        <main className="content">{props.children}</main>
+      </div>
+    </div>
+  );
+}
+
 export default function HomePage() {
   // 단위 8a 인증/회사 게이트 (Supabase 미설정이면 status="disabled" → 데모 그대로)
   const session = useCompanySession();
 
-  const [data, setData] = useState<ReturnType<typeof loadSampleData> | null>(null);
+  const [data, setData] = useState<AppData | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customerPrices, setCustomerPrices] = useState<CustomerPrice[]>([]);
@@ -79,10 +180,66 @@ export default function HomePage() {
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [aggCustomer, setAggCustomer] = useState<string>("all");
   const [aggDate, setAggDate] = useState<string>(""); // "" = 전체 날짜
+  const [dbError, setDbError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // DB 모드: 로그인+회사가 준비되면 Supabase에서 데이터 로드(최초면 샘플 시드)
+  const db = session.status === "ready" ? getBrowserSupabase() : null;
+  const companyId = session.status === "ready" ? session.companyId : null;
 
   function flash(text: string) {
     setMessage(text);
   }
+
+  useEffect(() => {
+    if (!db || !companyId) return;
+    let live = true;
+    (async () => {
+      setDbError(null);
+      try {
+        const loaded = await loadCompanyData(db, companyId);
+        const ords = await loadOrders(db, companyId, loaded.products);
+        if (!live) return;
+        setCustomers(loaded.customers);
+        setProducts(loaded.products);
+        setCustomerPrices(loaded.customerPrices);
+        // 발주 예시의 샘플 거래처 id → DB 거래처 id 매핑(이름 기준)
+        const nameOf = (sid: string) => sampleCustomers.find((s) => s.id === sid)?.name;
+        const mappedExamples = loadSampleData().orderExamples.map((ex) => ({
+          ...ex,
+          customerId:
+            loaded.customers.find((c) => c.name === nameOf(ex.customerId))?.id ??
+            loaded.customers[0]?.id ??
+            ex.customerId,
+        }));
+        setExamples(mappedExamples);
+        setData({
+          company: {
+            name: session.status === "ready" ? (session.companyName ?? "내 회사") : "내 회사",
+            businessNumber: "",
+            phone: "",
+            address: "",
+          },
+          customers: loaded.customers,
+          products: loaded.products,
+          customerPrices: loaded.customerPrices,
+          orderExamples: mappedExamples,
+        });
+        setOrders(ords);
+        setSelectedCustomerId(loaded.customers[0]?.id ?? "");
+        if (loaded.seeded) flash("샘플 데이터를 설치했습니다. (최초 설치 또는 누락분 복구 · 가명 테스트용)");
+      } catch {
+        if (live)
+          setDbError(
+            "데이터 준비 중 문제가 발생했습니다. 네트워크 확인 후 [다시 시도]를 누르면 중단된 지점부터 안전하게 이어집니다.",
+          );
+      }
+    })();
+    return () => {
+      live = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [db, companyId]);
 
   function handleLoadSample() {
     const loaded = loadSampleData();
@@ -163,6 +320,23 @@ export default function HomePage() {
       { customerId: selectedCustomerId, productId: pid, price: line.unitPrice },
     ]);
     updateLine(line.id, { priceRegistered: true });
+    // DB 모드: customer_prices upsert — 새로고침 후에도 자동 적용 유지
+    if (db && companyId) {
+      const client = db;
+      const cid = companyId;
+      void (async () => {
+        const { error } = await client.from("ordermoa_customer_prices").upsert(
+          {
+            company_id: cid,
+            customer_id: selectedCustomerId,
+            product_id: pid,
+            sale_price: line.unitPrice,
+          },
+          { onConflict: "company_id,customer_id,product_id" },
+        );
+        if (error) flash("단가가 화면에는 적용됐지만 저장에 실패했습니다. 다시 시도해주세요.");
+      })();
+    }
     flash(`${line.productName} 단가를 저장했습니다(다음 주문부터 자동 적용).`);
   }
   function registerAlias(line: ParsedLine) {
@@ -179,12 +353,58 @@ export default function HomePage() {
       ),
     );
     updateLine(line.id, { aliasRegistered: true });
+    // DB 모드: product_aliases 저장 — 새로고침 후에도 자동 매칭 유지
+    if (db && companyId) {
+      const client = db;
+      const cid = companyId;
+      void (async () => {
+        const { error } = await client.from("ordermoa_product_aliases").upsert(
+          { company_id: cid, product_id: pid, alias: token },
+          { onConflict: "company_id,alias", ignoreDuplicates: true },
+        );
+        if (error) flash("별칭이 화면에는 적용됐지만 저장에 실패했습니다. 다시 시도해주세요.");
+      })();
+    }
     flash(`'${token}' 을(를) ${product ? product.name : "선택 품목"} 별칭으로 등록했습니다. 다음부터 자동 매칭됩니다.`);
   }
 
-  function confirmOrder() {
-    if (!canConfirm(lines)) return;
+  async function confirmOrder() {
+    if (!canConfirm(lines) || saving) return;
     const customer = customers.find((c) => c.id === selectedCustomerId);
+
+    // DB 모드: ordermoa_orders/items에 저장(단가 스냅샷, amount는 DB 생성값)
+    if (db && companyId) {
+      setSaving(true);
+      try {
+        const saved = await saveOrder(
+          db,
+          companyId,
+          selectedCustomerId,
+          today(),
+          lines.map((l) => ({
+            productId: l.productId as string,
+            rawName: l.rawText || null,
+            quantity: l.quantity as number,
+            unit: l.unit,
+            unitPrice: l.unitPrice,
+          })),
+          products,
+        );
+        setOrders((prev) => [saved, ...prev]);
+        setLines([]);
+        setRawText("");
+        setCurrentOrderId(saved.id);
+        setView("orders");
+        flash("주문이 저장되었습니다. 새로고침해도 유지됩니다.");
+      } catch {
+        flash("주문 저장에 실패했습니다. 네트워크 확인 후 [주문 확정]을 다시 눌러주세요.");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
+    // 데모 모드: 메모리 저장(새로고침 시 초기화)
     const olines: OrderLine[] = lines.map((l) => {
       const product = products.find((p) => p.id === l.productId);
       const qty = l.quantity as number;
@@ -214,7 +434,7 @@ export default function HomePage() {
     setRawText("");
     setCurrentOrderId(order.id);
     setView("orders");
-    flash("주문이 확정되었습니다.");
+    flash("주문이 확정되었습니다. (데모 모드 — 새로고침 시 초기화)");
   }
 
   // ---- 합산표 (매입처 발주용) ----
@@ -275,9 +495,11 @@ export default function HomePage() {
   // 인증 게이트: Supabase 설정 시 로그인/회사 컨텍스트가 준비돼야 데모 진입.
   if (session.status === "loading") {
     return (
-      <main className="app">
-        <div className="card">
-          <p className="muted">불러오는 중…</p>
+      <main className="gate">
+        <div className="gate-box">
+          <div className="card">
+            <p className="muted">불러오는 중…</p>
+          </div>
         </div>
       </main>
     );
@@ -285,81 +507,157 @@ export default function HomePage() {
   if (session.status === "signed_out") return <LoginView session={session} />;
   if (session.status === "no_company") return <CompanySetupView session={session} />;
 
+  const headerRight =
+    session.status === "ready" ? (
+      <>
+        <span>
+          {session.companyName} · {session.email}
+        </span>
+        <button className="link" onClick={() => session.signOut()}>
+          로그아웃
+        </button>
+      </>
+    ) : (
+      <span>{data ? `데모 회사: ${data.company.name}` : "데모"}</span>
+    );
+
   if (!data) {
     return (
-      <main className="app">
-        <AuthBar session={session} />
-        <div className="topbar">
-          <h1>오더모아</h1>
-          <span className="company">데모</span>
-        </div>
-        <div className="card">
-          <h2>샘플 데이터로 먼저 흐름을 확인해보세요</h2>
-          <p className="muted">
-            카톡/문자 발주를 붙여넣으면 품목별 합산표와 거래명세서가 나옵니다. 아래 버튼으로 가명
-            샘플(거래처·품목·별칭·단가·발주 예시)을 불러옵니다. 개인정보/실거래처명은 없습니다.
-          </p>
-          <button className="primary big" onClick={handleLoadSample}>
-            샘플 데이터 불러오기
-          </button>
-        </div>
-      </main>
+      <Shell view={view} onNav={setView} session={session} headerRight={headerRight}>
+        {db ? (
+          dbError ? (
+            <div className="card">
+              <h2>데이터를 불러오지 못했습니다</h2>
+              <p className="muted">{dbError}</p>
+              <button className="primary" onClick={() => window.location.reload()}>
+                다시 시도
+              </button>
+            </div>
+          ) : (
+            <div className="card">
+              <p className="muted">회사 데이터를 불러오는 중…</p>
+            </div>
+          )
+        ) : (
+          <div className="card">
+            <h2>샘플 데이터로 먼저 흐름을 확인해보세요</h2>
+            <p className="muted">
+              카톡/문자 발주를 붙여넣으면 품목별 합산표와 거래명세서가 나옵니다. 아래 버튼으로 가명
+              샘플(거래처·품목·별칭·단가·발주 예시)을 불러옵니다. 개인정보/실거래처명은 없습니다.
+            </p>
+            <button className="primary big" onClick={handleLoadSample}>
+              샘플 데이터 불러오기
+            </button>
+          </div>
+        )}
+      </Shell>
     );
   }
 
   const currentOrder = orders.find((o) => o.id === currentOrderId) ?? null;
 
   return (
-    <main className="app">
-      <AuthBar session={session} />
-      <div className="topbar no-print">
-        <h1>오더모아</h1>
-        <span className="company">데모 회사: {data.company.name}</span>
-      </div>
-
-      <nav className="nav no-print">
-        <button className={view === "dashboard" ? "primary" : ""} onClick={() => setView("dashboard")}>
-          대시보드
-        </button>
-        <button className={view === "paste" ? "primary" : ""} onClick={() => setView("paste")}>
-          발주 붙여넣기
-        </button>
-        <button className={view === "aggregate" ? "primary" : ""} onClick={() => setView("aggregate")}>
-          품목별 합산표
-        </button>
-        <button className={view === "orders" ? "primary" : ""} onClick={() => setView("orders")}>
-          주문 목록
-        </button>
-      </nav>
-
+    <Shell
+      view={view}
+      onNav={(v) => {
+        setView(v);
+        flash("");
+      }}
+      session={session}
+      headerRight={headerRight}
+    >
       {message && (
-        <p className="notice no-print" role="status">
+        <p className="notice no-print" role="status" style={{ marginBottom: 12 }}>
           {message}
         </p>
       )}
 
       {view === "dashboard" && (
         <section>
-          <div className="card">
-            <h2>오늘 할 일</h2>
-            <button className="primary big" onClick={() => setView("paste")} style={{ marginBottom: 10 }}>
+          <div className="workbench-head">
+            <div>
+              <p className="eyebrow">오늘 업무</p>
+              <h2>
+                {(session.status === "ready" ? session.companyName : data.company.name) ?? "사장님"}님,
+                안녕하세요
+              </h2>
+              <p className="muted">
+                카톡/문자 발주를 붙여넣고, 거래처별 단가로 확정한 뒤 품목별 합산표와 거래명세서를
+                확인합니다.
+              </p>
+            </div>
+            <button className="primary big cta-main" onClick={() => setView("paste")}>
               발주 붙여넣기
             </button>
-            <div className="summary-grid">
-              <div className="card" style={{ margin: 0 }}>
-                <div className="muted">확정 주문</div>
-                <div className="stat">{orders.length}건</div>
-              </div>
-              <div className="card" style={{ margin: 0 }}>
-                <div className="muted">합산 품목 종류</div>
-                <div className="stat">{aggregate.length}종</div>
-              </div>
+          </div>
+
+          <div className="ops-grid" style={{ marginBottom: 14 }}>
+            <button className="stat-card clickable" onClick={() => setView("orders")}>
+              <span className="stat-label">오늘 확정 주문</span>
+              <span className="stat">{orders.length}건</span>
+              <span className="stat-note">주문 목록으로 이동</span>
+            </button>
+            <button className="stat-card clickable" onClick={() => setView("aggregate")}>
+              <span className="stat-label">합산 품목 종류</span>
+              <span className="stat">{aggregate.length}종</span>
+              <span className="stat-note">매입처 발주 문장 확인</span>
+            </button>
+            <div className="stat-card">
+              <span className="stat-label">저장 상태</span>
+              <span className={session.status === "ready" ? "status-text ok" : "status-text warn"}>
+                {session.status === "ready" ? "DB 저장 모드" : "데모 모드"}
+              </span>
+              <span className="stat-note">
+                {session.status === "ready" ? "새로고침 후에도 유지" : "새로고침 시 초기화"}
+              </span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-label">다음 단계</span>
+              <span className="status-text">8b 실측</span>
+              <span className="stat-note">로그인 제한 해제 후 DB 저장 확인</span>
             </div>
           </div>
-          <div className="card">
-            <div className="row-actions">
-              <button onClick={() => setView("aggregate")}>품목별 합산표 보기</button>
-              <button onClick={() => setView("orders")}>주문 목록 보기</button>
+
+          <div className="dashboard-grid">
+            <div className="panel">
+              <h3>현재 가능한 업무</h3>
+              <div className="table-wrap compact">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>흐름</th>
+                      <th>상태</th>
+                      <th>바로가기</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>발주 원문 붙여넣기</td>
+                      <td><span className="badge ok">사용 가능</span></td>
+                      <td><button className="link" onClick={() => setView("paste")}>열기</button></td>
+                    </tr>
+                    <tr>
+                      <td>품목별 합산표</td>
+                      <td><span className="badge ok">사용 가능</span></td>
+                      <td><button className="link" onClick={() => setView("aggregate")}>열기</button></td>
+                    </tr>
+                    <tr>
+                      <td>주문 목록/거래명세서</td>
+                      <td><span className="badge ok">사용 가능</span></td>
+                      <td><button className="link" onClick={() => setView("orders")}>열기</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="panel">
+              <h3>준비 중인 업무</h3>
+              <ul className="ready-list">
+                <li><span>거래처·품목·단가 관리</span><span className="badge info">1차</span></li>
+                <li><span>주문 DB 저장 실측 완료 처리</span><span className="badge amber">진행</span></li>
+                <li><span>월 합계·명세서 재출력</span><span className="badge warn">8c</span></li>
+                <li><span>세금계산서·원가·마감</span><span className="badge err">2차</span></li>
+              </ul>
             </div>
           </div>
         </section>
@@ -410,6 +708,7 @@ export default function HomePage() {
         <ReviewView
           lines={lines}
           products={products}
+          busy={saving}
           customerName={customers.find((c) => c.id === selectedCustomerId)?.name ?? ""}
           onAssign={assignProduct}
           onQty={setQty}
@@ -571,7 +870,7 @@ export default function HomePage() {
           <DeliveryNote order={currentOrder} company={data.company} />
         </section>
       )}
-    </main>
+    </Shell>
   );
 }
 
@@ -591,6 +890,7 @@ function badgeFor(line: ParsedLine) {
 function ReviewView(props: {
   lines: ParsedLine[];
   products: Product[];
+  busy?: boolean;
   customerName: string;
   onAssign: (line: ParsedLine, productId: string) => void;
   onQty: (line: ParsedLine, value: string) => void;
@@ -724,8 +1024,8 @@ function ReviewView(props: {
       )}
       <div className="row-actions" style={{ marginTop: 10 }}>
         <button onClick={props.onBack}>← 다시 붙여넣기</button>
-        <button className="primary" onClick={props.onConfirm} disabled={!confirmable}>
-          주문 확정
+        <button className="primary" onClick={props.onConfirm} disabled={!confirmable || props.busy}>
+          {props.busy ? "저장 중…" : "주문 확정"}
         </button>
       </div>
     </section>
