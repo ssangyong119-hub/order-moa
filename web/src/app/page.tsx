@@ -518,7 +518,14 @@ export default function HomePage() {
         </button>
       </>
     ) : (
-      <span>{data ? `데모 회사: ${data.company.name}` : "데모"}</span>
+      <>
+        <span>{data ? `데모 회사: ${data.company.name}` : "데모"}</span>
+        {session.isDevDemo && (
+          <button className="link" onClick={() => session.exitDemoMode()}>
+            로그인 모드
+          </button>
+        )}
+      </>
     );
 
   if (!data) {
@@ -545,6 +552,12 @@ export default function HomePage() {
               카톡/문자 발주를 붙여넣으면 품목별 합산표와 거래명세서가 나옵니다. 아래 버튼으로 가명
               샘플(거래처·품목·별칭·단가·발주 예시)을 불러옵니다. 개인정보/실거래처명은 없습니다.
             </p>
+            {session.isDevDemo && (
+              <p className="notice">
+                개발용 데모 모드입니다. Supabase 메일 제한과 관계없이 화면을 확인할 수 있고, 저장 데이터는
+                새로고침 시 초기화됩니다.
+              </p>
+            )}
             <button className="primary big" onClick={handleLoadSample}>
               샘플 데이터 불러오기
             </button>

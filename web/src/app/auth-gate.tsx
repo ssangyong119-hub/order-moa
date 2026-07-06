@@ -6,8 +6,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { getBrowserSupabase } from "@/lib/supabase/client";
+import { isDevDemoAvailable } from "@/lib/supabase/config";
 
 const COMPANY_KEY = "order-moa.companyId";
+const DEV_DEMO_KEY = "order-moa.devDemo";
 const AUTH_WAIT_MS = 6000;
 
 export type GateStatus = "disabled" | "loading" | "signed_out" | "no_company" | "ready";
@@ -26,6 +28,10 @@ export interface CompanySession {
   error: string | null;
   info: string | null;
   busy: boolean;
+  devDemoAvailable: boolean;
+  isDevDemo: boolean;
+  enterDemoMode: () => void;
+  exitDemoMode: () => void;
   signIn: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   createCompany: (name: string) => Promise<void>;
@@ -34,7 +40,13 @@ export interface CompanySession {
 
 export function useCompanySession(): CompanySession {
   const supabase = useMemo(() => getBrowserSupabase(), []);
-  const [status, setStatus] = useState<GateStatus>(supabase ? "loading" : "disabled");
+  const devDemoAvailable = isDevDemoAvailable();
+  const initialDevDemo =
+    devDemoAvailable &&
+    typeof window !== "undefined" &&
+    window.localStorage.getItem(DEV_DEMO_KEY) === "1";
+  const [forceDemo, setForceDemo] = useState(initialDevDemo);
+  const [status, setStatus] = useState<GateStatus>(supabase && !initialDevDemo ? "loading" : "disabled");
   const [email, setEmail] = useState<string | null>(null);
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
   const [companyId, setCompanyId] = useState<string | null>(null);
@@ -70,7 +82,7 @@ export function useCompanySession(): CompanySession {
 
   useEffect(() => {
     mounted.current = true;
-    if (!supabase) return;
+    if (!supabase || forceDemo) return;
     const timer = window.setTimeout(() => {
       if (!mounted.current) return;
       setError("로그인 상태 확인이 지연되어 로그인 화면으로 전환했습니다. 다시 시도해주세요.");
@@ -108,7 +120,22 @@ export function useCompanySession(): CompanySession {
       window.clearTimeout(timer);
       subscription.unsubscribe();
     };
-  }, [supabase, loadCompanies]);
+  }, [supabase, forceDemo, loadCompanies]);
+
+  const enterDemoMode = useCallback(() => {
+    if (!devDemoAvailable) return;
+    if (typeof window !== "undefined") window.localStorage.setItem(DEV_DEMO_KEY, "1");
+    setForceDemo(true);
+    setError(null);
+    setInfo(null);
+    setStatus("disabled");
+  }, [devDemoAvailable]);
+
+  const exitDemoMode = useCallback(() => {
+    if (typeof window !== "undefined") window.localStorage.removeItem(DEV_DEMO_KEY);
+    setForceDemo(false);
+    setStatus(supabase ? "loading" : "disabled");
+  }, [supabase]);
 
   const signIn = useCallback(
     async (addr: string) => {
@@ -172,6 +199,10 @@ export function useCompanySession(): CompanySession {
     error,
     info,
     busy,
+    devDemoAvailable,
+    isDevDemo: forceDemo,
+    enterDemoMode,
+    exitDemoMode,
     signIn,
     signOut,
     createCompany,
@@ -210,6 +241,13 @@ export function LoginView({ session }: { session: CompanySession }) {
         </div>
         {session.info && <p className="notice" style={{ marginTop: 10 }}>{session.info}</p>}
         {session.error && <p className="notice" style={{ marginTop: 10 }}>{session.error}</p>}
+        {session.devDemoAvailable && (
+          <div className="dev-demo">
+            <strong>메일 제한 때문에 못 들어가나요?</strong>
+            <p className="muted">개발 중에는 저장 없이 화면과 흐름을 먼저 볼 수 있습니다.</p>
+            <button onClick={() => session.enterDemoMode()}>개발용 데모로 보기</button>
+          </div>
+        )}
         </div>
       </div>
     </main>

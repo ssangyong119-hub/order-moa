@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "vitest";
-import { getPublicSupabaseEnv, isSupabaseConfigured } from "./config";
+import { getPublicSupabaseEnv, isDevDemoAvailable, isSupabaseConfigured } from "./config";
 
 const OLD_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const OLD_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -29,4 +29,10 @@ test("한쪽만 있으면 미설정 취급", () => {
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://demo.supabase.co";
   delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   expect(isSupabaseConfigured()).toBe(false);
+});
+
+test("개발용 데모 진입은 development에서만 허용", () => {
+  expect(isDevDemoAvailable("development")).toBe(true);
+  expect(isDevDemoAvailable("test")).toBe(true);
+  expect(isDevDemoAvailable("production")).toBe(false);
 });

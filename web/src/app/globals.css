@@ -200,6 +200,10 @@ td input.qty,td input.price{max-width:96px}
 .gate-box{width:100%;max-width:430px}
 .gate .brand{font-weight:750;font-size:1.15rem}
 .gate .brand small{display:block;font-weight:400;font-size:.74rem;color:var(--soft)}
+.dev-demo{
+  margin-top:14px;padding-top:12px;border-top:1px solid var(--line-soft);
+}
+.dev-demo p{margin:4px 0 10px}
 
 /* ── 모바일 ── */
 @media (max-width:900px){

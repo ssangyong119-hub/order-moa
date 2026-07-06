@@ -17,3 +17,7 @@ export function getPublicSupabaseEnv(): PublicSupabaseEnv | null {
 export function isSupabaseConfigured(): boolean {
   return getPublicSupabaseEnv() !== null;
 }
+
+export function isDevDemoAvailable(nodeEnv = process.env.NODE_ENV): boolean {
+  return nodeEnv !== "production";
+}

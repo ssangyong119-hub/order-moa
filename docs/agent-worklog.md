@@ -1113,3 +1113,14 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
 - [남은 위험] 이름 기준 재사용은 "샘플과 동일 이름" 전제 — 사용자가 시드 후 거래처명을 바꾸면 보충 시 같은 이름이 새로 생길 수 있음(1차 허용, 기준정보 CRUD에서 정리 가능). ensureSeed 자체의 동시 실행(두 탭 동시 최초 접속)은 products 중복 생성 가능성 — 낮은 확률, 후순위(유니크 제약 또는 RPC 직렬화로 2차 보강)
 - [나중] order_imports(raw_text) 저장(8c) · 저장 RPC 원자화 · 샘플 초기화/재설치 버튼(설정 화면) · unique(company_id,name) 제약 검토
 - [다음] 사용자 DB 실측(로그인→시드→확정→F5 유지) → 성공 시 진행현황 8b 완료 처리
+
+## 2026-07-06 Codex (개발용 데모 진입 보강)
+
+- 목적: Supabase 매직링크 `email rate limit exceeded` 상태에서도 프론트엔드/사이드바 업무 화면을 계속 확인할 수 있게 함.
+- 변경:
+  - `isDevDemoAvailable()` 추가: development/test에서만 개발용 데모 진입 허용, production에서는 비활성.
+  - 로그인 화면에 `개발용 데모로 보기` 버튼 추가.
+  - 개발용 데모 선택은 localStorage `order-moa.devDemo=1`로 유지, 헤더의 `로그인 모드` 버튼으로 해제 가능.
+  - 데모 진입 시 Supabase 설정이 있어도 인증 게이트를 우회하고 기존 샘플/메모리 모드로 진입.
+  - `.env.local.example`에 메일 제한 시 개발용 데모 버튼 안내 추가.
+- 검증: root npm test 5/5, web npm test 68/68, web npm run build 성공, npm audit 0건, 로컬 dev 서버 http://localhost:3010 응답 200. 브라우저 자동화는 Codex 앱 연결 타임아웃으로 수동 확인 주소 안내.
