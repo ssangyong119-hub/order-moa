@@ -30,6 +30,7 @@ import {
   type ConfirmedOrder,
   type OrderLine,
 } from "@/lib/order-store";
+import { padDeliveryNoteLines } from "@/lib/delivery-note";
 import {
   buildAggregateRows,
   buildContributionText,
@@ -888,7 +889,7 @@ export default function HomePage() {
             <button className="primary" onClick={() => window.print()}>
               인쇄
             </button>
-            <span className="muted">인쇄/출력은 PC를 권장합니다.</span>
+            <span className="muted">브라우저 인쇄창이 열립니다. 프린터 출력 또는 PDF 저장을 선택하세요.</span>
           </div>
           <DeliveryNote order={currentOrder} company={data.company} />
         </section>
@@ -1075,6 +1076,7 @@ function DeliveryNote(props: {
   company: { name: string; businessNumber: string; phone: string; address: string };
 }) {
   const { order, company } = props;
+  const noteRows = padDeliveryNoteLines(order.lines, 10);
   return (
     <div className="note-doc print-area">
       <div className="note-head">
@@ -1118,16 +1120,27 @@ function DeliveryNote(props: {
             </tr>
           </thead>
           <tbody>
-            {order.lines.map((l, i) => (
-              <tr key={`${order.id}_${i}`}>
-                <td>{i + 1}</td>
-                <td>{l.productName}</td>
-                <td>{l.unit}</td>
-                <td className="num">{l.quantity}</td>
-                <td className="num">{l.unitPrice.toLocaleString("ko-KR")}</td>
-                <td className="num">{l.amount.toLocaleString("ko-KR")}</td>
-              </tr>
-            ))}
+            {noteRows.map((row, i) =>
+              row.kind === "item" ? (
+                <tr key={`${order.id}_${i}`}>
+                  <td>{i + 1}</td>
+                  <td>{row.line.productName}</td>
+                  <td>{row.line.unit}</td>
+                  <td className="num">{row.line.quantity}</td>
+                  <td className="num">{row.line.unitPrice.toLocaleString("ko-KR")}</td>
+                  <td className="num">{row.line.amount.toLocaleString("ko-KR")}</td>
+                </tr>
+              ) : (
+                <tr className="blank-row" key={`${order.id}_blank_${i}`}>
+                  <td>{i + 1}</td>
+                  <td />
+                  <td />
+                  <td className="num" />
+                  <td className="num" />
+                  <td className="num" />
+                </tr>
+              ),
+            )}
           </tbody>
         </table>
       </div>

@@ -94,7 +94,7 @@ export interface SampleOrderExample {
   purpose: string;
 }
 
-/** 발주 원문 예시 10건 (§7) */
+/** 발주 원문 예시 — 짧은 확인용 + 긴 테스트용 */
 export const sampleOrderExamples: SampleOrderExample[] = [
   {
     id: "ex1",
@@ -165,6 +165,50 @@ export const sampleOrderExamples: SampleOrderExample[] = [
     label: "⑩ 공산품 정형 (행복마트)",
     rawText: "식탁보 1BOX\n위생장갑 3박스\n키친타월 2박스",
     purpose: "공산품 / 거래명세서 미리보기",
+  },
+  {
+    id: "ex11",
+    customerId: "cust_garam",
+    label: "⑪ 6줄 채소 발주 (가람식당)",
+    rawText: "콩나물 3박스\n두부 4판\n미나리 6단\n대파 2단\n계란 2판\n양배추 1통",
+    purpose: "6줄 이상 정형 발주 + 단가 미등록 포함",
+  },
+  {
+    id: "ex12",
+    customerId: "cust_eutteum",
+    label: "⑫ 7줄 반찬집 발주 (으뜸반찬)",
+    rawText: "콩 2박스\n두부판 5\n양파 2\n무 3개\n부추 4단\n팽이 6봉\n새송이 2팩",
+    purpose: "별칭 다수 + 긴 거래명세서 확인",
+  },
+  {
+    id: "ex13",
+    customerId: "cust_hanbit",
+    label: "⑬ 카페+소모품 6줄 (한빛카페)",
+    rawText: "계란 3판\n키친타올 2박스\n식용유 2통\n종이컵 1박스\n위생장갑 1박스\n콩나물 1박스",
+    purpose: "식자재+소모품 혼합, 일부 단가 미등록 확인",
+  },
+  {
+    id: "ex14",
+    customerId: "cust_neulbom",
+    label: "⑭ 분식집 긴 발주 10줄 (늘봄분식)",
+    rawText:
+      "어묵 2박스\n떡국떡 3kg\n대파 4단\n양배추 2통\n콩나물 2박스\n팽이 5봉\n새송이 3팩\n두부 4판\n계란 2판\n식용유 1통",
+    purpose: "10줄 장문 발주, 명세서 빈 행 없이 긴 문서 확인",
+  },
+  {
+    id: "ex15",
+    customerId: "cust_happy",
+    label: "⑮ 마트 혼합 8줄 (행복마트)",
+    rawText:
+      "위생장갑 4박스\n식탁보 2BOX\n키친타월 3박스\n어묵 1박스\n종이컵 2박스\n식용유 1통\n감자 5kg\n오이 2박스",
+    purpose: "공산품+식자재 혼합, 주문 목록/합산표 물량 확보",
+  },
+  {
+    id: "ex16",
+    customerId: "cust_garam",
+    label: "⑯ 비정형 장문 (가람식당)",
+    rawText: "콩 2박스랑 두부 3판, 미나리 4단\n대파도 2단 주세요\n계란 1판\n양배추 큰거 2통",
+    purpose: "연결어/군말/모호 표현 혼합",
   },
 ];
 
