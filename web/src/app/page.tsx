@@ -34,8 +34,11 @@ import { padDeliveryNoteLines } from "@/lib/delivery-note";
 import {
   buildAggregateRows,
   buildContributionText,
+  buildSupplierPurchaseSections,
   formatPurchaseOrderText,
+  formatSupplierPurchaseText,
 } from "@/lib/aggregate";
+import { searchProductsForOrder } from "@/lib/product-search";
 import {
   CompanySetupView,
   LoginView,
@@ -181,6 +184,7 @@ export default function HomePage() {
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [aggCustomer, setAggCustomer] = useState<string>("all");
   const [aggDate, setAggDate] = useState<string>(""); // "" = 전체 날짜
+  const [purchaseSelectedIds, setPurchaseSelectedIds] = useState<string[]>([]);
   const [dbError, setDbError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -450,6 +454,16 @@ export default function HomePage() {
     return buildAggregateRows(filtered, products);
   }, [orders, aggCustomer, aggDate, products]);
 
+  useEffect(() => {
+    setPurchaseSelectedIds((prev) => {
+      const ids = aggregate.map((row) => row.productId);
+      const prevSet = new Set(prev);
+      const kept = ids.filter((id) => prevSet.has(id));
+      const added = ids.filter((id) => !prevSet.has(id));
+      return [...kept, ...added];
+    });
+  }, [aggregate]);
+
   // 복사용 발주 문장 (현재 필터 기준)
   const purchaseTitle = useMemo(() => {
     if (aggDate === today()) return "오늘 발주 합산";
@@ -460,12 +474,27 @@ export default function HomePage() {
     () => formatPurchaseOrderText(aggregate, purchaseTitle),
     [aggregate, purchaseTitle],
   );
+  const purchaseSelectedSet = useMemo(() => new Set(purchaseSelectedIds), [purchaseSelectedIds]);
+  const supplierPurchaseSections = useMemo(
+    () => buildSupplierPurchaseSections(aggregate, products, purchaseSelectedSet),
+    [aggregate, products, purchaseSelectedSet],
+  );
+  const supplierPurchaseText = useMemo(
+    () => formatSupplierPurchaseText(supplierPurchaseSections),
+    [supplierPurchaseSections],
+  );
 
-  async function copyPurchaseText() {
+  function togglePurchaseRow(productId: string) {
+    setPurchaseSelectedIds((prev) =>
+      prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId],
+    );
+  }
+
+  async function copyTextToClipboard(text: string, successMessage: string) {
     try {
       if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(purchaseText);
-        flash("발주 문장을 복사했습니다. 매입처에 붙여넣어 보내세요.");
+        await navigator.clipboard.writeText(text);
+        flash(successMessage);
         return;
       }
       throw new Error("clipboard unavailable");
@@ -477,6 +506,10 @@ export default function HomePage() {
       }
       flash("자동 복사가 안 돼요. 아래 칸이 선택되었으니 길게 눌러(또는 Ctrl+C) 복사하세요.");
     }
+  }
+
+  async function copyPurchaseText() {
+    await copyTextToClipboard(supplierPurchaseText || purchaseText, "매입처별 발주 문장을 복사했습니다.");
   }
 
   function exportCsv() {
@@ -724,7 +757,9 @@ export default function HomePage() {
         <ReviewView
           lines={lines}
           products={products}
+          prices={customerPrices}
           busy={saving}
+          customerId={selectedCustomerId}
           customerName={customers.find((c) => c.id === selectedCustomerId)?.name ?? ""}
           onAssign={assignProduct}
           onQty={setQty}
@@ -784,6 +819,7 @@ export default function HomePage() {
                   <thead>
                     <tr>
                       <th>품목</th>
+                      <th>매입처</th>
                       <th>단위</th>
                       <th className="num">총수량</th>
                       <th>거래처별 내역</th>
@@ -791,8 +827,23 @@ export default function HomePage() {
                   </thead>
                   <tbody>
                     {aggregate.map((a) => (
-                      <tr key={a.productId}>
-                        <td>{a.name}</td>
+                      <tr
+                        key={a.productId}
+                        className={purchaseSelectedSet.has(a.productId) ? "purchase-included" : ""}
+                      >
+                        <td>
+                          <label className="checkline">
+                            <input
+                              type="checkbox"
+                              checked={purchaseSelectedSet.has(a.productId)}
+                              onChange={() => togglePurchaseRow(a.productId)}
+                            />
+                            <span>{a.name}</span>
+                          </label>
+                        </td>
+                        <td className="muted">
+                          {products.find((p) => p.id === a.productId)?.purchaseSupplierName ?? "매입처 미지정"}
+                        </td>
                         <td>{a.unit}</td>
                         <td className="num">
                           <strong>
@@ -810,15 +861,36 @@ export default function HomePage() {
               </div>
 
               <div style={{ borderTop: "1px solid var(--line)", marginTop: 16, paddingTop: 14 }}>
-                <h3 style={{ marginTop: 0 }}>매입처에 보낼 발주 문장</h3>
+                <h3 style={{ marginTop: 0 }}>매입처별로 보낼 발주 문장</h3>
                 <p className="muted" style={{ marginTop: 0 }}>
-                  아래 내용을 복사해 매입처에 그대로 보내세요.
+                  체크된 품목만 매입처별로 묶입니다. 이미 발주할 품목은 체크 상태로 두고, 제외할 품목은 체크를 끄세요.
                 </p>
+                <div className="supplier-sections">
+                  {supplierPurchaseSections.map((section) => (
+                    <div className="supplier-section" key={section.supplierName}>
+                      <div className="supplier-section-head">
+                        <strong>{section.supplierName}</strong>
+                        <button
+                          className="link"
+                          onClick={() =>
+                            copyTextToClipboard(
+                              formatSupplierPurchaseText([section]),
+                              `${section.supplierName} 발주 문장을 복사했습니다.`,
+                            )
+                          }
+                        >
+                          이 매입처만 복사
+                        </button>
+                      </div>
+                      <pre>{formatSupplierPurchaseText([section])}</pre>
+                    </div>
+                  ))}
+                </div>
                 <textarea
                   id="purchase-text"
                   readOnly
-                  value={purchaseText}
-                  rows={Math.min(aggregate.length + 2, 12)}
+                  value={supplierPurchaseText}
+                  rows={Math.min(Math.max(supplierPurchaseText.split("\n").length + 1, 4), 14)}
                   onFocus={(e) => e.currentTarget.select()}
                 />
                 <div className="row-actions no-print" style={{ marginTop: 8 }}>
@@ -915,7 +987,9 @@ function badgeFor(line: ParsedLine) {
 function ReviewView(props: {
   lines: ParsedLine[];
   products: Product[];
+  prices: CustomerPrice[];
   busy?: boolean;
+  customerId: string;
   customerName: string;
   onAssign: (line: ParsedLine, productId: string) => void;
   onQty: (line: ParsedLine, value: string) => void;
@@ -927,6 +1001,7 @@ function ReviewView(props: {
   onBack: () => void;
 }) {
   const { lines, products, customerName } = props;
+  const [productQueries, setProductQueries] = useState<Record<string, string>>({});
   const blockReason = confirmBlockReason(lines);
   const confirmable = canConfirm(lines);
   const orderMargin = estimatedOrderMargin(
@@ -983,14 +1058,47 @@ function ReviewView(props: {
                 <tr key={line.id}>
                   <td>{line.rawText}</td>
                   <td>
-                    <select value={line.productId ?? ""} onChange={(e) => props.onAssign(line, e.target.value)}>
-                      <option value="">(미지정)</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="product-picker">
+                      <input
+                        value={productQueries[line.id] ?? ""}
+                        onChange={(e) => setProductQueries((prev) => ({ ...prev, [line.id]: e.target.value }))}
+                        placeholder={line.productName || "품목 검색"}
+                        aria-label={`${line.rawText} 품목 검색`}
+                      />
+                      {line.productId && (
+                        <div className="selected-product">
+                          선택됨: {line.productName} · {line.unit} ·{" "}
+                          {product?.purchaseSupplierName ?? "매입처 미지정"}
+                        </div>
+                      )}
+                      {(productQueries[line.id] ?? "").trim() && (
+                        <div className="product-results">
+                          {searchProductsForOrder(
+                            products,
+                            props.prices,
+                            props.customerId,
+                            productQueries[line.id] ?? "",
+                          ).map((result) => (
+                            <button
+                              type="button"
+                              key={result.product.id}
+                              onClick={() => {
+                                props.onAssign(line, result.product.id);
+                                setProductQueries((prev) => ({ ...prev, [line.id]: "" }));
+                              }}
+                            >
+                              <strong>{result.product.name}</strong>
+                              <span>{result.unit}</span>
+                              <span>{result.price === null ? "단가 미등록" : formatKRW(result.price)}</span>
+                              <span>{result.supplierName}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {!line.productId && !(productQueries[line.id] ?? "").trim() && (
+                        <div className="muted">품목명을 입력해 검색하세요. 예: 김치, 수세미, 콩</div>
+                      )}
+                    </div>
                     {canRegisterAlias(line) && (
                       <button className="link" onClick={() => props.onRegisterAlias(line)}>
                         별칭 등록

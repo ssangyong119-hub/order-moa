@@ -19,41 +19,56 @@ export const sampleCustomers: Customer[] = [
   { id: "cust_neulbom", name: "늘봄분식", memo: "소량 다품목" },
 ];
 
+export const samplePurchaseSuppliers = [
+  { id: "sup_veg", name: "야채매입처" },
+  { id: "sup_tofu", name: "두부콩나물매입처" },
+  { id: "sup_root", name: "뿌리채소매입처" },
+  { id: "sup_processed", name: "김치반찬매입처" },
+  { id: "sup_goods", name: "공산품매입처" },
+];
+
+function supplier(id: string) {
+  return samplePurchaseSuppliers.find((s) => s.id === id)?.name ?? "매입처 미지정";
+}
+
 /**
  * 품목 (30) — baseUnit / aliases / basePurchasePrice.
  * basePurchasePrice는 §6.1 명시 품목만 설정, 나머지는 null(마진 미표시 테스트).
  */
 export const sampleProducts: Product[] = [
-  { id: "p01", name: "콩나물", baseUnit: "박스", aliases: ["콩", "콩박스", "콩나물박스"], basePurchasePrice: 6500 },
-  { id: "p02", name: "숙주", baseUnit: "박스", aliases: ["숙주나물"], basePurchasePrice: null },
-  { id: "p03", name: "두부", baseUnit: "판", aliases: ["두부판"], basePurchasePrice: 1800 },
-  { id: "p04", name: "미나리", baseUnit: "단", aliases: ["미나리단"], basePurchasePrice: 2500 },
-  { id: "p05", name: "깐양파", baseUnit: "10kg", aliases: ["양파"], basePurchasePrice: 9000 },
-  { id: "p06", name: "대파", baseUnit: "단", aliases: ["대파단"], basePurchasePrice: 3000 },
-  { id: "p07", name: "양배추", baseUnit: "통", aliases: [], basePurchasePrice: null },
-  { id: "p08", name: "무", baseUnit: "개", aliases: [], basePurchasePrice: 1000 },
-  { id: "p09", name: "배추", baseUnit: "포기", aliases: [], basePurchasePrice: null },
-  { id: "p10", name: "감자", baseUnit: "kg", aliases: [], basePurchasePrice: null },
-  { id: "p11", name: "애호박", baseUnit: "개", aliases: [], basePurchasePrice: null },
-  { id: "p12", name: "팽이버섯", baseUnit: "봉", aliases: ["팽이"], basePurchasePrice: null },
-  { id: "p13", name: "새송이버섯", baseUnit: "팩", aliases: ["새송이"], basePurchasePrice: null },
-  { id: "p14", name: "느타리버섯", baseUnit: "팩", aliases: [], basePurchasePrice: null },
-  { id: "p15", name: "계란", baseUnit: "판", aliases: ["계란판"], basePurchasePrice: 5500 },
-  { id: "p16", name: "상추", baseUnit: "kg", aliases: [], basePurchasePrice: null },
-  { id: "p17", name: "깻잎", baseUnit: "박스", aliases: [], basePurchasePrice: null },
-  { id: "p18", name: "청양고추", baseUnit: "kg", aliases: [], basePurchasePrice: null },
-  { id: "p19", name: "당근", baseUnit: "kg", aliases: [], basePurchasePrice: null },
-  { id: "p20", name: "오이", baseUnit: "박스", aliases: [], basePurchasePrice: null },
-  { id: "p21", name: "마늘", baseUnit: "kg", aliases: [], basePurchasePrice: null },
-  { id: "p22", name: "부추", baseUnit: "단", aliases: [], basePurchasePrice: null },
-  { id: "p23", name: "시금치", baseUnit: "단", aliases: [], basePurchasePrice: null },
-  { id: "p24", name: "떡국떡", baseUnit: "kg", aliases: [], basePurchasePrice: 3500 },
-  { id: "p25", name: "어묵", baseUnit: "박스", aliases: [], basePurchasePrice: 10000 },
-  { id: "p26", name: "식용유", baseUnit: "통", aliases: [], basePurchasePrice: null },
-  { id: "p27", name: "식탁보", baseUnit: "BOX", aliases: [], basePurchasePrice: 16000 },
-  { id: "p28", name: "위생장갑", baseUnit: "박스", aliases: ["장갑"], basePurchasePrice: 3500 },
-  { id: "p29", name: "키친타월", baseUnit: "박스", aliases: ["키친타올"], basePurchasePrice: null },
-  { id: "p30", name: "종이컵", baseUnit: "박스", aliases: [], basePurchasePrice: null },
+  { id: "p01", name: "콩나물", baseUnit: "박스", aliases: ["콩", "콩박스", "콩나물박스"], purchaseSupplierId: "sup_tofu", purchaseSupplierName: supplier("sup_tofu"), basePurchasePrice: 6500 },
+  { id: "p02", name: "숙주", baseUnit: "박스", aliases: ["숙주나물"], purchaseSupplierId: "sup_tofu", purchaseSupplierName: supplier("sup_tofu"), basePurchasePrice: null },
+  { id: "p03", name: "두부", baseUnit: "판", aliases: ["두부판"], purchaseSupplierId: "sup_tofu", purchaseSupplierName: supplier("sup_tofu"), basePurchasePrice: 1800 },
+  { id: "p04", name: "미나리", baseUnit: "단", aliases: ["미나리단"], purchaseSupplierId: "sup_veg", purchaseSupplierName: supplier("sup_veg"), basePurchasePrice: 2500 },
+  { id: "p05", name: "깐양파", baseUnit: "10kg", aliases: ["양파"], purchaseSupplierId: "sup_veg", purchaseSupplierName: supplier("sup_veg"), basePurchasePrice: 9000 },
+  { id: "p06", name: "대파", baseUnit: "단", aliases: ["대파단"], purchaseSupplierId: "sup_veg", purchaseSupplierName: supplier("sup_veg"), basePurchasePrice: 3000 },
+  { id: "p07", name: "양배추", baseUnit: "통", aliases: [], purchaseSupplierId: "sup_veg", purchaseSupplierName: supplier("sup_veg"), basePurchasePrice: null },
+  { id: "p08", name: "무", baseUnit: "개", aliases: [], purchaseSupplierId: "sup_root", purchaseSupplierName: supplier("sup_root"), basePurchasePrice: 1000 },
+  { id: "p09", name: "배추", baseUnit: "포기", aliases: [], purchaseSupplierId: "sup_veg", purchaseSupplierName: supplier("sup_veg"), basePurchasePrice: null },
+  { id: "p10", name: "감자", baseUnit: "kg", aliases: [], purchaseSupplierId: "sup_root", purchaseSupplierName: supplier("sup_root"), basePurchasePrice: null },
+  { id: "p11", name: "애호박", baseUnit: "개", aliases: [], purchaseSupplierId: "sup_veg", purchaseSupplierName: supplier("sup_veg"), basePurchasePrice: null },
+  { id: "p12", name: "팽이버섯", baseUnit: "봉", aliases: ["팽이"], purchaseSupplierId: "sup_veg", purchaseSupplierName: supplier("sup_veg"), basePurchasePrice: null },
+  { id: "p13", name: "새송이버섯", baseUnit: "팩", aliases: ["새송이"], purchaseSupplierId: "sup_veg", purchaseSupplierName: supplier("sup_veg"), basePurchasePrice: null },
+  { id: "p14", name: "느타리버섯", baseUnit: "팩", aliases: [], purchaseSupplierId: "sup_veg", purchaseSupplierName: supplier("sup_veg"), basePurchasePrice: null },
+  { id: "p15", name: "계란", baseUnit: "판", aliases: ["계란판"], purchaseSupplierId: null, purchaseSupplierName: null, basePurchasePrice: 5500 },
+  { id: "p16", name: "상추", baseUnit: "kg", aliases: [], purchaseSupplierId: "sup_veg", purchaseSupplierName: supplier("sup_veg"), basePurchasePrice: null },
+  { id: "p17", name: "깻잎", baseUnit: "박스", aliases: [], purchaseSupplierId: "sup_veg", purchaseSupplierName: supplier("sup_veg"), basePurchasePrice: null },
+  { id: "p18", name: "청양고추", baseUnit: "kg", aliases: [], purchaseSupplierId: "sup_veg", purchaseSupplierName: supplier("sup_veg"), basePurchasePrice: null },
+  { id: "p19", name: "당근", baseUnit: "kg", aliases: [], purchaseSupplierId: "sup_root", purchaseSupplierName: supplier("sup_root"), basePurchasePrice: null },
+  { id: "p20", name: "오이", baseUnit: "박스", aliases: [], purchaseSupplierId: "sup_veg", purchaseSupplierName: supplier("sup_veg"), basePurchasePrice: null },
+  { id: "p21", name: "마늘", baseUnit: "kg", aliases: [], purchaseSupplierId: "sup_root", purchaseSupplierName: supplier("sup_root"), basePurchasePrice: null },
+  { id: "p22", name: "부추", baseUnit: "단", aliases: [], purchaseSupplierId: "sup_veg", purchaseSupplierName: supplier("sup_veg"), basePurchasePrice: null },
+  { id: "p23", name: "시금치", baseUnit: "단", aliases: [], purchaseSupplierId: "sup_veg", purchaseSupplierName: supplier("sup_veg"), basePurchasePrice: null },
+  { id: "p24", name: "떡국떡", baseUnit: "kg", aliases: [], purchaseSupplierId: "sup_processed", purchaseSupplierName: supplier("sup_processed"), basePurchasePrice: 3500 },
+  { id: "p25", name: "어묵", baseUnit: "박스", aliases: [], purchaseSupplierId: "sup_processed", purchaseSupplierName: supplier("sup_processed"), basePurchasePrice: 10000 },
+  { id: "p26", name: "식용유", baseUnit: "통", aliases: [], purchaseSupplierId: "sup_goods", purchaseSupplierName: supplier("sup_goods"), basePurchasePrice: null },
+  { id: "p27", name: "식탁보", baseUnit: "BOX", aliases: [], purchaseSupplierId: "sup_goods", purchaseSupplierName: supplier("sup_goods"), basePurchasePrice: 16000 },
+  { id: "p28", name: "위생장갑", baseUnit: "박스", aliases: ["장갑"], purchaseSupplierId: "sup_goods", purchaseSupplierName: supplier("sup_goods"), basePurchasePrice: 3500 },
+  { id: "p29", name: "키친타월", baseUnit: "박스", aliases: ["키친타올"], purchaseSupplierId: "sup_goods", purchaseSupplierName: supplier("sup_goods"), basePurchasePrice: null },
+  { id: "p30", name: "종이컵", baseUnit: "박스", aliases: [], purchaseSupplierId: "sup_goods", purchaseSupplierName: supplier("sup_goods"), basePurchasePrice: null },
+  { id: "p31", name: "배추김치", baseUnit: "kg", aliases: ["김치"], purchaseSupplierId: "sup_processed", purchaseSupplierName: supplier("sup_processed"), basePurchasePrice: null },
+  { id: "p32", name: "총각김치", baseUnit: "kg", aliases: ["알타리김치", "김치"], purchaseSupplierId: "sup_processed", purchaseSupplierName: supplier("sup_processed"), basePurchasePrice: null },
+  { id: "p33", name: "수세미", baseUnit: "개", aliases: ["주방수세미"], purchaseSupplierId: "sup_goods", purchaseSupplierName: supplier("sup_goods"), basePurchasePrice: null },
 ];
 
 /** 거래처별 판매단가 (일부만 등록 — 미등록 경고 테스트) */
@@ -79,11 +94,14 @@ export const sampleCustomerPrices: CustomerPrice[] = [
   { customerId: "cust_happy", productId: "p27", price: 19500 },
   { customerId: "cust_happy", productId: "p29", price: 8500 },
   { customerId: "cust_happy", productId: "p25", price: 12000 },
+  { customerId: "cust_happy", productId: "p33", price: 1200 },
   // 늘봄분식 (콩나물 미등록)
   { customerId: "cust_neulbom", productId: "p25", price: 12500 },
   { customerId: "cust_neulbom", productId: "p24", price: 4500 },
   { customerId: "cust_neulbom", productId: "p07", price: 3000 },
   { customerId: "cust_neulbom", productId: "p06", price: 4200 },
+  { customerId: "cust_neulbom", productId: "p31", price: 6000 },
+  { customerId: "cust_neulbom", productId: "p32", price: 6500 },
 ];
 
 export interface SampleOrderExample {

@@ -15,6 +15,9 @@ export interface Product {
   name: string;
   baseUnit: string;
   aliases?: string[];
+  /** 기본 매입처. 1차에서는 표시/그룹핑용, 실제 수정 화면과 DB 연결은 다음 단계. */
+  purchaseSupplierId?: string | null;
+  purchaseSupplierName?: string | null;
   /** 기준 매입단가(원, 정수). 예상 마진 표시용 참고값. 미등록(없음)이면 마진 미표시. */
   basePurchasePrice?: number | null;
 }

@@ -2,12 +2,19 @@ import { expect, test } from "vitest";
 import {
   buildAggregateRows,
   buildContributionText,
+  buildSupplierPurchaseSections,
   formatPurchaseOrderText,
+  formatSupplierPurchaseText,
   formatQtyUnit,
   type AggregatableOrder,
 } from "./aggregate";
 
 const productOrder = [{ id: "p01" }, { id: "p05" }, { id: "p03" }]; // 콩나물, 깐양파, 두부
+const productsWithSuppliers = [
+  { id: "p01", purchaseSupplierName: "두부콩나물매입처" },
+  { id: "p05", purchaseSupplierName: "야채매입처" },
+  { id: "p03", purchaseSupplierName: "두부콩나물매입처" },
+];
 
 // 예: 1거래처 콩나물 3 / 2거래처 콩나물 2·양파 2 / 3거래처 콩나물 2·양파 1
 const orders: AggregatableOrder[] = [
@@ -83,4 +90,23 @@ test("buildContributionText: 거래처별 내역 문장", () => {
 test("formatQtyUnit: 단위 없으면 수량만", () => {
   expect(formatQtyUnit(7, "박스")).toBe("7박스");
   expect(formatQtyUnit(7, "")).toBe("7");
+});
+
+test("buildSupplierPurchaseSections: 체크된 품목만 매입처별로 묶는다", () => {
+  const rows = buildAggregateRows(orders, productOrder);
+  const sections = buildSupplierPurchaseSections(rows, productsWithSuppliers, new Set(["p01"]));
+  expect(sections).toEqual([
+    {
+      supplierName: "두부콩나물매입처",
+      rows: [rows[0]],
+    },
+  ]);
+});
+
+test("formatSupplierPurchaseText: 매입처별 제목과 품목 발주문장을 만든다", () => {
+  const rows = buildAggregateRows(orders, productOrder);
+  const sections = buildSupplierPurchaseSections(rows, productsWithSuppliers, new Set(["p01", "p05"]));
+  expect(formatSupplierPurchaseText(sections)).toBe(
+    "[두부콩나물매입처]\n콩나물 7박스\n\n[야채매입처]\n양파 3망",
+  );
 });

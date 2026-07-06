@@ -147,6 +147,25 @@ td input.qty,td input.price{max-width:96px}
 .status-text.ok{color:var(--ok-fg)}
 .status-text.warn{color:var(--warn-fg)}
 .row-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.checkline{display:flex;align-items:center;gap:8px;margin:0;font-size:.88rem;color:inherit;font-weight:500}
+.checkline input{width:18px;min-height:18px;padding:0;flex:0 0 18px}
+.purchase-included{background:#fafafa}
+.purchase-included td:first-child::after{
+  content:"문장 포함";display:inline-block;margin-left:8px;
+  color:var(--ok-fg);background:var(--ok-bg);border-radius:999px;
+  padding:1px 7px;font-size:.68rem;font-weight:700;
+}
+.product-picker{min-width:260px}
+.selected-product{font-size:.74rem;color:var(--soft);margin-top:4px}
+.product-results{
+  display:flex;flex-direction:column;gap:6px;margin-top:6px;
+  max-height:220px;overflow:auto;
+}
+.product-results button{
+  display:grid;grid-template-columns:minmax(120px,1fr) 64px 96px minmax(110px,.8fr);
+  gap:8px;align-items:center;text-align:left;min-height:40px;padding:7px 9px;
+}
+.product-results span{font-size:.76rem;color:var(--soft)}
 
 /* ── 대시보드 업무판 ── */
 .workbench-head{
@@ -171,6 +190,16 @@ td input.qty,td input.price{max-width:96px}
   padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:.88rem;
 }
 .ready-list li:last-child{border-bottom:none}
+.supplier-sections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:10px 0}
+.supplier-section{
+  border:1px solid var(--line);border-radius:var(--radius);
+  background:#fbfcfd;padding:10px 12px;
+}
+.supplier-section-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.supplier-section pre{
+  margin:8px 0 0;white-space:pre-wrap;font-family:inherit;
+  color:var(--ink);font-size:.88rem;line-height:1.55;
+}
 .empty-state{
   border:1px dashed var(--line);border-radius:var(--radius);
   background:#fbfcfd;padding:18px;text-align:left;
@@ -234,6 +263,8 @@ td input.qty,td input.price{max-width:96px}
   .workbench-head{grid-template-columns:1fr}
   .cta-main{min-height:48px}
   .dashboard-grid{grid-template-columns:1fr}
+  .supplier-sections{grid-template-columns:1fr}
+  .product-results button{grid-template-columns:1fr 54px;gap:4px}
 }
 @media (max-width:480px){
   .summary-grid,.ops-grid{grid-template-columns:1fr}

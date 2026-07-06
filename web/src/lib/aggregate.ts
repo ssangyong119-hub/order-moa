@@ -29,6 +29,16 @@ export interface AggregateRow {
   contributions: AggregateContribution[];
 }
 
+export interface PurchaseSupplierProduct {
+  id: string;
+  purchaseSupplierName?: string | null;
+}
+
+export interface SupplierPurchaseSection {
+  supplierName: string;
+  rows: AggregateRow[];
+}
+
 /**
  * 주문들을 품목별로 합산한다.
  * - qty: 품목 총수량
@@ -91,6 +101,35 @@ export function formatPurchaseOrderText(rows: AggregateRow[], title = "발주 �
   if (rows.length === 0) return title;
   const body = rows.map((r) => `${r.name} ${formatQtyUnit(r.qty, r.unit)}`).join("\n");
   return `${title}\n${body}`;
+}
+
+export function buildSupplierPurchaseSections(
+  rows: AggregateRow[],
+  products: PurchaseSupplierProduct[],
+  selectedProductIds: Set<string> = new Set(rows.map((row) => row.productId)),
+): SupplierPurchaseSection[] {
+  const supplierByProduct = new Map(
+    products.map((product) => [product.id, product.purchaseSupplierName || "매입처 미지정"]),
+  );
+  const sections = new Map<string, AggregateRow[]>();
+  for (const row of rows) {
+    if (!selectedProductIds.has(row.productId)) continue;
+    const supplierName = supplierByProduct.get(row.productId) ?? "매입처 미지정";
+    sections.set(supplierName, [...(sections.get(supplierName) ?? []), row]);
+  }
+  return [...sections.entries()].map(([supplierName, sectionRows]) => ({
+    supplierName,
+    rows: sectionRows,
+  }));
+}
+
+export function formatSupplierPurchaseText(sections: SupplierPurchaseSection[]): string {
+  return sections
+    .map((section) => {
+      const body = section.rows.map((row) => `${row.name} ${formatQtyUnit(row.qty, row.unit)}`).join("\n");
+      return `[${section.supplierName}]\n${body}`;
+    })
+    .join("\n\n");
 }
 
 /** 거래처별 기여 내역 문장 (예: "가람식당 3박스, 한빛카페 2박스") */
