@@ -1188,3 +1188,27 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
   - 브라우저에서 `http://127.0.0.1:3020/order-moa-progress-dashboard.html` 표시 확인.
 - 다음:
   - 파싱 결과 화면에서 `바나나`처럼 미매칭 품목을 즉석 신규 품목으로 저장하고 현재 줄에 바로 매칭하는 기능.
+
+## 2026-07-06 Codex (미매칭 품목 즉석 신규 저장)
+
+- 사용자 요구:
+  - `바나나 20kg`처럼 품목 DB에 없는 발주가 미매칭일 때 품목 관리 화면으로 이동하지 않고, 파싱 결과 화면에서 바로 신규 품목을 저장해야 함.
+  - 저장 즉시 현재 줄이 매칭되어 주문 확정 가능 상태로 바뀌고, 다음 주문부터 자동 매칭되어야 함.
+- RED/GREEN:
+  - `product-registration.test.ts` 추가.
+  - RED: 신규 품목 저장 결과에 고객 단가와 현재 line 매칭이 없어서 실패 확인.
+  - GREEN: `buildNewProductRegistration()` 구현.
+- 구현:
+  - `web/src/lib/product-registration.ts` 추가: 신규 품목, 거래처별 단가, 갱신된 파싱 line을 한 번에 생성.
+  - 파싱 결과 화면에서 미매칭 line에 `신규 품목으로 저장` 버튼 표시.
+  - 버튼 클릭 시 품목명/단위/단가/기본 매입처를 그 자리에서 입력.
+  - `저장 후 매칭` 클릭 시 products/customerPrices/현재 line 상태를 즉시 갱신.
+  - DB 모드에서는 `ordermoa_products`와 `ordermoa_customer_prices`에도 저장 시도.
+- 참고:
+  - 현재 DB 스키마에는 매입처 컬럼이 없어 기본 매입처는 데모/화면 상태에 반영됨. Supabase 영구 저장은 다음 기준정보/매입처 DB 확장 단계에서 연결 필요.
+- 검증:
+  - product-registration 테스트 통과.
+  - web npm test 78/78.
+  - web npm run build 성공.
+  - npm audit --audit-level=low 0건.
+  - 새 개발 서버 `http://localhost:3011` 응답 200.

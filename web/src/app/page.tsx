@@ -30,6 +30,7 @@ import {
   type ConfirmedOrder,
   type OrderLine,
 } from "@/lib/order-store";
+import { buildNewProductRegistration, type NewProductRegistrationInput } from "@/lib/product-registration";
 import { padDeliveryNoteLines } from "@/lib/delivery-note";
 import {
   buildAggregateRows,
@@ -373,6 +374,56 @@ export default function HomePage() {
       })();
     }
     flash(`'${token}' 을(를) ${product ? product.name : "선택 품목"} 별칭으로 등록했습니다. 다음부터 자동 매칭됩니다.`);
+  }
+
+  function createProductFromLine(line: ParsedLine, input: Omit<NewProductRegistrationInput, "customerId">) {
+    const result = buildNewProductRegistration(
+      line,
+      { ...input, customerId: selectedCustomerId },
+      () => crypto.randomUUID(),
+    );
+    setProducts((prev) => [...prev, result.product]);
+    if (result.customerPrice) {
+      setCustomerPrices((prev) => [
+        ...prev.filter(
+          (cp) =>
+            !(cp.customerId === result.customerPrice!.customerId && cp.productId === result.customerPrice!.productId),
+        ),
+        result.customerPrice!,
+      ]);
+    }
+    setLines((prev) => prev.map((l) => (l.id === line.id ? result.line : l)));
+
+    if (db && companyId) {
+      const client = db;
+      const cid = companyId;
+      void (async () => {
+        const productInsert = await client.from("ordermoa_products").insert({
+          id: result.product.id,
+          company_id: cid,
+          name: result.product.name,
+          base_unit: result.product.baseUnit,
+          base_purchase_price: result.product.basePurchasePrice ?? null,
+        });
+        if (productInsert.error) {
+          flash("품목이 화면에는 추가됐지만 DB 저장에 실패했습니다. 기준정보 화면에서 다시 확인해주세요.");
+          return;
+        }
+        if (result.customerPrice) {
+          const priceUpsert = await client.from("ordermoa_customer_prices").upsert(
+            {
+              company_id: cid,
+              customer_id: result.customerPrice.customerId,
+              product_id: result.customerPrice.productId,
+              sale_price: result.customerPrice.price,
+            },
+            { onConflict: "company_id,customer_id,product_id" },
+          );
+          if (priceUpsert.error) flash("품목은 저장됐지만 단가 저장에 실패했습니다. 단가를 다시 저장해주세요.");
+        }
+      })();
+    }
+    flash(`${result.product.name}을(를) 신규 품목으로 저장하고 현재 줄에 매칭했습니다.`);
   }
 
   async function confirmOrder() {
@@ -768,6 +819,8 @@ export default function HomePage() {
           onPrice={setPrice}
           onSavePrice={savePrice}
           onRegisterAlias={registerAlias}
+          onCreateProduct={createProductFromLine}
+          supplierNames={[...new Set(products.map((p) => p.purchaseSupplierName).filter(Boolean) as string[])]}
           onUnit={(line, v) => updateLine(line.id, { unit: v })}
           onConfirm={confirmOrder}
           onBack={() => setView("paste")}
@@ -1006,11 +1059,16 @@ function ReviewView(props: {
   onUnit: (line: ParsedLine, value: string) => void;
   onSavePrice: (line: ParsedLine) => void;
   onRegisterAlias: (line: ParsedLine) => void;
+  onCreateProduct: (line: ParsedLine, input: Omit<NewProductRegistrationInput, "customerId">) => void;
+  supplierNames: string[];
   onConfirm: () => void;
   onBack: () => void;
 }) {
   const { lines, products, customerName } = props;
   const [productQueries, setProductQueries] = useState<Record<string, string>>({});
+  const [newProductDrafts, setNewProductDrafts] = useState<
+    Record<string, { name: string; unit: string; unitPrice: string; purchaseSupplierName: string }>
+  >({});
   const blockReason = confirmBlockReason(lines);
   const confirmable = canConfirm(lines);
   const orderMargin = estimatedOrderMargin(
@@ -1028,6 +1086,42 @@ function ReviewView(props: {
   const total = sumAmounts(
     lines.filter((l) => l.quantity).map((l) => lineAmount(l.quantity as number, l.unitPrice)),
   );
+
+  function openNewProductForm(line: ParsedLine) {
+    setNewProductDrafts((prev) => ({
+      ...prev,
+      [line.id]: {
+        name: line.productName || extractNameCandidate(line.rawText),
+        unit: line.unit || "개",
+        unitPrice: line.unitPrice > 0 ? String(line.unitPrice) : "",
+        purchaseSupplierName: "",
+      },
+    }));
+  }
+
+  function updateNewProductDraft(
+    lineId: string,
+    patch: Partial<{ name: string; unit: string; unitPrice: string; purchaseSupplierName: string }>,
+  ) {
+    setNewProductDrafts((prev) => ({ ...prev, [lineId]: { ...prev[lineId], ...patch } }));
+  }
+
+  function saveNewProduct(line: ParsedLine) {
+    const draft = newProductDrafts[line.id];
+    if (!draft || !draft.name.trim() || !draft.unit.trim()) return;
+    props.onCreateProduct(line, {
+      name: draft.name,
+      unit: draft.unit,
+      unitPrice: draft.unitPrice === "" ? line.unitPrice : Number(draft.unitPrice),
+      purchaseSupplierName: draft.purchaseSupplierName,
+    });
+    setNewProductDrafts((prev) => {
+      const next = { ...prev };
+      delete next[line.id];
+      return next;
+    });
+    setProductQueries((prev) => ({ ...prev, [line.id]: "" }));
+  }
 
   return (
     <section className="card">
@@ -1106,6 +1200,76 @@ function ReviewView(props: {
                       )}
                       {!line.productId && !(productQueries[line.id] ?? "").trim() && (
                         <div className="muted">품목명을 입력해 검색하세요. 예: 김치, 수세미, 콩</div>
+                      )}
+                      {line.status === "unmatched" && (
+                        <div className="quick-product">
+                          {!newProductDrafts[line.id] ? (
+                            <button type="button" className="link" onClick={() => openNewProductForm(line)}>
+                              신규 품목으로 저장
+                            </button>
+                          ) : (
+                            <div className="quick-product-form">
+                              <input
+                                value={newProductDrafts[line.id].name}
+                                onChange={(e) => updateNewProductDraft(line.id, { name: e.target.value })}
+                                placeholder="품목명"
+                                aria-label={`${line.rawText} 신규 품목명`}
+                              />
+                              <input
+                                value={newProductDrafts[line.id].unit}
+                                onChange={(e) => updateNewProductDraft(line.id, { unit: e.target.value })}
+                                placeholder="단위"
+                                aria-label={`${line.rawText} 신규 품목 단위`}
+                              />
+                              <input
+                                type="number"
+                                min={0}
+                                value={newProductDrafts[line.id].unitPrice}
+                                onChange={(e) => updateNewProductDraft(line.id, { unitPrice: e.target.value })}
+                                placeholder="단가"
+                                aria-label={`${line.rawText} 신규 품목 단가`}
+                              />
+                              <input
+                                list={`supplier-list-${line.id}`}
+                                value={newProductDrafts[line.id].purchaseSupplierName}
+                                onChange={(e) =>
+                                  updateNewProductDraft(line.id, { purchaseSupplierName: e.target.value })
+                                }
+                                placeholder="기본 매입처"
+                                aria-label={`${line.rawText} 신규 품목 기본 매입처`}
+                              />
+                              <datalist id={`supplier-list-${line.id}`}>
+                                {props.supplierNames.map((name) => (
+                                  <option value={name} key={name} />
+                                ))}
+                              </datalist>
+                              <div className="row-actions">
+                                <button
+                                  type="button"
+                                  className="primary"
+                                  onClick={() => saveNewProduct(line)}
+                                  disabled={
+                                    !newProductDrafts[line.id].name.trim() || !newProductDrafts[line.id].unit.trim()
+                                  }
+                                >
+                                  저장 후 매칭
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setNewProductDrafts((prev) => {
+                                      const next = { ...prev };
+                                      delete next[line.id];
+                                      return next;
+                                    })
+                                  }
+                                >
+                                  취소
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                     {canRegisterAlias(line) && (
