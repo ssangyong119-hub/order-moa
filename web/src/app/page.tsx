@@ -287,6 +287,7 @@ export default function HomePage() {
         status: "unmatched",
         unitPrice: 0,
         priceRegistered: false,
+        needsProductConfirmation: false,
       });
       return;
     }
@@ -302,6 +303,7 @@ export default function HomePage() {
       unitPrice: saved ? saved.price : 0,
       priceRegistered: Boolean(saved),
       status: statusFor(productId, line.quantity),
+      needsProductConfirmation: false,
     });
   }
   function setQty(line: ParsedLine, value: string) {
@@ -903,6 +905,7 @@ function summarizeItems(lines: OrderLine[]): string {
 }
 
 function badgeFor(line: ParsedLine) {
+  if (line.needsProductConfirmation) return <span className="badge amber">후보 확인</span>;
   if (line.status === "unmatched") return <span className="badge err">미매칭</span>;
   if (line.status === "qty_uncertain") return <span className="badge warn">수량 확인</span>;
   return <span className="badge ok">정상</span>;
@@ -951,7 +954,7 @@ function ReviewView(props: {
       <h2>파싱 결과 확인 · {customerName}</h2>
       <p className="muted">
         품목/수량/단위/단가를 직접 고칠 수 있습니다. 미매칭(빨강)·수량 확인(노랑)이 남으면 확정할 수
-        없습니다.
+        없습니다. 후보 확인은 비슷한 품목이 여러 개 걸린 경우라, 품목을 한 번 선택해야 합니다.
       </p>
       <div className="table-wrap">
         <table>
@@ -991,6 +994,15 @@ function ReviewView(props: {
                       <button className="link" onClick={() => props.onRegisterAlias(line)}>
                         별칭 등록
                       </button>
+                    )}
+                    {line.needsProductConfirmation && line.candidateProductIds && (
+                      <div className="muted">
+                        후보:{" "}
+                        {line.candidateProductIds
+                          .map((id) => products.find((p) => p.id === id)?.name)
+                          .filter(Boolean)
+                          .join(" / ")}
+                      </div>
                     )}
                     {line.aliasRegistered && <span className="muted"> 별칭 등록됨</span>}
                   </td>

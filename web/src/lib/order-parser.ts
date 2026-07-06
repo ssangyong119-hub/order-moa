@@ -29,6 +29,10 @@ export interface ParsedLine {
   wasUnmatched: boolean;
   /** 사용자가 이 라인의 원문 토큰을 별칭으로 등록했는지. */
   aliasRegistered?: boolean;
+  /** 같은 원문 후보에 걸린 품목 후보들. 2개 이상이면 사용자 확인이 필요하다. */
+  candidateProductIds?: string[];
+  /** 다중 후보 중 자동 선택된 값이라 사용자가 확인해야 하는지. */
+  needsProductConfirmation?: boolean;
 }
 
 // 단위 사전 (sample-data-definition §10.2)
@@ -75,27 +79,41 @@ function normalize(text: string): string {
   return text.replace(/\s+/g, "");
 }
 
-function matchProduct(candidate: string, products: Product[]): Product | null {
+function productTokens(product: Product): string[] {
+  return [product.name, ...(product.aliases ?? [])];
+}
+
+function pushUnique(products: Product[], product: Product) {
+  if (!products.some((p) => p.id === product.id)) products.push(product);
+}
+
+function matchProductCandidates(candidate: string, products: Product[]): Product[] {
   const norm = normalize(candidate);
-  if (!norm) return null;
+  if (!norm) return [];
+  const exact: Product[] = [];
   // 1) 정확 일치 (품목명/별칭)
   for (const product of products) {
-    if (normalize(product.name) === norm) return product;
-    for (const alias of product.aliases ?? []) {
-      if (normalize(alias) === norm) return product;
+    for (const token of productTokens(product)) {
+      if (normalize(token) === norm) pushUnique(exact, product);
     }
   }
+  if (exact.length > 0) return exact;
+
   // 2) 포함 매칭 (후보 ⊇ 별칭/품목명 또는 그 반대)
   //    1글자 토큰은 오매칭 위험(예: "무"가 "단무지"에 포함)이라 정확 일치에서만 허용.
   const contains = (a: string, b: string) =>
     a.length >= 2 && b.length >= 2 && (a.includes(b) || b.includes(a));
+  const included: Product[] = [];
   for (const product of products) {
-    if (contains(norm, normalize(product.name))) return product;
-    for (const alias of product.aliases ?? []) {
-      if (contains(norm, normalize(alias))) return product;
+    for (const token of productTokens(product)) {
+      if (contains(norm, normalize(token))) pushUnique(included, product);
     }
   }
-  return null;
+  return included;
+}
+
+function matchProduct(candidate: string, products: Product[]): Product | null {
+  return matchProductCandidates(candidate, products)[0] ?? null;
 }
 
 export function extractNameCandidate(segment: string): string {
@@ -170,7 +188,10 @@ export function parseOrderText(
     const cluster = pickQuantityCluster(segment);
     const quantity = cluster ? Number(cluster.raw) : null;
 
-    const product = matchProduct(extractNameCandidate(segment), products);
+    const productCandidates = matchProductCandidates(extractNameCandidate(segment), products);
+    const product = productCandidates[0] ?? null;
+    const candidateProductIds = productCandidates.map((p) => p.id);
+    const needsProductConfirmation = candidateProductIds.length > 1;
     const unit = extractUnit(segment, product ? product.baseUnit : "", cluster?.unit ?? null);
 
     let unitPrice = 0;
@@ -204,6 +225,8 @@ export function parseOrderText(
       priceRegistered,
       status,
       wasUnmatched: !product,
+      candidateProductIds,
+      needsProductConfirmation,
     };
   });
 }
@@ -219,7 +242,13 @@ export function canRegisterAlias(
 export function canConfirm(lines: ParsedLine[]): boolean {
   return (
     lines.length > 0 &&
-    lines.every((line) => line.productId !== null && line.quantity !== null && line.quantity > 0)
+    lines.every(
+      (line) =>
+        line.productId !== null &&
+        line.quantity !== null &&
+        line.quantity > 0 &&
+        !line.needsProductConfirmation,
+    )
   );
 }
 
@@ -230,8 +259,10 @@ export function confirmBlockReason(lines: ParsedLine[]): string | null {
   const uncertain = lines.filter(
     (line) => line.productId !== null && (line.quantity === null || line.quantity <= 0),
   ).length;
+  const ambiguous = lines.filter((line) => line.needsProductConfirmation).length;
   const parts: string[] = [];
   if (unmatched > 0) parts.push(`미매칭 ${unmatched}건(품목을 지정하거나 별칭 등록)`);
   if (uncertain > 0) parts.push(`수량 확인 필요 ${uncertain}건`);
+  if (ambiguous > 0) parts.push(`품목 후보 확인 ${ambiguous}건`);
   return parts.length > 0 ? `확정 불가: ${parts.join(", ")}` : null;
 }

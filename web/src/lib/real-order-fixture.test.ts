@@ -2,13 +2,13 @@
 // 데이터: docs/order-moa-real-order-test-data.json (실사용 이카운트 패턴 일반화, 가명·임의단가)
 // 목적: 파서의 "현재 동작"을 그대로 고정한다(개선 아님). 아래 CURRENT 표는 2026-07-02 실측값.
 // 파서를 개선하면 이 표의 기대값을 의도적으로 바꿔야 하며, 그 diff가 곧 개선 내역이 된다.
-// JSON의 expectedStatus는 UX 관점 예상(오매칭_위험/단위_확인 포함)이라 파서 관찰값과 1:1이 아니다
+// JSON의 expectedStatus는 UX 관점 예상(후보_확인/단가_미등록 등 포함)이라 파서 관찰값과 1:1이 아니다
 // — 대조 분석은 docs/order-moa-real-order-test-plan.md 참조.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import type { CustomerPrice, Product } from "./domain/types";
-import { parseOrderText, type LineStatus } from "./order-parser";
+import { canConfirm, confirmBlockReason, parseOrderText, type LineStatus } from "./order-parser";
 
 interface FixtureProduct {
   id: string;
@@ -65,7 +65,7 @@ type ExpectedLine = [string | null, number | null, string, LineStatus, boolean];
 const CURRENT: Record<string, ExpectedLine[]> = {
   t01: [["rp01", 3, "박스", "matched", true], ["rp04", 2, "박스", "matched", true], ["rp05", 5, "봉", "matched", true]],
   t02: [["rp03", 2, "봉", "matched", true], ["rp06", 3, "개", "matched", true]],
-  // t03: '숙주' 토큰이 rp01/rp02 양쪽에 포함 → 등록 순서상 rp01(세척숙주) 첫 매칭 (다중 후보 미제시 — 현재 한계)
+  // t03: '숙주' 토큰이 rp01/rp02 양쪽에 포함 → rp01 임시 선택 + 후보 확인으로 확정 차단
   t03: [["rp01", 3, "박스", "matched", true]],
   // t04: 별칭 '무'가 등록된 상태에선 rp16 매칭 성공(별칭으로 해결됨을 검증). 미등록 상태는 아래 전용 테스트.
   t04: [["rp16", 2, "개", "matched", true]],
@@ -109,12 +109,22 @@ for (const sentence of raw.orderSentences) {
   });
 }
 
-// ── 현재 한계 고정(characterization) — 개선 시 이 3개의 기대값을 바꾸는 것이 목표 ──
+// ── 현재 한계/개선 고정(characterization) — 개선 시 기대값을 의도적으로 바꾼다 ──
 
-test("[한계 고정] t03: 동일 토큰 다중 품목 → 등록 순서 첫 매칭(rp01), 후보 선택 미제공", () => {
+test("[개선 3차] t03: 동일 토큰 다중 품목 → 첫 후보 임시 선택 + 후보 목록 제공", () => {
   const lines = parse(raw.orderSentences.find((s) => s.id === "t03")!);
   expect(lines[0].productId).toBe("rp01"); // '숙주'가 세척숙주(rp01)·숙주1kg(rp02) 양쪽 포함 — 순서 의존
-  expect(lines[0].status).toBe("matched"); // 경고 없이 정상처럼 보임 = 오매칭 위험의 실체
+  expect(lines[0].status).toBe("matched");
+  expect(lines[0].candidateProductIds).toEqual(["rp01", "rp02"]);
+});
+
+test("[개선 3차] t03: 동일 토큰 다중 품목은 후보 확인 전까지 확정 차단", () => {
+  const lines = parse(raw.orderSentences.find((s) => s.id === "t03")!);
+  expect(lines[0].productId).toBe("rp01");
+  expect(lines[0].candidateProductIds).toEqual(["rp01", "rp02"]);
+  expect(lines[0].needsProductConfirmation).toBe(true);
+  expect(canConfirm(lines)).toBe(false);
+  expect(confirmBlockReason(lines)).toContain("품목 후보 확인");
 });
 
 test("[한계 고정] t04 변형: 별칭 '무' 미등록이면 1글자 품목은 미매칭(정확일치만 허용)", () => {

@@ -1124,3 +1124,13 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
   - 데모 진입 시 Supabase 설정이 있어도 인증 게이트를 우회하고 기존 샘플/메모리 모드로 진입.
   - `.env.local.example`에 메일 제한 시 개발용 데모 버튼 안내 추가.
 - 검증: root npm test 5/5, web npm test 68/68, web npm run build 성공, npm audit 0건, 로컬 dev 서버 http://localhost:3010 응답 200. 브라우저 자동화는 Codex 앱 연결 타임아웃으로 수동 확인 주소 안내.
+
+## 2026-07-06 Codex (파서 개선 3차 — 다중 품목 후보 확인)
+
+- 목적: `숙주`처럼 여러 품목에 동시에 걸리는 발주 토큰이 정상처럼 자동 확정되는 위험 제거.
+- RED: `t03 숙주 3박스`가 `candidateProductIds=[rp01,rp02]`, `needsProductConfirmation=true`, `canConfirm=false`가 되길 기대하는 테스트 추가 후 실패 확인.
+- GREEN:
+  - `matchProductCandidates()` 추가: 정확 일치 후보 우선, 없으면 포함 매칭 후보를 모두 수집.
+  - 다중 후보면 첫 후보를 임시 선택하되 `후보 확인`으로 표시하고 확정 차단.
+  - 확인 화면에 후보 품목명 목록 표시, 사용자가 드롭다운에서 품목을 선택하면 확인 상태 해제.
+- 문서 동기화: 실제 발주 테스트 JSON/MD/XLSX에서 t03을 `오매칭_위험`에서 `후보_확인`으로 전환.
