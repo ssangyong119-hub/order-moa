@@ -112,3 +112,12 @@ test("예시8 비정형: 연결어 '랑' 분리 + 일부 수량 불확실", () =
   expect(lines[2].quantity).toBe(2);
   expect(canConfirm(lines)).toBe(false);
 });
+
+test("단위 사전 확장: 모/봉지를 수량 단위로 인식하고 품목명 후보에서 제거", () => {
+  const lines = parseOrderText("두부 4모\n팽이 2봉지", "cust_garam", products, prices);
+  expect(lines.map((l) => l.productId)).toEqual(["p03", "p12"]);
+  expect(lines.map((l) => l.quantity)).toEqual([4, 2]);
+  expect(lines.map((l) => l.unit)).toEqual(["모", "봉지"]);
+  expect(extractNameCandidate("두부 4모")).toBe("두부");
+  expect(extractNameCandidate("팽이 2봉지")).toBe("팽이");
+});

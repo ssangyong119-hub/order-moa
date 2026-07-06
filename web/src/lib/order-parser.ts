@@ -33,7 +33,8 @@ export interface ParsedLine {
 
 // 단위 사전 (sample-data-definition §10.2)
 const UNITS = [
-  "박스", "box", "kg", "ea", "개", "봉", "단", "판", "팩", "망", "통", "포기", "l", "ml", "입", "매",
+  "박스", "box", "kg", "키로", "킬로", "키로그람", "킬로그람", "ea", "개", "봉지", "봉", "단", "판", "팩", "망", "통",
+  "포기", "장", "마리", "모", "l", "ml", "입", "매",
 ];
 // 한글 수사(단독 토큰) — 아라비아 숫자 없으면 수량 불확실 처리
 const KOR_NUM = ["한", "두", "세", "네", "다섯", "여섯", "일곱", "여덟", "아홉", "열"];
@@ -49,7 +50,21 @@ const TRAILING_PARTICLES = ["으로", "로", "도"];
 // 수량 선택 시 우선순위를 낮춘다(개선 1차: t11 규격 숫자 오인).
 const MEASURE_UNITS = ["kg", "g", "l", "ml"];
 
-const unitAlt = UNITS.map((u) => u.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+const UNIT_ALIASES: Record<string, string> = {
+  키로: "kg",
+  킬로: "kg",
+  키로그람: "kg",
+  킬로그람: "kg",
+};
+
+function normalizeUnit(unit: string): string {
+  return UNIT_ALIASES[unit.toLowerCase()] ?? unit;
+}
+
+const unitAlt = [...UNITS]
+  .sort((a, b) => b.length - a.length)
+  .map((u) => u.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+  .join("|");
 // 숫자(+선택 단위) 클러스터
 const numUnitReGlobal = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${unitAlt})?`, "gi");
 // 단독 단위(경계)
@@ -118,7 +133,7 @@ interface QuantityCluster {
 function pickQuantityCluster(segment: string): QuantityCluster | null {
   const clusters: QuantityCluster[] = [...segment.matchAll(numUnitReGlobal)].map((m) => ({
     raw: m[1],
-    unit: m[2] ?? null,
+    unit: m[2] ? normalizeUnit(m[2]) : null,
   }));
   const isMeasure = (u: string | null) => u !== null && MEASURE_UNITS.includes(u.toLowerCase());
   const countUnit = clusters.find((c) => c.unit !== null && !isMeasure(c.unit));
@@ -131,7 +146,7 @@ function extractUnit(segment: string, fallback: string, clusterUnit: string | nu
   if (clusterUnit) return clusterUnit;
   const standalone = standaloneUnitRe.exec(` ${segment} `);
   standaloneUnitRe.lastIndex = 0;
-  if (standalone && standalone[2]) return standalone[2];
+  if (standalone && standalone[2]) return normalizeUnit(standalone[2]);
   return fallback;
 }
 

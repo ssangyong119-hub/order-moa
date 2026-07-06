@@ -78,10 +78,10 @@ const CURRENT: Record<string, ExpectedLine[]> = {
   t10: [["rp01", 1, "박스", "matched", false]],
   // t11: "청양고추 1kg 2봉" — 규격 숫자(1kg)는 수량에서 제외, 뒤의 수량단위(2봉)를 채택 (개선 1차 적용)
   t11: [["rp23", 2, "봉", "matched", true]],
-  // t12: '키로'는 단위 사전에 없어 baseUnit(kg)으로 조용히 폴백 — "단위 확인" 상태는 파서에 없음
+  // t12: '키로'는 단위 사전에서 kg로 표준화(개선 2차 적용)
   t12: [["rp26", 2, "kg", "matched", true]],
   t13: [["rp17", 2, "봉", "matched", true]],
-  // t14: '장'도 사전에 없지만 rp28 baseUnit이 '장'이라 폴백 결과가 우연히 일치
+  // t14: '장' 단위는 사전에서 직접 인식(개선 2차 적용)
   t14: [["rp27", 2, "개", "matched", true], ["rp28", 3, "장", "matched", true]],
   t15: [["rp10", 2, "박스", "matched", true]],
   t16: [["rp24", 2, "봉", "matched", true], ["rp21", 3, "개", "matched", true]],
@@ -143,4 +143,18 @@ test("[개선 1차 회귀] 측정단위 숫자만 있으면 그대로 수량 —
   expect(lines[0].productId).toBe("rp07");
   expect(lines[0].quantity).toBe(3);
   expect(lines[0].unit).toBe("kg");
+});
+
+test("[개선 2차] 키로는 kg로 표준화하고 품목명 후보에서 제거", () => {
+  const lines = parseOrderText("소불고기 2키로", "tc_d", products, prices);
+  expect(lines[0].productId).toBe("rp26");
+  expect(lines[0].quantity).toBe(2);
+  expect(lines[0].unit).toBe("kg");
+});
+
+test("[개선 2차] 장 단위는 baseUnit 우연 폴백이 아니라 원문 단위로 인식", () => {
+  const lines = parseOrderText("비닐 3장", "tc_d", products, prices);
+  expect(lines[0].productId).toBe("rp28");
+  expect(lines[0].quantity).toBe(3);
+  expect(lines[0].unit).toBe("장");
 });
