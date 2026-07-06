@@ -1,225 +1,24 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>오더모아 진행현황 대시보드 (2026-07-02)</title>
+<title>오더모아 진행현황</title>
 <style>
-  :root{
-    --ink:#141413; --soft:#6b6960; --line:#e3e0d6; --bg:#faf9f5; --paper:#fff;
-    --green-bg:#e3f2e5; --green-fg:#22662e;
-    --blue-bg:#e2edf9; --blue-fg:#1d5a99;
-    --yellow-bg:#fdf3d0; --yellow-fg:#8a6d11;
-    --gray-bg:#ececea; --gray-fg:#5c5a54;
-    --red-bg:#fbe7e4; --red-fg:#a5473a;
-    --coral:#cc785c;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
-    font-family:system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif;
-    font-size:15px;line-height:1.55}
-  .wrap{max-width:960px;margin:0 auto;padding:20px 14px 60px}
-  h1{font-family:Georgia,serif;font-size:1.5rem;margin:0 0 2px}
-  h2{font-family:Georgia,serif;font-size:1.1rem;margin:28px 0 8px;border-bottom:2px solid var(--ink);padding-bottom:4px}
-  .sub{color:var(--soft);font-size:.85rem}
-  .purpose{background:var(--paper);border:1px solid var(--line);border-left:4px solid var(--coral);
-    padding:10px 14px;margin:14px 0;font-size:.95rem}
-  .flow{background:var(--paper);border:1px solid var(--line);padding:10px 14px;font-size:.85rem;color:var(--soft)}
-  .flow b{color:var(--ink)}
-  table{width:100%;border-collapse:collapse;background:var(--paper);border:1px solid var(--line)}
-  th,td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top;font-size:.88rem}
-  th{background:#f3f1ea;font-size:.78rem;color:var(--soft);white-space:nowrap}
-  tr:last-child td{border-bottom:none}
-  .tbl-wrap{overflow-x:auto}
-  .pill{display:inline-block;padding:1px 10px;border-radius:999px;font-size:.75rem;font-weight:600;white-space:nowrap}
-  .s-done{background:var(--green-bg);color:var(--green-fg)}
-  .s-doing{background:var(--blue-bg);color:var(--blue-fg)}
-  .s-next{background:var(--yellow-bg);color:var(--yellow-fg)}
-  .s-hold{background:var(--gray-bg);color:var(--gray-fg)}
-  .s-out{background:var(--red-bg);color:var(--red-fg)}
-  .here{background:#fffbe8}
-  .here td:first-child{border-left:4px solid var(--coral)}
-  .here-tag{color:var(--coral);font-weight:700;font-size:.75rem;white-space:nowrap}
-  .plain{color:var(--soft);font-size:.82rem}
-  .ok{color:var(--green-fg);font-weight:600}
-  .todo{color:var(--yellow-fg);font-weight:600}
-  .legend{margin:10px 0 0;font-size:.8rem;color:var(--soft)}
-  .legend .pill{margin-right:4px}
-  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  .foot{margin-top:30px;font-size:.78rem;color:var(--soft);border-top:1px solid var(--line);padding-top:10px}
-  code{background:#f3f1ea;padding:1px 5px;border-radius:4px;font-size:.82em}
-  @media(max-width:640px){ .two{grid-template-columns:1fr} th,td{padding:7px 8px} }
-  @media print{
-    body{background:#fff;font-size:12px}
-    .wrap{max-width:none;padding:0}
-    h2{page-break-after:avoid}
-    table{page-break-inside:auto}
-    tr{page-break-inside:avoid}
-  }
+:root {--bg:#f5f7fb;--panel:#ffffff;--ink:#172033;--muted:#66758a;--line:#dce4ef;--brand:#d07559;--green:#d9fbe7;--green-ink:#08753f;--blue:#dbeafe;--blue-ink:#1d4ed8;--yellow:#fff3c4;--yellow-ink:#915f00;--purple:#eee7ff;--purple-ink:#6841bd;--red:#ffe5e0;--red-ink:#b33b2e;}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);letter-spacing:0}header{padding:32px 36px 24px;background:linear-gradient(180deg,#fff 0%,#f8fafc 100%);border-bottom:1px solid var(--line)}h1{margin:0 0 8px;font-size:32px}.subtitle{color:var(--muted);font-size:16px;line-height:1.6;max-width:980px}.meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;color:var(--muted);font-size:14px}.meta span{border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 11px}main{width:min(1240px,calc(100% - 32px));margin:24px auto 56px;display:grid;gap:22px}section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px}section h2{margin:0 0 14px;font-size:22px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.flow{display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:0;list-style:none}.flow li{background:#eef3f8;border:1px solid var(--line);border-radius:999px;padding:8px 12px;color:#334155}table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid var(--line);border-radius:10px}th,td{padding:12px 14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{background:#eef3f8;color:#475569;font-weight:700}tr:last-child td{border-bottom:0}td span{color:var(--muted)}.badge{display:inline-block;border-radius:999px;padding:4px 9px;font-weight:700;font-size:12px;white-space:nowrap}.badge.done{background:var(--green);color:var(--green-ink)}.badge.doing{background:var(--blue);color:var(--blue-ink)}.badge.partial{background:var(--purple);color:var(--purple-ink)}.badge.next{background:var(--yellow);color:var(--yellow-ink)}.badge.hold{background:#eef2f7;color:#64748b}.badge.later{background:var(--red);color:var(--red-ink)}.now{display:inline-block;margin-left:8px;color:#fff;background:var(--brand);border-radius:999px;padding:3px 8px;font-size:12px}.list{display:grid;gap:10px;padding:0;margin:0;list-style:none}.list li{border:1px solid var(--line);border-radius:8px;padding:13px 14px;background:#fbfdff}.list strong{display:block;margin-bottom:4px}.list span{color:var(--muted);line-height:1.5}.next-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.next-card{border:1px solid var(--line);border-radius:10px;padding:16px;background:#fbfdff}.next-card>div{width:32px;height:32px;display:grid;place-items:center;border-radius:50%;background:var(--brand);color:#fff;font-weight:800}.next-card h3{margin:12px 0 8px;font-size:18px}.next-card p{margin:0 0 10px;color:var(--muted);line-height:1.55}.next-card small{color:#475569;font-weight:700}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#334155}.footer-note{color:var(--muted);line-height:1.6}@media(max-width:900px){.grid2,.next-grid{grid-template-columns:1fr}header{padding:24px 18px}main{width:calc(100% - 20px)}table{font-size:14px}th:nth-child(4),td:nth-child(4){display:none}}@media print{body{background:#fff}header,section{break-inside:avoid}main{width:100%;margin:0}}
 </style>
 </head>
 <body>
-<div class="wrap">
-
-  <h1>오더모아 진행현황</h1>
-  <div class="sub">기준일 2026-07-02 · 브랜치 <code>codex/integrate-mvp-docs-web</code> · 운영용 관리표</div>
-
-  <div class="purpose">
-    <b>이 프로젝트는</b> 전체 ERP를 대체하는 게 아니라, 도소매/식당납품 사장님이
-    <b>카톡/문자 발주를 붙여넣으면 합산표·매입처 발주 문장·거래명세서까지 바로 나오게</b> 하는
-    좁은 웹 ERP MVP입니다.
-  </div>
-
-  <div class="flow">
-    <b>핵심 흐름</b> — 카톡/문자 발주 원문 → 품목/수량/단가 정제 → 거래처별 판매가 적용 →
-    예상 마진(참고값) → 주문 확정 → 품목별 합산표 → 매입처 발주 문장 복사 → 주문 목록 → 거래명세서 미리보기/인쇄
-  </div>
-
-  <h2>지금 어디까지 왔나 (한 줄 요약)</h2>
-  <table>
-    <tr>
-      <td>
-        앱 화면 흐름(단위 6·7)과 <b>로그인·회사·데이터 잠금 기반(단위 8a)</b>까지 끝났고,
-        실제 Supabase에서 <b>로그인 → 회사 '히든식품' 생성 → 앱 진입 성공</b>,
-        이어서 <b>잠금 검증(8a-검증) 전부 통과</b>했습니다: 다른 회사 사용자에겐 히든식품 데이터가 <b>0/0/0으로 안 보이고</b>, 몰래 넣기(위조 insert)도 <b>DB가 막았습니다</b>.<br>
-        <span class="plain">비유: <b>8a는 문패와 출입문을 단 단계</b> — 문이 잠기고, <b>옆집 열쇠로 우리 집이 안 열리는 것까지</b> 확인했습니다.
-        다음 <b>8b가 실제 주문 장부를 저장</b>하는 단계라, 지금은 주문을 확정해도 새로고침하면 사라집니다(의도된 데모 상태).</span>
-      </td>
-    </tr>
-  </table>
-
-  <h2>전체 로드맵</h2>
-  <div class="tbl-wrap">
-  <table>
-    <thead><tr><th>단위</th><th>이름</th><th>무슨 뜻인가</th><th>상태</th><th>비고</th></tr></thead>
-    <tbody>
-      <tr><td>단위 1</td><td>web 스캐폴드</td><td class="plain">앱의 뼈대(빈 집) 만들기</td><td><span class="pill s-done">완료</span></td><td class="plain">c2b5479</td></tr>
-      <tr><td>단위 2</td><td>DB 스키마/RLS 설계 문서</td><td class="plain">장부 양식과 잠금 규칙을 종이에 설계</td><td><span class="pill s-done">완료</span></td><td class="plain">설계 문서</td></tr>
-      <tr><td>단위 3</td><td>화면 설계·샘플 데이터</td><td class="plain">필요한 화면과 시연용 가짜 데이터 정의</td><td><span class="pill s-done">완료</span></td><td class="plain">설계 문서</td></tr>
-      <tr><td>단위 4</td><td>HTML 프로토타입</td><td class="plain">영업/검증용 정적 데모 한 장</td><td><span class="pill s-done">완료</span></td><td class="plain">prototype/</td></tr>
-      <tr><td>단위 5</td><td>이카운트 벤치마크 반영</td><td class="plain">실사용 ERP를 관찰해 설계를 현실에 맞게 보정</td><td><span class="pill s-done">완료</span></td><td class="plain">매입단가·마진·명세서 양식</td></tr>
-      <tr><td>단위 6</td><td>Next.js 데모 핵심 흐름</td><td class="plain">붙여넣기→파싱→합산표→명세서를 실제 앱 화면으로</td><td><span class="pill s-done">완료</span></td><td class="plain">6736b48</td></tr>
-      <tr><td>단위 7</td><td>합산 + 발주 문장 복사</td><td class="plain">품목별 총수량과 매입처에 보낼 문장까지</td><td><span class="pill s-done">완료</span></td><td class="plain">0c4472b</td></tr>
-      <tr><td>단위 8a</td><td>Supabase 인증/회사/RLS 기반</td><td class="plain"><b>문패와 출입문</b> — 로그인, 회사 만들기, 회사별 잠금</td><td><span class="pill s-done">완료</span></td><td class="plain">SQL 3개 적용·히든식품 생성 성공</td></tr>
-      <tr><td>8a-검증</td><td>RLS/데이터 실측</td><td class="plain">잠금 실측 <b>전부 통과</b> — A/B 격리 0/0/0 · 위조 insert 거부(RLS 42501)</td><td><span class="pill s-done">완료</span></td><td class="plain">2026-07-02</td></tr>
-      <tr class="here"><td>단위 8b <div class="here-tag">◀ 현재 위치(다음 할 일)</div></td><td>주문 저장/조회/기간 집계</td><td class="plain"><b>실제 주문 장부 저장</b> — 새로고침해도 주문이 남음</td><td><span class="pill s-next">다음</span></td><td class="plain">task-prompt-unit-8</td></tr>
-      <tr><td>단위 8c</td><td>합산표/명세서 DB 연결</td><td class="plain">저장된 장부에서 합산표·명세서를 다시 꺼내 쓰기</td><td><span class="pill s-next">다음</span></td><td class="plain">재출력</td></tr>
-      <tr><td>2차</td><td>미수금·세금계산서·PDF·OCR 등</td><td class="plain">지금은 일부러 안 만드는 것들(아래 표)</td><td><span class="pill s-out">제외/2차</span></td><td class="plain">1차 검증 후</td></tr>
-    </tbody>
-  </table>
-  </div>
-  <p class="legend">상태:
-    <span class="pill s-done">완료</span>
-    <span class="pill s-doing">진행 중</span>
-    <span class="pill s-next">다음</span>
-    <span class="pill s-hold">보류</span>
-    <span class="pill s-out">제외/2차</span>
-  </p>
-
-  <h2>현재 상태 — 되는 것 / 아직 안 되는 것</h2>
-  <div class="two">
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr><th colspan="2">✅ 지금 되는 것</th></tr></thead>
-        <tbody>
-          <tr><td>데모 핵심 흐름</td><td class="plain">붙여넣기→파싱수정→확정→합산표→명세서</td></tr>
-          <tr><td>합산/발주 문장 복사</td><td class="plain">"콩나물 7박스, 양파 3망" 버튼 한 번에 복사</td></tr>
-          <tr><td>로그인</td><td class="plain">이메일 매직링크 입장 성공</td></tr>
-          <tr><td>회사 생성</td><td class="plain">'히든식품' 생성 성공(부트스트랩 RPC)</td></tr>
-          <tr><td>Supabase 설치</td><td class="plain">공유 프로젝트에 SQL 3개 적용 성공(ordermoa_ 접두사)</td></tr>
-          <tr><td>8a-검증(완료)</td><td class="plain">회사/멤버 row·anon 차단·policy + A/B 격리 0/0/0 · 위조 insert 거부</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr><th colspan="2">⏳ 아직 안 되는 것</th></tr></thead>
-        <tbody>
-          <tr><td>주문 DB 저장</td><td class="plain">확정해도 새로고침하면 사라짐(메모리뿐)</td></tr>
-          <tr><td>주문 목록 DB 조회</td><td class="plain">저장 장부에서 불러오기</td></tr>
-          <tr><td>합산표 DB 연결</td><td class="plain">저장 주문으로 합산</td></tr>
-          <tr><td>명세서 DB 재출력</td><td class="plain">지난 주문 명세서 다시 인쇄</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <h2>검증 체크리스트</h2>
-  <div class="tbl-wrap">
-  <table>
-    <thead><tr><th>항목</th><th>무슨 뜻인가</th><th>결과</th></tr></thead>
-    <tbody>
-      <tr><td>root <code>npm test</code></td><td class="plain">옛 정적 데모 회귀 테스트</td><td class="ok">통과 5/5</td></tr>
-      <tr><td>web <code>npm test</code></td><td class="plain">계산/파싱/합산 자동 테스트</td><td class="ok">통과 32/32</td></tr>
-      <tr><td>web <code>npm run build</code></td><td class="plain">배포용 빌드가 깨지지 않는지</td><td class="ok">성공</td></tr>
-      <tr><td>web <code>npm audit --audit-level=low</code></td><td class="plain">알려진 보안 취약점 검사</td><td class="ok">0건</td></tr>
-      <tr><td><code>.env.local</code> Git 미추적</td><td class="plain">비밀키가 저장소에 안 올라가는지</td><td class="ok">확인</td></tr>
-      <tr><td>Supabase SQL 0001/0002/0003</td><td class="plain">장부 테이블·잠금·회사생성 함수 설치</td><td class="ok">적용 성공</td></tr>
-      <tr><td>로그인</td><td class="plain">이메일 매직링크 입장</td><td class="ok">성공</td></tr>
-      <tr><td>회사 생성</td><td class="plain">'히든식품' 등록</td><td class="ok">성공</td></tr>
-      <tr><td>데모 진입</td><td class="plain">로그인+회사 후 앱 화면 진입</td><td class="ok">성공</td></tr>
-      <tr><td>Supabase 회사/멤버 row 확인</td><td class="plain">장부에 회사가 진짜 기록됐는지 SQL로 확인</td><td class="ok">성공 — 히든식품 / role=owner</td></tr>
-      <tr><td>비로그인(anon) 조회 차단</td><td class="plain">로그인 없이 공개 키로 회사 데이터가 보이는지</td><td class="ok">차단 확인 — [] 반환</td></tr>
-      <tr><td>RLS policy 존재 확인</td><td class="plain">ordermoa_* 테이블마다 잠금 규칙이 설치됐는지</td><td class="ok">확인 — 테이블별 policy 존재</td></tr>
-      <tr><td>A/B 회사 격리 select 실측</td><td class="plain">다른 회사 사용자엔 히든식품 데이터가 안 보이는지</td><td class="ok">성공 — 회사/멤버/거래처 0/0/0</td></tr>
-      <tr><td>A회사 위조 insert 차단</td><td class="plain">다른 회사 사용자가 히든식품에 몰래 넣기 시도</td><td class="ok">차단 성공 — RLS 오류 42501</td></tr>
-    </tbody>
-  </table>
-  </div>
-
-  <h2>보류 / 제외 (일부러 안 만드는 것)</h2>
-  <div class="tbl-wrap">
-  <table>
-    <thead><tr><th>기능</th><th>구분</th><th>이유</th></tr></thead>
-    <tbody>
-      <tr><td>미수금/입금 본격 관리</td><td><span class="pill s-out">2차</span></td><td class="plain">1차는 수동 체크 개념만</td></tr>
-      <tr><td>세금계산서 발행(홈택스)</td><td><span class="pill s-out">2차</span></td><td class="plain">근거 금액 데이터만 1차에 보존</td></tr>
-      <tr><td>PDF 파일 생성</td><td><span class="pill s-out">2차</span></td><td class="plain">1차는 브라우저 인쇄로 충분</td></tr>
-      <tr><td>OCR/사진 인식</td><td><span class="pill s-out">제외</span></td><td class="plain">정확도 리스크</td></tr>
-      <tr><td>카카오톡 자동 읽기</td><td><span class="pill s-out">제외</span></td><td class="plain">정책/권한 리스크</td></tr>
-      <tr><td>이카운트 연동</td><td><span class="pill s-out">제외</span></td><td class="plain">대체가 아니라 보조로 시작</td></tr>
-      <tr><td>매입처별 발주 저장/기본 매입처</td><td><span class="pill s-out">2차</span></td><td class="plain">1차는 합산표+복사 문장까지</td></tr>
-      <tr><td>정확한 회계 마진(원가/재고/세무)</td><td><span class="pill s-out">2차</span></td><td class="plain">1차는 기준 매입단가 참고 마진만</td></tr>
-      <tr><td>단가 변경 이력</td><td><span class="pill s-out">2차</span></td><td class="plain">현재 단가만 관리</td></tr>
-      <tr><td>직원 권한 UI(staff)</td><td><span class="pill s-out">2차</span></td><td class="plain">스키마만 준비됨</td></tr>
-      <tr><td>거래처 주문 링크</td><td><span class="pill s-hold">보류</span></td><td class="plain">MVP 검증 후 실험</td></tr>
-    </tbody>
-  </table>
-  </div>
-
-  <h2>다음 작업 (추천 순서)</h2>
-  <div class="tbl-wrap">
-  <table>
-    <thead><tr><th>순서</th><th>단위</th><th>내용</th><th>왜 이 순서인가</th><th>예상 크기</th></tr></thead>
-    <tbody>
-      <tr class="here">
-        <td>1</td><td><b>8b</b></td>
-        <td>주문 저장/조회/기간 집계</td>
-        <td class="plain">8a-검증(잠금)이 전부 통과돼 이제 안전하게 데이터를 쌓을 수 있음. "기록이 남는다"로 핵심 가치가 완성되는 단계</td>
-        <td class="plain">중간 (1세션)</td>
-      </tr>
-      <tr>
-        <td>2</td><td><b>8c</b></td>
-        <td>합산표/거래명세서 DB 연결</td>
-        <td class="plain">저장된 주문으로 재출력 — 8b 위에 얹는 조회 작업</td>
-        <td class="plain">중간</td>
-      </tr>
-      <tr>
-        <td>(옵션)</td><td><b>파서 개선</b></td>
-        <td>다중 후보 선택(2순위)·단위 사전 확장(3순위)</td>
-        <td class="plain">현장 발주 인식률 향상. 8b와 독립적이라 언제든 병행 가능</td>
-        <td class="plain">작음~중간</td>
-      </tr>
-    </tbody>
-  </table>
-  </div>
-
-  <div class="foot">
-    Supabase: 신규 프로젝트 한도로 <code>yangsan-inventory</code> 공유 사용 · 오더모아 객체는 전부 <code>ordermoa_</code> 접두사<br>
-    최근 커밋: fff449b(인수인계) · 926bdc6(접두사) · 48c2755(인증/회사 기반) · bd5a2df(저장 흐름 설계)<br>
-    원본 데이터: <code>docs/order-moa-progress-data.json</code> — 이 파일을 고친 뒤 HTML/엑셀을 다시 만들면 됩니다.
-  </div>
-
-</div>
+<header><h1>오더모아 (Order-Moa) 진행현황</h1><p class="subtitle">전체 ERP 대체가 아니라, 도소매/식당납품 사장님용 좁은 웹 ERP MVP. 핵심 가치: 카톡/문자 발주를 붙여넣으면 파싱, 합산표, 매입처별 발주 문장, 거래명세서까지 이어지는 것.</p><div class="meta"><span>업데이트: 2026-07-06</span><span>브랜치: codex/integrate-mvp-docs-web</span><span>현재 초점: 기준정보 관리 1차 준비: 매입처/품목/별칭/단가를 사용자가 직접 고칠 수 있게 만들기</span></div></header>
+<main>
+<section><h2>한눈에 보기</h2><p class="footer-note">지금은 “붙여넣기 데모”를 넘어, 품목 검색과 매입처별 발주 문장까지 들어간 상태입니다. 다음 큰 작업은 샘플로 박혀 있는 매입처/품목/단가를 사용자가 직접 고치는 기준정보 관리 화면입니다.</p><ul class="flow"><li>카톡/문자 발주 원문 붙여넣기</li><li>품목/수량/단가 정제(파싱+수정)</li><li>품목 검색으로 빠른 수정</li><li>거래처별 판매가 자동 적용</li><li>예상 마진 참고값 표시</li><li>주문 확정</li><li>품목별 합산표</li><li>매입처별 발주 문장 분리/복사</li><li>주문 목록(판매조회형)</li><li>거래명세서 미리보기/브라우저 인쇄</li></ul></section>
+<section><h2>로드맵</h2><table><thead><tr><th>단위</th><th>작업</th><th>상태</th><th>메모</th></tr></thead><tbody><tr><td>단위 1</td><td><strong>web 스캐폴드</strong><br><span>앱의 뼈대 만들기 - Next.js + 테스트 틀</span></td><td><span class="badge done">완료</span></td><td>기초 완료</td></tr><tr><td>단위 2</td><td><strong>DB 스키마/RLS 설계 문서</strong><br><span>장부 양식과 잠금 규칙을 문서로 설계</span></td><td><span class="badge done">완료</span></td><td>db-schema-definition / supabase-rls-policy</td></tr><tr><td>단위 3</td><td><strong>화면 설계·샘플 데이터 정의</strong><br><span>필요 화면과 시연용 샘플 데이터 정의</span></td><td><span class="badge done">완료</span></td><td>screen-specification / sample-data-definition</td></tr><tr><td>단위 4</td><td><strong>HTML 프로토타입</strong><br><span>영업/검증용 정적 데모 한 장</span></td><td><span class="badge done">완료</span></td><td>prototype/order-moa-demo.html</td></tr><tr><td>단위 5</td><td><strong>이카운트 벤치마크 반영</strong><br><span>실사용 ERP를 참고해 명세서/단가/마진 설계를 보정</span></td><td><span class="badge done">완료</span></td><td>좁은 MVP 범위로 재정리</td></tr><tr><td>단위 6</td><td><strong>Next.js 데모 핵심 흐름</strong><br><span>붙여넣기→파싱→확정→합산표→명세서를 앱 화면으로 구현</span></td><td><span class="badge done">완료</span></td><td>샘플 데이터 기반</td></tr><tr><td>단위 7</td><td><strong>품목별 합산+복사 문장</strong><br><span>여러 거래처 주문을 품목별로 합쳐 매입처에 보낼 문장 생성</span></td><td><span class="badge done">완료</span></td><td>복사 버튼+fallback textarea</td></tr><tr><td>단위 8a</td><td><strong>Supabase 인증/회사/RLS 기반</strong><br><span>로그인, 회사 만들기, 회사별 데이터 잠금 기반</span></td><td><span class="badge done">완료</span></td><td>SQL 3개 적용, 히든식품 회사 생성, RLS 기본 검증</td></tr><tr><td>8b 기반</td><td><strong>주문 DB 저장/조회 기반</strong><br><span>DB 모드에서 샘플 기준정보 시드와 주문 저장 흐름의 코드 기반 구현</span></td><td><span class="badge partial">부분 완료</span></td><td>이메일 rate limit 때문에 실사용 저장 실측은 남음</td></tr><tr><td>파서 개선</td><td><strong>단위 사전+다중 후보 확인</strong><br><span>키로/장/모 등 현장 단위를 보강하고, 숙주처럼 후보가 여러 개인 품목은 사용자가 선택</span></td><td><span class="badge done">완료</span></td><td>실제 발주 fixture 기반 테스트</td></tr><tr><td>화면 정리</td><td><strong>좌측 사이드바 업무 화면</strong><br><span>스크린샷처럼 업무 메뉴가 왼쪽에 고정되는 구조로 정리</span></td><td><span class="badge done">완료</span></td><td>데모 모드에서도 확인 가능</td></tr><tr><td>샘플/명세서</td><td><strong>긴 샘플 발주+명세서 빈행/인쇄 보정</strong><br><span>6줄/10줄 긴 샘플을 추가하고 품목이 적어도 명세서 모양이 유지되게 보정</span></td><td><span class="badge done">완료</span></td><td>인쇄는 브라우저 print 단계</td></tr><tr><td>매입처 1차</td><td><strong>품목 검색+기본 매입처별 발주 문장</strong><br><span>품목 검색으로 빠르게 수정하고, 합산표에서 매입처별로 발주 문장을 나눠 복사</span></td><td><span class="badge done">완료</span></td><td>기본 매입처는 샘플 데이터 기준, 체크 품목만 발주 문장 포함</td></tr><tr><td>기준정보 1차</td><td><strong>매입처/품목/별칭/단가 수정 화면</strong><br><span>사용자가 매입처 이름과 품목별 기본 매입처, 별칭, 단가를 직접 관리</span></td><td><span class="badge next">다음</span></td><td>현재 위치 <span class="now">현재 위치</span></td></tr><tr><td>단위 8c</td><td><strong>DB 기반 합산표/명세서 재출력/월 합계</strong><br><span>저장된 주문에서 합산표와 거래명세서를 다시 꺼내고 거래처별 금액 집계</span></td><td><span class="badge next">다음</span></td><td>기준정보/8b 실측 후 연결</td></tr><tr><td>2차</td><td><strong>미수금·세금계산서·PDF·OCR·이카운트 연동</strong><br><span>좁은 MVP 검증 뒤 결정할 큰 기능들</span></td><td><span class="badge later">2차</span></td><td>지금은 만들지 않음</td></tr></tbody></table></section>
+<section class="grid2"><div><h2>완료/구현됨</h2><ul class="list"><li><strong>개발용 데모 진입</strong><span>Supabase 이메일 rate limit이 걸려도 버튼으로 앱 화면을 볼 수 있음</span></li><li><strong>좌측 사이드바형 업무 화면</strong><span>홈/대시보드/발주/조회/기준정보/자금/설정 메뉴 구조로 정리</span></li><li><strong>샘플 발주 16개</strong><span>짧은 예시뿐 아니라 6줄/10줄 긴 발주도 선택 가능</span></li><li><strong>파서 단위 사전 확장</strong><span>키로, 장, 모, 봉지 등 현장 표현을 더 잘 인식</span></li><li><strong>다중 품목 후보 확인</strong><span>숙주처럼 여러 품목에 걸리는 경우 &#x27;후보 확인&#x27;으로 막고 사용자가 선택</span></li><li><strong>품목 검색 선택 UI</strong><span>수세미/김치처럼 검색하면 관련 품목, 단위, 단가, 매입처를 보고 선택</span></li><li><strong>기본 매입처별 발주 문장</strong><span>야채/두부콩나물/공산품 등 샘플 매입처별로 발주 문장을 분리</span></li><li><strong>합산표 체크박스</strong><span>보낼 품목을 체크하면 매입처별 발주 문장에 들어가고, 복사 가능</span></li><li><strong>매입처 발주 체크 기본 비움</strong><span>합산표가 열려도 처음엔 발주문장이 비어 있고, 사용자가 체크한 품목만 매입처별 문장에 들어감</span></li><li><strong>거래명세서 모양 보정</strong><span>품목이 적어도 빈행을 채워 명세서 형태가 무너지지 않음</span></li><li><strong>8b 저장 기반 코드</strong><span>DB 모드에서 샘플 기준정보 시드와 주문 저장 흐름 구현. 실사용 실측은 남음</span></li></ul></div><div><h2>아직 남음</h2><ul class="list"><li><strong>매입처 관리 화면</strong><span>야채매입처/두부콩나물매입처 같은 이름을 사용자가 추가·수정·삭제하는 화면</span></li><li><strong>품목별 기본 매입처 수정</strong><span>콩나물은 A매입처, 양파는 B매입처처럼 품목별 매입처를 사용자가 바꾸는 기능</span></li><li><strong>품목/별칭/단가 기준정보 CRUD</strong><span>샘플 데이터가 아니라 사용자가 직접 품목, 별칭, 거래처별 단가를 관리</span></li><li><strong>8b 실사용 DB 저장 실측</strong><span>로그인 후 주문 확정→새로고침→주문 목록 유지 확인이 아직 남음</span></li><li><strong>DB 기반 합산표/명세서 재출력</strong><span>현재 데모 화면 흐름은 좋지만 저장된 DB 장부에서 다시 꺼내는 8c 연결은 다음</span></li><li><strong>서버 PDF 생성</strong><span>현재 인쇄는 브라우저 인쇄창(window.print) 단계. PDF 파일 생성은 2차</span></li></ul></div></section>
+<section><h2>검증 체크리스트</h2><table><thead><tr><th>항목</th><th>의미</th><th>결과</th></tr></thead><tbody><tr><td>root npm test</td><td>정적 데모 회귀 테스트</td><td><strong>통과 5/5</strong></td></tr><tr><td>web npm test</td><td>파서/합산/검색/주문 저장 빌더 자동 테스트</td><td><strong>통과 77/77</strong></td></tr><tr><td>web npm run build</td><td>배포용 빌드가 깨지지 않는지</td><td><strong>성공</strong></td></tr><tr><td>npm audit --audit-level=low</td><td>알려진 보안 취약점 검사</td><td><strong>0건</strong></td></tr><tr><td>local web</td><td>현재 앱 확인 주소</td><td><strong>http://localhost:3010 응답 200</strong></td></tr><tr><td>Supabase SQL 0001/0002/0003</td><td>장부 테이블/RLS/회사생성 함수 설치</td><td><strong>적용 성공</strong></td></tr><tr><td>8a RLS 검증</td><td>회사 row, anon 차단, policy, A/B 격리, 위조 insert 차단</td><td><strong>통과</strong></td></tr><tr><td>민감정보</td><td>service role key 커밋/번들 포함 여부</td><td><strong>미포함</strong></td></tr></tbody></table></section>
+<section><h2>다음 작업 후보</h2><div class="next-grid"><article class="next-card"><div>A</div><h3>기준정보 관리 1차</h3><p>지금 사용자가 바로 느끼는 불편은 &#x27;매입처/품목/단가를 내가 바꿀 수 있나&#x27;입니다. 매입처 이름 수정, 품목별 기본 매입처 지정, 품목/별칭/단가 관리 화면을 먼저 만들면 샘플 데모에서 실제 운영 도구로 넘어갑니다.</p><small>예상 작업량: 중간</small></article><article class="next-card"><div>B</div><h3>8b 실사용 DB 저장 실측/보강</h3><p>이메일 rate limit을 피하는 개발용 진입은 생겼지만, 실제 로그인 상태에서 주문 저장→새로고침 유지 확인은 마무리해야 합니다.</p><small>예상 작업량: 짧음~중간</small></article><article class="next-card"><div>C</div><h3>8c DB 기반 합산표/명세서 재출력/월 합계</h3><p>저장된 주문 장부에서 합산표와 거래명세서를 다시 꺼내고, 거래처별 일/월 금액을 보는 단계입니다.</p><small>예상 작업량: 중간</small></article><article class="next-card"><div>D</div><h3>실제 발주 테스트 라운드</h3><p>엑셀에서 뽑은 실제 발주품목으로 긴 주문을 여러 번 넣어보고 파서/검색/매입처 분리가 현장감 있게 맞는지 확인합니다.</p><small>예상 작업량: 반복</small></article></div></section>
+<section><h2>보류/2차 기능</h2><table><thead><tr><th>분류</th><th>기능</th><th>이유</th></tr></thead><tbody><tr><td>2차</td><td>미수금/입금 본격 관리</td><td>1차는 주문·합산·명세서 흐름 검증 우선</td></tr><tr><td>2차</td><td>세금계산서 발행</td><td>근거 데이터는 보존하되 직접 발행은 나중</td></tr><tr><td>2차</td><td>PDF 파일 생성</td><td>현재는 브라우저 인쇄. 서버 PDF는 추후</td></tr><tr><td>제외</td><td>OCR/사진 인식</td><td>정확도와 운영 리스크가 커서 후순위</td></tr><tr><td>제외</td><td>카카오톡 자동 읽기</td><td>정책/권한 리스크. 지금은 복사→붙여넣기</td></tr><tr><td>제외</td><td>이카운트 연동</td><td>전체 ERP 대체가 아니라 좁은 MVP 검증 우선</td></tr><tr><td>2차</td><td>매입처별 원가 이력/복수 매입처 견적</td><td>1차는 기본 매입처와 발주 문장 분리까지</td></tr><tr><td>2차</td><td>정확 회계 마진/재고평가</td><td>1차 예상 마진은 참고값</td></tr><tr><td>2차</td><td>직원 권한 UI</td><td>스키마 기반은 있으나 운영 화면은 나중</td></tr></tbody></table></section>
+<section><h2>최근 커밋</h2><ul><li><code>490ca0b feat: add product search and supplier purchase grouping</code></li><li><code>57f2721 feat: expand samples and polish delivery notes</code></li><li><code>aef9ba9 feat: require confirmation for ambiguous product matches</code></li><li><code>204a08f feat: add development demo entry</code></li><li><code>cbd3574 fix: expand order parser unit dictionary</code></li></ul><p class="footer-note">Supabase: 신규 Supabase 프로젝트 한도 때문에 기존 yangsan-inventory 프로젝트를 공유. 충돌 방지를 위해 모든 오더모아 DB 객체는 ordermoa_ 접두사 사용. 이 문서는 비개발자용 진행판이며, 실제 구현 검증은 테스트/빌드 결과와 함께 봅니다.</p></section>
+</main>
 </body>
 </html>

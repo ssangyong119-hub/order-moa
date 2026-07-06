@@ -103,6 +103,11 @@ test("buildSupplierPurchaseSections: 체크된 품목만 매입처별로 묶는�
   ]);
 });
 
+test("buildSupplierPurchaseSections: 체크된 품목이 없으면 매입처 발주문장도 비운다", () => {
+  const rows = buildAggregateRows(orders, productOrder);
+  expect(buildSupplierPurchaseSections(rows, productsWithSuppliers, new Set())).toEqual([]);
+});
+
 test("formatSupplierPurchaseText: 매입처별 제목과 품목 발주문장을 만든다", () => {
   const rows = buildAggregateRows(orders, productOrder);
   const sections = buildSupplierPurchaseSections(rows, productsWithSuppliers, new Set(["p01", "p05"]));

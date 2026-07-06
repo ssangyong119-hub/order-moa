@@ -458,9 +458,7 @@ export default function HomePage() {
     setPurchaseSelectedIds((prev) => {
       const ids = aggregate.map((row) => row.productId);
       const prevSet = new Set(prev);
-      const kept = ids.filter((id) => prevSet.has(id));
-      const added = ids.filter((id) => !prevSet.has(id));
-      return [...kept, ...added];
+      return ids.filter((id) => prevSet.has(id));
     });
   }, [aggregate]);
 
@@ -509,7 +507,11 @@ export default function HomePage() {
   }
 
   async function copyPurchaseText() {
-    await copyTextToClipboard(supplierPurchaseText || purchaseText, "매입처별 발주 문장을 복사했습니다.");
+    if (!supplierPurchaseText.trim()) {
+      flash("매입처에 보낼 품목을 먼저 체크해주세요.");
+      return;
+    }
+    await copyTextToClipboard(supplierPurchaseText, "매입처별 발주 문장을 복사했습니다.");
   }
 
   function exportCsv() {
@@ -863,28 +865,35 @@ export default function HomePage() {
               <div style={{ borderTop: "1px solid var(--line)", marginTop: 16, paddingTop: 14 }}>
                 <h3 style={{ marginTop: 0 }}>매입처별로 보낼 발주 문장</h3>
                 <p className="muted" style={{ marginTop: 0 }}>
-                  체크된 품목만 매입처별로 묶입니다. 이미 발주할 품목은 체크 상태로 두고, 제외할 품목은 체크를 끄세요.
+                  처음에는 비워져 있습니다. 매입처에 보낼 품목만 체크하면 아래 발주 문장에 들어갑니다.
                 </p>
                 <div className="supplier-sections">
-                  {supplierPurchaseSections.map((section) => (
-                    <div className="supplier-section" key={section.supplierName}>
-                      <div className="supplier-section-head">
-                        <strong>{section.supplierName}</strong>
-                        <button
-                          className="link"
-                          onClick={() =>
-                            copyTextToClipboard(
-                              formatSupplierPurchaseText([section]),
-                              `${section.supplierName} 발주 문장을 복사했습니다.`,
-                            )
-                          }
-                        >
-                          이 매입처만 복사
-                        </button>
-                      </div>
-                      <pre>{formatSupplierPurchaseText([section])}</pre>
+                  {supplierPurchaseSections.length === 0 ? (
+                    <div className="empty-state compact">
+                      <strong>아직 선택한 품목이 없습니다.</strong>
+                      <p className="muted">위 표에서 발주할 품목을 체크하면 매입처별 문장이 만들어집니다.</p>
                     </div>
-                  ))}
+                  ) : (
+                    supplierPurchaseSections.map((section) => (
+                      <div className="supplier-section" key={section.supplierName}>
+                        <div className="supplier-section-head">
+                          <strong>{section.supplierName}</strong>
+                          <button
+                            className="link"
+                            onClick={() =>
+                              copyTextToClipboard(
+                                formatSupplierPurchaseText([section]),
+                                `${section.supplierName} 발주 문장을 복사했습니다.`,
+                              )
+                            }
+                          >
+                            이 매입처만 복사
+                          </button>
+                        </div>
+                        <pre>{formatSupplierPurchaseText([section])}</pre>
+                      </div>
+                    ))
+                  )}
                 </div>
                 <textarea
                   id="purchase-text"
@@ -894,7 +903,7 @@ export default function HomePage() {
                   onFocus={(e) => e.currentTarget.select()}
                 />
                 <div className="row-actions no-print" style={{ marginTop: 8 }}>
-                  <button className="primary" onClick={copyPurchaseText}>
+                  <button className="primary" onClick={copyPurchaseText} disabled={!supplierPurchaseText.trim()}>
                     발주 문장 복사
                   </button>
                 </div>

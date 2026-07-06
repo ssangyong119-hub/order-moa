@@ -1,19 +1,22 @@
 {
   "meta": {
     "project": "오더모아 (Order-Moa)",
-    "purpose": "전체 ERP 대체가 아니라, 도소매/식당납품 사장님용 좁은 웹 ERP MVP. 핵심 가치: \"카톡 발주를 붙여넣으면 합산표·발주 문장·거래명세서가 나온다\"",
-    "updated": "2026-07-02",
+    "purpose": "전체 ERP 대체가 아니라, 도소매/식당납품 사장님용 좁은 웹 ERP MVP. 핵심 가치: 카톡/문자 발주를 붙여넣으면 파싱, 합산표, 매입처별 발주 문장, 거래명세서까지 이어지는 것.",
+    "updated": "2026-07-06",
     "branch": "codex/integrate-mvp-docs-web",
+    "currentFocus": "기준정보 관리 1차 준비: 매입처/품목/별칭/단가를 사용자가 직접 고칠 수 있게 만들기",
     "recentCommits": [
-      "fff449b docs: record handoff verification",
-      "926bdc6 fix: prefix ordermoa supabase objects",
-      "48c2755 feat: add supabase auth company foundation",
-      "bd5a2df docs: prepare supabase persistence flow"
+      "490ca0b feat: add product search and supplier purchase grouping",
+      "57f2721 feat: expand samples and polish delivery notes",
+      "aef9ba9 feat: require confirmation for ambiguous product matches",
+      "204a08f feat: add development demo entry",
+      "cbd3574 fix: expand order parser unit dictionary"
     ],
-    "supabase": "신규 프로젝트 한도로 기존 yangsan-inventory 프로젝트 공유. 충돌 방지 위해 모든 오더모아 DB 객체에 ordermoa_ 접두사.",
+    "supabase": "신규 Supabase 프로젝트 한도 때문에 기존 yangsan-inventory 프로젝트를 공유. 충돌 방지를 위해 모든 오더모아 DB 객체는 ordermoa_ 접두사 사용.",
     "statusLegend": {
       "완료": "green",
       "진행 중": "blue",
+      "부분 완료": "purple",
       "다음": "yellow",
       "보류": "gray",
       "제외/2차": "lightred"
@@ -22,75 +25,317 @@
   "coreFlow": [
     "카톡/문자 발주 원문 붙여넣기",
     "품목/수량/단가 정제(파싱+수정)",
+    "품목 검색으로 빠른 수정",
     "거래처별 판매가 자동 적용",
     "예상 마진 참고값 표시",
     "주문 확정",
     "품목별 합산표",
-    "매입처 발주 문장 복사",
+    "매입처별 발주 문장 분리/복사",
     "주문 목록(판매조회형)",
-    "거래명세서 미리보기/인쇄"
+    "거래명세서 미리보기/브라우저 인쇄"
   ],
   "roadmap": [
-    { "unit": "단위 1", "name": "web 스캐폴드", "plain": "앱의 뼈대(빈 집) 만들기 — Next.js + 테스트 틀", "status": "완료", "note": "커밋 c2b5479" },
-    { "unit": "단위 2", "name": "DB 스키마/RLS 설계 문서", "plain": "장부 양식과 잠금 규칙을 종이에 설계(문서만)", "status": "완료", "note": "db-schema-definition / supabase-rls-policy" },
-    { "unit": "단위 3", "name": "화면 설계·샘플 데이터 정의", "plain": "어떤 화면이 필요한지, 시연용 가짜 데이터 정의", "status": "완료", "note": "screen-specification / sample-data-definition" },
-    { "unit": "단위 4", "name": "HTML 프로토타입", "plain": "영업/검증용 정적 데모 한 장(DB 없음)", "status": "완료", "note": "prototype/order-moa-demo.html" },
-    { "unit": "단위 5", "name": "이카운트 벤치마크 반영", "plain": "실사용 ERP를 관찰해 설계 문서를 현실에 맞게 보정", "status": "완료", "note": "매입단가·예상마진·명세서 양식 등" },
-    { "unit": "단위 6", "name": "Next.js 데모 핵심 흐름", "plain": "붙여넣기→파싱→합산표→명세서를 실제 앱 화면으로(저장은 아직 메모리)", "status": "완료", "note": "커밋 6736b48" },
-    { "unit": "단위 7", "name": "매입처 발주용 합산+복사 문장", "plain": "여러 거래처 주문을 품목별로 합쳐 매입처에 보낼 문장까지", "status": "완료", "note": "커밋 0c4472b" },
-    { "unit": "단위 8a", "name": "Supabase 인증/회사/RLS 기반", "plain": "문패와 출입문 — 로그인, 회사 만들기, 회사별 데이터 잠금 기반", "status": "완료", "note": "SQL 3개 적용 성공, 로그인+회사(히든식품) 생성 성공" },
-    { "unit": "8a-검증", "name": "RLS/데이터 실측", "plain": "잠금이 진짜 잠기는지 확인 완료 — 회사/멤버 row·anon 차단·policy 존재 + A/B 격리(0/0/0)·위조 insert 거부", "status": "완료", "note": "A/B 격리 실측 통과(2026-07-02)" },
-    { "unit": "단위 8b", "name": "주문 저장/조회/기간 집계", "plain": "실제 주문 장부 저장 — 새로고침해도 주문이 남고, 거래처별 일/월 합계가 나옴", "status": "다음", "note": "task-prompt-unit-8 §5/§6", "current": true },
-    { "unit": "단위 8c", "name": "합산표/거래명세서 DB 연결", "plain": "저장된 장부에서 합산표·명세서를 다시 꺼내 쓰기(재출력)", "status": "다음", "note": "task-prompt-unit-8 §7/§8" },
-    { "unit": "2차", "name": "미수금·세금계산서·PDF·OCR·연동 등", "plain": "지금은 일부러 안 만드는 것들(아래 보류/제외 표 참조)", "status": "제외/2차", "note": "1차 검증 후 결정" }
+    {
+      "unit": "단위 1",
+      "name": "web 스캐폴드",
+      "plain": "앱의 뼈대 만들기 - Next.js + 테스트 틀",
+      "status": "완료",
+      "note": "기초 완료"
+    },
+    {
+      "unit": "단위 2",
+      "name": "DB 스키마/RLS 설계 문서",
+      "plain": "장부 양식과 잠금 규칙을 문서로 설계",
+      "status": "완료",
+      "note": "db-schema-definition / supabase-rls-policy"
+    },
+    {
+      "unit": "단위 3",
+      "name": "화면 설계·샘플 데이터 정의",
+      "plain": "필요 화면과 시연용 샘플 데이터 정의",
+      "status": "완료",
+      "note": "screen-specification / sample-data-definition"
+    },
+    {
+      "unit": "단위 4",
+      "name": "HTML 프로토타입",
+      "plain": "영업/검증용 정적 데모 한 장",
+      "status": "완료",
+      "note": "prototype/order-moa-demo.html"
+    },
+    {
+      "unit": "단위 5",
+      "name": "이카운트 벤치마크 반영",
+      "plain": "실사용 ERP를 참고해 명세서/단가/마진 설계를 보정",
+      "status": "완료",
+      "note": "좁은 MVP 범위로 재정리"
+    },
+    {
+      "unit": "단위 6",
+      "name": "Next.js 데모 핵심 흐름",
+      "plain": "붙여넣기→파싱→확정→합산표→명세서를 앱 화면으로 구현",
+      "status": "완료",
+      "note": "샘플 데이터 기반"
+    },
+    {
+      "unit": "단위 7",
+      "name": "품목별 합산+복사 문장",
+      "plain": "여러 거래처 주문을 품목별로 합쳐 매입처에 보낼 문장 생성",
+      "status": "완료",
+      "note": "복사 버튼+fallback textarea"
+    },
+    {
+      "unit": "단위 8a",
+      "name": "Supabase 인증/회사/RLS 기반",
+      "plain": "로그인, 회사 만들기, 회사별 데이터 잠금 기반",
+      "status": "완료",
+      "note": "SQL 3개 적용, 히든식품 회사 생성, RLS 기본 검증"
+    },
+    {
+      "unit": "8b 기반",
+      "name": "주문 DB 저장/조회 기반",
+      "plain": "DB 모드에서 샘플 기준정보 시드와 주문 저장 흐름의 코드 기반 구현",
+      "status": "부분 완료",
+      "note": "이메일 rate limit 때문에 실사용 저장 실측은 남음"
+    },
+    {
+      "unit": "파서 개선",
+      "name": "단위 사전+다중 후보 확인",
+      "plain": "키로/장/모 등 현장 단위를 보강하고, 숙주처럼 후보가 여러 개인 품목은 사용자가 선택",
+      "status": "완료",
+      "note": "실제 발주 fixture 기반 테스트"
+    },
+    {
+      "unit": "화면 정리",
+      "name": "좌측 사이드바 업무 화면",
+      "plain": "스크린샷처럼 업무 메뉴가 왼쪽에 고정되는 구조로 정리",
+      "status": "완료",
+      "note": "데모 모드에서도 확인 가능"
+    },
+    {
+      "unit": "샘플/명세서",
+      "name": "긴 샘플 발주+명세서 빈행/인쇄 보정",
+      "plain": "6줄/10줄 긴 샘플을 추가하고 품목이 적어도 명세서 모양이 유지되게 보정",
+      "status": "완료",
+      "note": "인쇄는 브라우저 print 단계"
+    },
+    {
+      "unit": "매입처 1차",
+      "name": "품목 검색+기본 매입처별 발주 문장",
+      "plain": "품목 검색으로 빠르게 수정하고, 합산표에서 매입처별로 발주 문장을 나눠 복사",
+      "status": "완료",
+      "note": "기본 매입처는 샘플 데이터 기준, 체크 품목만 발주 문장 포함"
+    },
+    {
+      "unit": "기준정보 1차",
+      "name": "매입처/품목/별칭/단가 수정 화면",
+      "plain": "사용자가 매입처 이름과 품목별 기본 매입처, 별칭, 단가를 직접 관리",
+      "status": "다음",
+      "note": "현재 위치",
+      "current": true
+    },
+    {
+      "unit": "단위 8c",
+      "name": "DB 기반 합산표/명세서 재출력/월 합계",
+      "plain": "저장된 주문에서 합산표와 거래명세서를 다시 꺼내고 거래처별 금액 집계",
+      "status": "다음",
+      "note": "기준정보/8b 실측 후 연결"
+    },
+    {
+      "unit": "2차",
+      "name": "미수금·세금계산서·PDF·OCR·이카운트 연동",
+      "plain": "좁은 MVP 검증 뒤 결정할 큰 기능들",
+      "status": "제외/2차",
+      "note": "지금은 만들지 않음"
+    }
   ],
   "currentState": {
     "done": [
-      { "item": "Next.js 데모 핵심 흐름(단위 6)", "plain": "붙여넣기→파싱수정→확정→합산표→명세서가 화면에서 동작" },
-      { "item": "품목별 합산/발주 문장 복사(단위 7)", "plain": "\"콩나물 7박스, 양파 3망\"을 버튼 한 번에 복사" },
-      { "item": "Supabase 인증/회사/RLS 기반(단위 8a)", "plain": "로그인(이메일 링크)과 회사 만들기, 회사별 잠금 규칙 준비" },
-      { "item": "Supabase 실제 적용", "plain": "yangsan-inventory 공유 프로젝트에 SQL 3개(0001/0002/0003) 적용 성공" },
-      { "item": "로그인/회사 생성 실동작", "plain": "매직링크 로그인 성공, 회사 '히든식품' 생성, 데모 진입 성공" },
-      { "item": "8a-검증(완료)", "plain": "회사/멤버 row·anon 차단·policy 확인 + A/B 격리(다른 회사 사용자엔 회사/멤버/거래처 0/0/0)·위조 insert 거부(RLS 42501)" }
+      {
+        "item": "개발용 데모 진입",
+        "plain": "Supabase 이메일 rate limit이 걸려도 버튼으로 앱 화면을 볼 수 있음"
+      },
+      {
+        "item": "좌측 사이드바형 업무 화면",
+        "plain": "홈/대시보드/발주/조회/기준정보/자금/설정 메뉴 구조로 정리"
+      },
+      {
+        "item": "샘플 발주 16개",
+        "plain": "짧은 예시뿐 아니라 6줄/10줄 긴 발주도 선택 가능"
+      },
+      {
+        "item": "파서 단위 사전 확장",
+        "plain": "키로, 장, 모, 봉지 등 현장 표현을 더 잘 인식"
+      },
+      {
+        "item": "다중 품목 후보 확인",
+        "plain": "숙주처럼 여러 품목에 걸리는 경우 '후보 확인'으로 막고 사용자가 선택"
+      },
+      {
+        "item": "품목 검색 선택 UI",
+        "plain": "수세미/김치처럼 검색하면 관련 품목, 단위, 단가, 매입처를 보고 선택"
+      },
+      {
+        "item": "기본 매입처별 발주 문장",
+        "plain": "야채/두부콩나물/공산품 등 샘플 매입처별로 발주 문장을 분리"
+      },
+      {
+        "item": "합산표 체크박스",
+        "plain": "보낼 품목을 체크하면 매입처별 발주 문장에 들어가고, 복사 가능"
+      },
+      {
+        "item": "매입처 발주 체크 기본 비움",
+        "plain": "합산표가 열려도 처음엔 발주문장이 비어 있고, 사용자가 체크한 품목만 매입처별 문장에 들어감"
+      },
+      {
+        "item": "거래명세서 모양 보정",
+        "plain": "품목이 적어도 빈행을 채워 명세서 형태가 무너지지 않음"
+      },
+      {
+        "item": "8b 저장 기반 코드",
+        "plain": "DB 모드에서 샘플 기준정보 시드와 주문 저장 흐름 구현. 실사용 실측은 남음"
+      }
     ],
     "notDone": [
-      { "item": "주문 DB 저장", "plain": "주문 확정해도 아직 브라우저 메모리에만 있음(새로고침하면 사라짐)" },
-      { "item": "주문 목록 DB 조회", "plain": "저장된 장부에서 주문 목록 불러오기" },
-      { "item": "합산표 DB 연결", "plain": "저장된 주문으로 합산표 만들기" },
-      { "item": "거래명세서 DB 재출력", "plain": "지난 주문의 명세서를 언제든 다시 인쇄" }
+      {
+        "item": "매입처 관리 화면",
+        "plain": "야채매입처/두부콩나물매입처 같은 이름을 사용자가 추가·수정·삭제하는 화면"
+      },
+      {
+        "item": "품목별 기본 매입처 수정",
+        "plain": "콩나물은 A매입처, 양파는 B매입처처럼 품목별 매입처를 사용자가 바꾸는 기능"
+      },
+      {
+        "item": "품목/별칭/단가 기준정보 CRUD",
+        "plain": "샘플 데이터가 아니라 사용자가 직접 품목, 별칭, 거래처별 단가를 관리"
+      },
+      {
+        "item": "8b 실사용 DB 저장 실측",
+        "plain": "로그인 후 주문 확정→새로고침→주문 목록 유지 확인이 아직 남음"
+      },
+      {
+        "item": "DB 기반 합산표/명세서 재출력",
+        "plain": "현재 데모 화면 흐름은 좋지만 저장된 DB 장부에서 다시 꺼내는 8c 연결은 다음"
+      },
+      {
+        "item": "서버 PDF 생성",
+        "plain": "현재 인쇄는 브라우저 인쇄창(window.print) 단계. PDF 파일 생성은 2차"
+      }
     ]
   },
   "checklist": [
-    { "item": "root npm test", "plain": "옛 정적 데모 회귀 테스트", "result": "통과 5/5" },
-    { "item": "web npm test", "plain": "앱 계산/파싱/합산 자동 테스트", "result": "통과 32/32" },
-    { "item": "web npm run build", "plain": "배포용 빌드가 깨지지 않는지", "result": "성공" },
-    { "item": "web npm audit --audit-level=low", "plain": "알려진 보안 취약점 검사", "result": "0건" },
-    { "item": ".env.local Git 미추적", "plain": "비밀키가 저장소에 안 올라가는지", "result": "확인(미추적)" },
-    { "item": "Supabase SQL 0001/0002/0003 적용", "plain": "장부 테이블/잠금/회사생성 함수 설치", "result": "적용 성공" },
-    { "item": "로그인 성공", "plain": "이메일 매직링크로 입장", "result": "성공" },
-    { "item": "회사 생성 성공", "plain": "'히든식품' 회사 등록", "result": "성공" },
-    { "item": "데모 진입 성공", "plain": "로그인+회사 후 앱 화면 진입", "result": "성공" },
-    { "item": "Supabase 회사/멤버 row 확인", "plain": "장부에 회사가 진짜 기록됐는지 SQL로 확인", "result": "성공 — 히든식품 / role=owner" },
-    { "item": "비로그인(anon) 조회 차단", "plain": "로그인 없이 공개 키로 회사 데이터가 보이는지", "result": "차단 확인 — [] 반환" },
-    { "item": "RLS policy 존재 확인", "plain": "ordermoa_* 테이블마다 잠금 규칙이 설치됐는지", "result": "확인 — 테이블별 policy 존재" },
-    { "item": "A/B 회사 격리 select 실측", "plain": "다른 회사 사용자엔 히든식품 데이터가 안 보이는지", "result": "성공 — 회사/멤버/거래처 0/0/0" },
-    { "item": "A회사 위조 insert 차단", "plain": "다른 회사 사용자가 히든식품에 몰래 넣기 시도", "result": "차단 성공 — RLS 오류 42501" }
+    {
+      "item": "root npm test",
+      "plain": "정적 데모 회귀 테스트",
+      "result": "통과 5/5"
+    },
+    {
+      "item": "web npm test",
+      "plain": "파서/합산/검색/주문 저장 빌더 자동 테스트",
+      "result": "통과 77/77"
+    },
+    {
+      "item": "web npm run build",
+      "plain": "배포용 빌드가 깨지지 않는지",
+      "result": "성공"
+    },
+    {
+      "item": "npm audit --audit-level=low",
+      "plain": "알려진 보안 취약점 검사",
+      "result": "0건"
+    },
+    {
+      "item": "local web",
+      "plain": "현재 앱 확인 주소",
+      "result": "http://localhost:3010 응답 200"
+    },
+    {
+      "item": "Supabase SQL 0001/0002/0003",
+      "plain": "장부 테이블/RLS/회사생성 함수 설치",
+      "result": "적용 성공"
+    },
+    {
+      "item": "8a RLS 검증",
+      "plain": "회사 row, anon 차단, policy, A/B 격리, 위조 insert 차단",
+      "result": "통과"
+    },
+    {
+      "item": "민감정보",
+      "plain": "service role key 커밋/번들 포함 여부",
+      "result": "미포함"
+    }
   ],
   "deferred": [
-    { "item": "미수금/입금 본격 관리", "category": "2차", "plain": "1차는 수동 체크 개념만" },
-    { "item": "세금계산서 발행(홈택스)", "category": "2차", "plain": "근거 금액 데이터만 1차에 보존" },
-    { "item": "PDF 파일 생성", "category": "2차", "plain": "1차는 브라우저 인쇄로 충분" },
-    { "item": "OCR/사진 인식", "category": "제외", "plain": "정확도 리스크" },
-    { "item": "카카오톡 자동 읽기", "category": "제외", "plain": "정책/권한 리스크" },
-    { "item": "이카운트 연동", "category": "제외", "plain": "대체가 아니라 보조로 시작" },
-    { "item": "매입처별 발주 저장/기본 매입처", "category": "2차", "plain": "1차는 합산표+복사 문장까지" },
-    { "item": "정확한 회계 마진(원가/재고/세무)", "category": "2차", "plain": "1차는 기준 매입단가 참고 마진만" },
-    { "item": "단가 변경 이력", "category": "2차", "plain": "현재 단가만 관리" },
-    { "item": "직원 권한 UI(staff)", "category": "2차", "plain": "스키마만 준비됨" },
-    { "item": "거래처 주문 링크", "category": "보류", "plain": "MVP 검증 후 실험" }
+    {
+      "item": "미수금/입금 본격 관리",
+      "category": "2차",
+      "plain": "1차는 주문·합산·명세서 흐름 검증 우선"
+    },
+    {
+      "item": "세금계산서 발행",
+      "category": "2차",
+      "plain": "근거 데이터는 보존하되 직접 발행은 나중"
+    },
+    {
+      "item": "PDF 파일 생성",
+      "category": "2차",
+      "plain": "현재는 브라우저 인쇄. 서버 PDF는 추후"
+    },
+    {
+      "item": "OCR/사진 인식",
+      "category": "제외",
+      "plain": "정확도와 운영 리스크가 커서 후순위"
+    },
+    {
+      "item": "카카오톡 자동 읽기",
+      "category": "제외",
+      "plain": "정책/권한 리스크. 지금은 복사→붙여넣기"
+    },
+    {
+      "item": "이카운트 연동",
+      "category": "제외",
+      "plain": "전체 ERP 대체가 아니라 좁은 MVP 검증 우선"
+    },
+    {
+      "item": "매입처별 원가 이력/복수 매입처 견적",
+      "category": "2차",
+      "plain": "1차는 기본 매입처와 발주 문장 분리까지"
+    },
+    {
+      "item": "정확 회계 마진/재고평가",
+      "category": "2차",
+      "plain": "1차 예상 마진은 참고값"
+    },
+    {
+      "item": "직원 권한 UI",
+      "category": "2차",
+      "plain": "스키마 기반은 있으나 운영 화면은 나중"
+    }
   ],
   "next": [
-    { "id": "8b", "name": "주문 저장/조회/기간 집계", "why": "8a-검증(잠금)이 전부 통과돼 이제 안전하게 데이터를 쌓을 수 있다. 핵심 가치가 '기록이 남는다'로 완성되는 단계. 주문 확정→ordermoa_orders/items 저장→새로고침 후에도 유지.", "effort": "중간(1세션)" },
-    { "id": "8c", "name": "합산표/거래명세서 DB 연결", "why": "저장된 주문으로 합산표·명세서 재출력. 8b 위에 얹는 조회 작업.", "effort": "중간" }
+    {
+      "id": "A",
+      "name": "기준정보 관리 1차",
+      "why": "지금 사용자가 바로 느끼는 불편은 '매입처/품목/단가를 내가 바꿀 수 있나'입니다. 매입처 이름 수정, 품목별 기본 매입처 지정, 품목/별칭/단가 관리 화면을 먼저 만들면 샘플 데모에서 실제 운영 도구로 넘어갑니다.",
+      "effort": "중간"
+    },
+    {
+      "id": "B",
+      "name": "8b 실사용 DB 저장 실측/보강",
+      "why": "이메일 rate limit을 피하는 개발용 진입은 생겼지만, 실제 로그인 상태에서 주문 저장→새로고침 유지 확인은 마무리해야 합니다.",
+      "effort": "짧음~중간"
+    },
+    {
+      "id": "C",
+      "name": "8c DB 기반 합산표/명세서 재출력/월 합계",
+      "why": "저장된 주문 장부에서 합산표와 거래명세서를 다시 꺼내고, 거래처별 일/월 금액을 보는 단계입니다.",
+      "effort": "중간"
+    },
+    {
+      "id": "D",
+      "name": "실제 발주 테스트 라운드",
+      "why": "엑셀에서 뽑은 실제 발주품목으로 긴 주문을 여러 번 넣어보고 파서/검색/매입처 분리가 현장감 있게 맞는지 확인합니다.",
+      "effort": "반복"
+    }
   ]
 }
