@@ -395,7 +395,7 @@ export default function HomePage() {
         setRawText("");
         setCurrentOrderId(saved.id);
         setView("orders");
-        flash("주문이 저장되었습니다. 새로고침해도 유지됩니다.");
+        flash("주문이 저장되었습니다. 주문 목록에서 명세서를 보거나 합산표로 이동하세요.");
       } catch {
         flash("주문 저장에 실패했습니다. 네트워크 확인 후 [주문 확정]을 다시 눌러주세요.");
       } finally {
@@ -434,7 +434,7 @@ export default function HomePage() {
     setRawText("");
     setCurrentOrderId(order.id);
     setView("orders");
-    flash("주문이 확정되었습니다. (데모 모드 — 새로고침 시 초기화)");
+    flash("주문이 확정되었습니다. 주문 목록에서 명세서를 보거나 합산표로 이동하세요. (데모 모드 — 새로고침 시 초기화)");
   }
 
   // ---- 합산표 (매입처 발주용) ----
@@ -756,7 +756,11 @@ export default function HomePage() {
             {aggCustomer === "all" ? "전체 거래처" : customers.find((c) => c.id === aggCustomer)?.name}
           </p>
           {aggregate.length === 0 ? (
-            <p className="muted">대상 주문이 없습니다. 발주를 붙여넣고 확정해보세요.</p>
+            <div className="empty-state">
+              <strong>합산할 주문이 없습니다.</strong>
+              <p className="muted">발주를 먼저 확정하면 거래처별 수량이 자동으로 합쳐집니다.</p>
+              <button className="primary" onClick={() => setView("paste")}>발주 붙여넣기</button>
+            </div>
           ) : (
             <>
               <div className="table-wrap">
@@ -816,7 +820,11 @@ export default function HomePage() {
         <section className="card">
           <h2>주문 목록</h2>
           {orders.length === 0 ? (
-            <p className="muted">확정된 주문이 없습니다.</p>
+            <div className="empty-state">
+              <strong>확정된 주문이 없습니다.</strong>
+              <p className="muted">카톡/문자 발주를 붙여넣고 확인하면 이곳에 주문이 쌓입니다.</p>
+              <button className="primary" onClick={() => setView("paste")}>발주 붙여넣기</button>
+            </div>
           ) : (
             <div className="table-wrap">
               <table>
@@ -922,6 +930,11 @@ function ReviewView(props: {
 
   return (
     <section className="card">
+      <div className="steps no-print" aria-label="주문 처리 단계">
+        <span>1 붙여넣기</span>
+        <span className="active">2 확인</span>
+        <span>3 확정</span>
+      </div>
       <h2>파싱 결과 확인 · {customerName}</h2>
       <p className="muted">
         품목/수량/단위/단가를 직접 고칠 수 있습니다. 미매칭(빨강)·수량 확인(노랑)이 남으면 확정할 수

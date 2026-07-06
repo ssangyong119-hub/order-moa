@@ -171,6 +171,18 @@ td input.qty,td input.price{max-width:96px}
   padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:.88rem;
 }
 .ready-list li:last-child{border-bottom:none}
+.empty-state{
+  border:1px dashed var(--line);border-radius:var(--radius);
+  background:#fbfcfd;padding:18px;text-align:left;
+}
+.empty-state p{margin:6px 0 12px}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.steps span{
+  display:inline-flex;align-items:center;min-height:28px;
+  padding:4px 10px;border-radius:999px;
+  background:#eef2f7;color:var(--soft);font-size:.78rem;font-weight:650;
+}
+.steps span.active{background:var(--accent-soft);color:var(--accent-dark)}
 
 /* ── 거래명세서(인쇄 문서) — 앱 테마와 분리된 문서 스타일 유지 ── */
 .note-doc{background:#fff;color:#000;border:1px solid #999;padding:20px}
