@@ -1269,3 +1269,29 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
   - root `npm test` 통과 · web `npm test` 78/78 · `npm run build` 성공 · `npm audit --audit-level=low` 0건.
 - 커밋하지 않음 — Codex 검수·커밋 판단 대기.
 - [위험] progress JSON 스키마 변경으로 이전 형식을 기억하는 세션은 혼동 가능(단일 소스 원칙은 유지, 생성 스크립트가 새 스키마의 기준). [나중] suppliers 마이그레이션 초안은 Codex 승인 후 별도 단위(W05).
+
+## 2026-07-07 Codex (W02 거래처 CRUD + W05/W06 매입처 DB화 초안)
+
+- 선행:
+  - Claude의 헌장 고정화/진행현황 세분화 문서를 검수 후 `34d30df docs: refine ordermoa roadmap progress board`로 커밋.
+  - 진행현황 HTML은 `http://127.0.0.1:3025/order-moa-progress-dashboard.html`로 열어 확인.
+- W02 구현:
+  - `web/src/lib/customer-store.ts` 신규 — 거래처 입력 정규화/검증, insert/update payload, Supabase create/update/archive 저장소.
+  - `web/src/lib/customer-store.test.ts` 신규 — 거래처명 필수, nullable 필드, insert/update payload 테스트.
+  - `web/src/app/customer-management-view.tsx` 신규 — 거래처 검색, 새 거래처 추가, 수정, 보관 UI.
+  - `web/src/app/page.tsx` — 사이드바 `거래처 관리`를 준비 중에서 실제 화면으로 전환. 데모 모드는 메모리 반영, DB 모드는 `ordermoa_customers`에 저장/보관.
+- W05/W06 구현:
+  - `web/supabase/migrations/0004_suppliers.sql` 신규 — `ordermoa_suppliers` 테이블, `ordermoa_products.purchase_supplier_id`, RLS 정책, 교차회사 트리거.
+  - `web/src/lib/domain/types.ts` — `Supplier` 타입 추가, Product 매입처 주석 현행화.
+  - `web/src/lib/sample-data.ts` — 샘플 매입처를 `Supplier[]`로 타입 지정하고 `loadSampleData()`에 포함.
+  - `web/src/lib/order-store.ts` — DB 로드/시드에 suppliers 포함. 부분 시드 상태에서 매입처 누락분을 보충하고 기존 품목의 기본 매입처 연결을 업데이트.
+  - 미매칭 신규 품목 즉석 등록 시 기본 매입처를 DB 모드에서는 `ordermoa_suppliers`에 먼저 저장한 뒤 `ordermoa_products.purchase_supplier_id`로 연결. 데모 모드도 즉시 매입처 목록에 반영.
+- 진행현황:
+  - `docs/order-moa-progress-data.json` — W02 완료, W05/W06 진행 중(마이그레이션 적용 실측 대기)으로 갱신.
+  - `scripts/generate-progress.py` 실행으로 HTML/XLSX 재생성.
+- 검증(중간):
+  - web `npm test` 83/83 통과.
+  - web `npm run build` 성공.
+- 남은 확인:
+  - root `npm test`, web audit, 브라우저 스모크, 최종 커밋.
+  - Supabase 실제 적용은 아직 안 함. 적용 순서: 기존 0001~0003 이후 `0004_suppliers.sql`.

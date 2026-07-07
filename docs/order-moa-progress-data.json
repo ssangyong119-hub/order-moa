@@ -5,12 +5,13 @@
     "updated": "2026-07-07",
     "branch": "codex/integrate-mvp-docs-web",
     "charter": "docs/order-moa-system-meta-prompt.md (헌장 — 차수·범위의 기준. 이 진행판과 어긋나면 헌장이 우선)",
-    "currentFocus": "기준정보 관리 1차 (거래처/품목·별칭/단가 CRUD) + 매입처 DB화 설계 승인",
+    "currentFocus": "W02 거래처 관리 CRUD 완료. W05/W06 매입처 DB화 코드·마이그레이션 준비 완료, Supabase 적용 실측 대기.",
     "recentCommits": [
       "fc59baa docs: add ordermoa system planning charter",
       "a97dca8 feat: add inline product creation from unmatched orders",
       "8d95da6 feat: refine supplier purchase selection progress",
-      "490ca0b feat: add product search and supplier purchase grouping"
+      "490ca0b feat: add product search and supplier purchase grouping",
+      "34d30df docs: refine ordermoa roadmap progress board"
     ],
     "supabase": "신규 Supabase 프로젝트 한도 때문에 기존 yangsan-inventory 프로젝트를 공유. 충돌 방지를 위해 모든 오더모아 DB 객체는 ordermoa_ 접두사 사용.",
     "statusLegend": {
@@ -60,12 +61,12 @@
     {
       "id": "W02",
       "name": "기준정보 CRUD — 거래처 관리",
-      "status": "다음",
+      "status": "완료",
       "phase": "1차",
-      "plain": "가람식당 같은 거래처(파는 곳)를 사용자가 직접 추가·수정·보관하는 화면. 지금은 샘플 5곳이 박혀 있어 못 고칩니다.",
+      "plain": "가람식당 같은 거래처(파는 곳)를 사용자가 직접 추가·수정·보관하는 화면. 데모 모드와 Supabase 모드 저장 로직을 모두 연결했습니다.",
       "why": "샘플 데모에서 실제 운영 도구로 넘어가는 첫 단추. 내 거래처를 넣어야 발주 붙여넣기가 진짜 일이 됩니다.",
       "prereq": "없음 (DB 테이블·잠금 규칙은 이미 준비됨). page.tsx 화면 분리와 함께 진행 권장.",
-      "verify": "거래처 추가→새로고침 후 유지, 수정 반영, 보관(숨김) 동작. web npm test + build 통과.",
+      "verify": "거래처 추가/수정/보관 화면 구현. web npm test 83/83 + build 통과. Supabase 실사용 새로고침 확인은 다음 현장 실측에서 진행.",
       "docs": ["web/src/app/page.tsx", "web/src/lib/order-store.ts", "docs/screen-specification.md(S5)"]
     },
     {
@@ -93,23 +94,23 @@
     {
       "id": "W05",
       "name": "매입처 DB화 — suppliers 테이블 설계",
-      "status": "다음",
+      "status": "진행 중",
       "phase": "1차 보강",
-      "plain": "야채매입처 같은 매입처(사 오는 곳)를 DB에 정식 저장하는 설계. 지금은 화면에만 있어서 새로고침하면 매입처 지정이 사라질 수 있습니다.",
+      "plain": "야채매입처 같은 매입처(사 오는 곳)를 DB에 정식 저장하는 마이그레이션을 준비했습니다. Supabase SQL 적용과 RLS 실측만 남았습니다.",
       "why": "매입처별 발주 문장이 오더모아의 강점인데, 그 근거가 DB에 없으면 반쪽 기능입니다. 8c 전에 하는 것을 권장.",
-      "prereq": "Codex 마이그레이션 승인 (ordermoa_suppliers + RLS + 교차회사 트리거 + unique 이름).",
-      "verify": "마이그레이션 적용 후 RLS A/B 격리 확인, 테이블 생성 확인.",
+      "prereq": "0004_suppliers.sql을 Supabase SQL Editor에서 적용.",
+      "verify": "마이그레이션 파일 작성, RLS/교차회사 트리거 포함, web npm test 83/83 + build 통과. 실제 Supabase 적용 후 테이블/RLS 확인 필요.",
       "docs": ["docs/order-moa-system-meta-prompt.md(§6.4)", "docs/db-schema-definition.md", "web/supabase/migrations/"]
     },
     {
       "id": "W06",
       "name": "매입처 DB화 — 품목별 기본 매입처 연결",
-      "status": "다음",
+      "status": "진행 중",
       "phase": "1차 보강",
-      "plain": "품목마다 '이건 야채매입처에서 산다'를 DB에 저장(products에 매입처 연결 컬럼 추가). 신규 품목 즉석 등록의 기본 매입처도 진짜 저장됩니다.",
+      "plain": "품목마다 '이건 야채매입처에서 산다'를 DB에 저장하는 코드 연결을 넣었습니다. 신규 품목 즉석 등록의 기본 매입처도 DB에 저장되도록 준비했습니다.",
       "why": "이게 저장돼야 합산표의 매입처별 발주 문장이 새로고침 후에도 똑같이 나옵니다.",
       "prereq": "W05(테이블) 적용 완료.",
-      "verify": "품목의 매입처 지정→F5 후 유지→합산표 매입처별 문장에 반영. 테스트+빌드 통과.",
+      "verify": "시드 보충/품목 매입처 연결 테스트 추가. web npm test 83/83 + build 통과. Supabase 0004 적용 후 F5 유지 실측 필요.",
       "docs": ["web/src/lib/order-store.ts", "web/src/lib/product-registration.ts", "web/src/lib/aggregate.ts"]
     },
     {
@@ -225,7 +226,7 @@
   ],
   "checklist": [
     { "item": "root npm test", "plain": "정적 데모 회귀 테스트", "result": "통과 5/5" },
-    { "item": "web npm test", "plain": "파서/합산/검색/주문 저장 빌더 자동 테스트", "result": "통과 78/78" },
+    { "item": "web npm test", "plain": "파서/합산/검색/주문 저장 빌더/거래처·매입처 보강 자동 테스트", "result": "통과 83/83" },
     { "item": "web npm run build", "plain": "배포용 빌드가 깨지지 않는지", "result": "성공" },
     { "item": "npm audit --audit-level=low", "plain": "알려진 보안 취약점 검사", "result": "0건" },
     { "item": "Supabase SQL 0001/0002/0003", "plain": "장부 테이블/RLS/회사생성 함수 설치", "result": "적용 성공" },

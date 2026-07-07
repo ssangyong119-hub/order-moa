@@ -6,9 +6,14 @@
 //  - orders에는 delete 정책이 없음 → 저장 보상은 status='cancelled'(soft)로 처리.
 // 데모 모드(Supabase 미설정)는 이 파일을 사용하지 않는다(기존 메모리 흐름 유지).
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Customer, CustomerPrice, Product } from "./domain/types";
+import type { Customer, CustomerPrice, Product, Supplier } from "./domain/types";
 import { estimatedOrderMargin, sumAmounts } from "./calculations";
-import { sampleCustomers, sampleCustomerPrices, sampleProducts } from "./sample-data";
+import {
+  sampleCustomers,
+  sampleCustomerPrices,
+  sampleProducts,
+  samplePurchaseSuppliers,
+} from "./sample-data";
 
 export interface OrderLine {
   productId: string;
@@ -110,6 +115,11 @@ export interface NamedRow {
   name: string;
 }
 
+export interface ExistingProductRow extends NamedRow {
+  purchase_supplier_id?: string | null;
+  purchaseSupplierId?: string | null;
+}
+
 /**
  * 시드 보정 rows — 부분 시드 상태에서도 안전하게 재시도 가능하도록,
  * 이미 존재하는 거래처/품목(이름 기준)은 재사용하고 **누락분만** insert 대상으로 만든다.
@@ -119,14 +129,19 @@ export interface NamedRow {
 export function diffSeedRows(
   companyId: string,
   existingCustomers: NamedRow[],
-  existingProducts: NamedRow[],
+  existingProducts: ExistingProductRow[],
+  existingSuppliers: NamedRow[] = [],
   makeId: () => string = () => crypto.randomUUID(),
 ) {
   const custByName = new Map(existingCustomers.map((r) => [r.name, r.id]));
   const prodByName = new Map(existingProducts.map((r) => [r.name, r.id]));
+  const supplierByName = new Map(existingSuppliers.map((r) => [r.name, r.id]));
 
   const custId = new Map(
     sampleCustomers.map((c) => [c.id, custByName.get(c.name) ?? makeId()]),
+  );
+  const supplierId = new Map(
+    samplePurchaseSuppliers.map((s) => [s.id, supplierByName.get(s.name) ?? makeId()]),
   );
   const prodId = new Map(
     sampleProducts.map((p) => [p.id, prodByName.get(p.name) ?? makeId()]),
@@ -142,6 +157,14 @@ export function diffSeedRows(
         name: c.name,
         memo: c.memo ?? null,
       })),
+    suppliers: samplePurchaseSuppliers
+      .filter((s) => !supplierByName.has(s.name))
+      .map((s) => ({
+        id: supplierId.get(s.id)!,
+        company_id: companyId,
+        name: s.name,
+        memo: s.memo ?? null,
+      })),
     products: sampleProducts
       .filter((p) => !prodByName.has(p.name))
       .map((p) => ({
@@ -150,7 +173,15 @@ export function diffSeedRows(
         name: p.name,
         base_unit: p.baseUnit,
         base_purchase_price: p.basePurchasePrice ?? null,
+        purchase_supplier_id: p.purchaseSupplierId ? supplierId.get(p.purchaseSupplierId) ?? null : null,
       })),
+    productSupplierUpdates: sampleProducts.flatMap((p) => {
+      const existing = existingProducts.find((row) => row.name === p.name);
+      const targetSupplierId = p.purchaseSupplierId ? supplierId.get(p.purchaseSupplierId) ?? null : null;
+      const currentSupplierId = existing?.purchase_supplier_id ?? existing?.purchaseSupplierId ?? null;
+      if (!existing || !targetSupplierId || currentSupplierId === targetSupplierId) return [];
+      return [{ id: existing.id, company_id: companyId, purchase_supplier_id: targetSupplierId }];
+    }),
     // 전체 반환 — unique 키 기반 upsert로 멱등 처리(사용자 수정값은 ignoreDuplicates로 보존)
     aliases: sampleProducts.flatMap((p) =>
       (p.aliases ?? []).map((alias) => ({
@@ -170,20 +201,21 @@ export function diffSeedRows(
 
 /** 빈 회사 기준 전체 시드 rows (diffSeedRows의 특수형 — 기존 테스트/호출 호환). */
 export function buildSeedRows(companyId: string, makeId: () => string = () => crypto.randomUUID()) {
-  return diffSeedRows(companyId, [], [], makeId);
+  return diffSeedRows(companyId, [], [], [], makeId);
 }
 
 // ── repo (Supabase 호출) ──
 
 export interface CompanyData {
   customers: Customer[];
+  suppliers: Supplier[];
   products: Product[];
   customerPrices: CustomerPrice[];
   seeded: boolean;
 }
 
 async function fetchCompanyData(db: SupabaseClient, companyId: string) {
-  const [cust, prod, alias, price] = await Promise.all([
+  const [cust, supplier, prod, alias, price] = await Promise.all([
     db
       .from("ordermoa_customers")
       .select("id,name,phone,address,memo")
@@ -191,8 +223,14 @@ async function fetchCompanyData(db: SupabaseClient, companyId: string) {
       .is("archived_at", null)
       .order("created_at", { ascending: true }),
     db
+      .from("ordermoa_suppliers")
+      .select("id,name,memo")
+      .eq("company_id", companyId)
+      .is("archived_at", null)
+      .order("created_at", { ascending: true }),
+    db
       .from("ordermoa_products")
-      .select("id,name,base_unit,base_purchase_price")
+      .select("id,name,base_unit,base_purchase_price,purchase_supplier_id")
       .eq("company_id", companyId)
       .is("archived_at", null)
       .order("created_at", { ascending: true }),
@@ -202,7 +240,7 @@ async function fetchCompanyData(db: SupabaseClient, companyId: string) {
       .select("customer_id,product_id,sale_price")
       .eq("company_id", companyId),
   ]);
-  const err = cust.error ?? prod.error ?? alias.error ?? price.error;
+  const err = cust.error ?? supplier.error ?? prod.error ?? alias.error ?? price.error;
   if (err) throw err;
 
   const aliasByProduct = new Map<string, string[]>();
@@ -218,11 +256,19 @@ async function fetchCompanyData(db: SupabaseClient, companyId: string) {
     address: c.address ?? undefined,
     memo: c.memo ?? undefined,
   }));
+  const suppliers: Supplier[] = (supplier.data ?? []).map((s) => ({
+    id: s.id,
+    name: s.name,
+    memo: s.memo ?? undefined,
+  }));
+  const supplierById = new Map(suppliers.map((s) => [s.id, s.name]));
   const products: Product[] = (prod.data ?? []).map((p) => ({
     id: p.id,
     name: p.name,
     baseUnit: p.base_unit,
     aliases: aliasByProduct.get(p.id) ?? [],
+    purchaseSupplierId: p.purchase_supplier_id ?? null,
+    purchaseSupplierName: p.purchase_supplier_id ? supplierById.get(p.purchase_supplier_id) ?? null : null,
     basePurchasePrice: p.base_purchase_price,
   }));
   const customerPrices: CustomerPrice[] = (price.data ?? []).map((cp) => ({
@@ -230,7 +276,7 @@ async function fetchCompanyData(db: SupabaseClient, companyId: string) {
     productId: cp.product_id,
     price: cp.sale_price,
   }));
-  return { customers, products, customerPrices };
+  return { customers, suppliers, products, customerPrices };
 }
 
 async function countRows(db: SupabaseClient, table: string, companyId: string): Promise<number> {
@@ -249,21 +295,35 @@ async function countRows(db: SupabaseClient, table: string, companyId: string): 
  * 반환: 이번 호출에서 실제로 무언가를 설치했는지.
  */
 export async function ensureSeed(db: SupabaseClient, companyId: string): Promise<boolean> {
-  const [cust, prod] = await Promise.all([
+  const [cust, supplier, prod] = await Promise.all([
     db.from("ordermoa_customers").select("id,name").eq("company_id", companyId),
-    db.from("ordermoa_products").select("id,name").eq("company_id", companyId),
+    db.from("ordermoa_suppliers").select("id,name").eq("company_id", companyId),
+    db.from("ordermoa_products").select("id,name,purchase_supplier_id").eq("company_id", companyId),
   ]);
   if (cust.error) throw cust.error;
+  if (supplier.error) throw supplier.error;
   if (prod.error) throw prod.error;
 
-  const rows = diffSeedRows(companyId, cust.data ?? [], prod.data ?? []);
+  const rows = diffSeedRows(companyId, cust.data ?? [], prod.data ?? [], supplier.data ?? []);
 
   if (rows.customers.length > 0) {
     const r = await db.from("ordermoa_customers").insert(rows.customers);
     if (r.error) throw r.error;
   }
+  if (rows.suppliers.length > 0) {
+    const r = await db.from("ordermoa_suppliers").insert(rows.suppliers);
+    if (r.error) throw r.error;
+  }
   if (rows.products.length > 0) {
     const r = await db.from("ordermoa_products").insert(rows.products);
+    if (r.error) throw r.error;
+  }
+  for (const patch of rows.productSupplierUpdates) {
+    const r = await db
+      .from("ordermoa_products")
+      .update({ purchase_supplier_id: patch.purchase_supplier_id })
+      .eq("company_id", companyId)
+      .eq("id", patch.id);
     if (r.error) throw r.error;
   }
   const a = await db
@@ -275,7 +335,7 @@ export async function ensureSeed(db: SupabaseClient, companyId: string): Promise
     .upsert(rows.prices, { onConflict: "company_id,customer_id,product_id", ignoreDuplicates: true });
   if (cp.error) throw cp.error;
 
-  return rows.customers.length > 0 || rows.products.length > 0;
+  return rows.customers.length > 0 || rows.suppliers.length > 0 || rows.products.length > 0 || rows.productSupplierUpdates.length > 0;
 }
 
 /**
@@ -284,13 +344,14 @@ export async function ensureSeed(db: SupabaseClient, companyId: string): Promise
  * 하나라도 비어 있으면 ensureSeed로 누락분을 안전하게 보충(멱등 → 실패 시 재시도 가능).
  */
 export async function loadCompanyData(db: SupabaseClient, companyId: string): Promise<CompanyData> {
-  const [nCust, nProd, nPrice] = await Promise.all([
+  const [nCust, nSupplier, nProd, nPrice] = await Promise.all([
     countRows(db, "ordermoa_customers", companyId),
+    countRows(db, "ordermoa_suppliers", companyId),
     countRows(db, "ordermoa_products", companyId),
     countRows(db, "ordermoa_customer_prices", companyId),
   ]);
   let seeded = false;
-  if (nCust === 0 || nProd === 0 || nPrice === 0) {
+  if (nCust === 0 || nSupplier === 0 || nProd === 0 || nPrice === 0) {
     seeded = await ensureSeed(db, companyId);
   }
   const data = await fetchCompanyData(db, companyId);

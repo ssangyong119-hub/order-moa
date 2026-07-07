@@ -4,7 +4,7 @@
 // 인증/회사는 Supabase 게이트(8a)로 동작하며, env 미설정 시 데모 모드로 폴백.
 // 주문/샘플 데이터는 Supabase 설정 시 DB 저장·조회(8b), 미설정 시 데모 메모리 모드. PDF 없음(브라우저 인쇄).
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import type { Customer, CustomerPrice, Product } from "@/lib/domain/types";
+import type { Customer, CustomerPrice, Product, Supplier } from "@/lib/domain/types";
 import {
   canConfirm,
   canRegisterAlias,
@@ -24,6 +24,12 @@ import {
 import { loadSampleData, sampleCustomers, type SampleOrderExample } from "@/lib/sample-data";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import {
+  archiveCustomer as archiveCustomerInDb,
+  createCustomer as createCustomerInDb,
+  updateCustomer as updateCustomerInDb,
+  type CustomerFormInput,
+} from "@/lib/customer-store";
+import {
   loadCompanyData,
   loadOrders,
   saveOrder,
@@ -40,6 +46,7 @@ import {
   formatSupplierPurchaseText,
 } from "@/lib/aggregate";
 import { searchProductsForOrder } from "@/lib/product-search";
+import { CustomerManagementView } from "./customer-management-view";
 import {
   CompanySetupView,
   LoginView,
@@ -47,12 +54,13 @@ import {
   type CompanySession,
 } from "./auth-gate";
 
-type View = "dashboard" | "paste" | "review" | "aggregate" | "orders" | "note";
+type View = "dashboard" | "paste" | "review" | "aggregate" | "orders" | "note" | "customers";
 
 /** 앱 데이터 묶음 — 데모 모드(샘플)와 DB 모드(Supabase 로드) 공용 형태 */
 interface AppData {
   company: { name: string; businessNumber: string; phone: string; address: string };
   customers: Customer[];
+  suppliers: Supplier[];
   products: Product[];
   customerPrices: CustomerPrice[];
   orderExamples: SampleOrderExample[];
@@ -82,7 +90,7 @@ const NAV_GROUPS: Array<{
     label: "기준정보",
     icon: "◇",
     items: [
-      { label: "거래처 관리", icon: "□", soon: true, phase: "1차" },
+      { view: "customers", label: "거래처 관리", icon: "□" },
       { label: "품목·별칭 관리", icon: "◇", soon: true, phase: "1차" },
       { label: "단가 관리", icon: "₩", soon: true, phase: "1차" },
     ],
@@ -98,6 +106,7 @@ const VIEW_TITLES: Record<View, string> = {
   aggregate: "품목별 합산표",
   orders: "주문 목록",
   note: "거래명세서",
+  customers: "거래처 관리",
 };
 
 function Shell(props: {
@@ -171,6 +180,7 @@ export default function HomePage() {
   const [data, setData] = useState<AppData | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [customerPrices, setCustomerPrices] = useState<CustomerPrice[]>([]);
   const [examples, setExamples] = useState<SampleOrderExample[]>([]);
 
@@ -207,6 +217,7 @@ export default function HomePage() {
         const ords = await loadOrders(db, companyId, loaded.products);
         if (!live) return;
         setCustomers(loaded.customers);
+        setSuppliers(loaded.suppliers);
         setProducts(loaded.products);
         setCustomerPrices(loaded.customerPrices);
         // 발주 예시의 샘플 거래처 id → DB 거래처 id 매핑(이름 기준)
@@ -227,6 +238,7 @@ export default function HomePage() {
             address: "",
           },
           customers: loaded.customers,
+          suppliers: loaded.suppliers,
           products: loaded.products,
           customerPrices: loaded.customerPrices,
           orderExamples: mappedExamples,
@@ -252,6 +264,7 @@ export default function HomePage() {
     setData(loaded);
     setProducts(loaded.products);
     setCustomers(loaded.customers);
+    setSuppliers(loaded.suppliers);
     setCustomerPrices(loaded.customerPrices);
     setExamples(loaded.orderExamples);
     setSelectedCustomerId(loaded.customers[0]?.id ?? "");
@@ -377,11 +390,22 @@ export default function HomePage() {
   }
 
   function createProductFromLine(line: ParsedLine, input: Omit<NewProductRegistrationInput, "customerId">) {
+    const supplierName = input.purchaseSupplierName?.trim() ?? "";
+    const existingSupplier = supplierName ? suppliers.find((s) => s.name === supplierName) : undefined;
     const result = buildNewProductRegistration(
       line,
       { ...input, customerId: selectedCustomerId },
       () => crypto.randomUUID(),
     );
+    if (existingSupplier) {
+      result.product.purchaseSupplierId = existingSupplier.id;
+      result.product.purchaseSupplierName = existingSupplier.name;
+    } else if (!db && supplierName) {
+      const demoSupplier = { id: crypto.randomUUID(), name: supplierName };
+      result.product.purchaseSupplierId = demoSupplier.id;
+      result.product.purchaseSupplierName = demoSupplier.name;
+      setSuppliers((prev) => [...prev, demoSupplier]);
+    }
     setProducts((prev) => [...prev, result.product]);
     if (result.customerPrice) {
       setCustomerPrices((prev) => [
@@ -398,12 +422,39 @@ export default function HomePage() {
       const client = db;
       const cid = companyId;
       void (async () => {
+        let purchaseSupplierId = existingSupplier?.id ?? null;
+        if (!purchaseSupplierId && supplierName) {
+          const supplierRes = await client
+            .from("ordermoa_suppliers")
+            .insert({ company_id: cid, name: supplierName })
+            .select("id,name,memo")
+            .single();
+          if (supplierRes.error) {
+            flash("매입처 저장에 실패했습니다. 품목은 매입처 미지정으로 저장됩니다.");
+          } else {
+            purchaseSupplierId = supplierRes.data.id as string;
+            const supplier: Supplier = {
+              id: supplierRes.data.id as string,
+              name: supplierRes.data.name as string,
+              memo: supplierRes.data.memo ?? undefined,
+            };
+            setSuppliers((prev) => (prev.some((s) => s.id === supplier.id) ? prev : [...prev, supplier]));
+            setProducts((prev) =>
+              prev.map((p) =>
+                p.id === result.product.id
+                  ? { ...p, purchaseSupplierId: supplier.id, purchaseSupplierName: supplier.name }
+                  : p,
+              ),
+            );
+          }
+        }
         const productInsert = await client.from("ordermoa_products").insert({
           id: result.product.id,
           company_id: cid,
           name: result.product.name,
           base_unit: result.product.baseUnit,
           base_purchase_price: result.product.basePurchasePrice ?? null,
+          purchase_supplier_id: purchaseSupplierId,
         });
         if (productInsert.error) {
           flash("품목이 화면에는 추가됐지만 DB 저장에 실패했습니다. 기준정보 화면에서 다시 확인해주세요.");
@@ -424,6 +475,49 @@ export default function HomePage() {
       })();
     }
     flash(`${result.product.name}을(를) 신규 품목으로 저장하고 현재 줄에 매칭했습니다.`);
+  }
+
+  function replaceCustomers(next: Customer[]) {
+    setCustomers(next);
+    setData((prev) => (prev ? { ...prev, customers: next } : prev));
+    if (!next.some((c) => c.id === selectedCustomerId)) {
+      setSelectedCustomerId(next[0]?.id ?? "");
+    }
+  }
+
+  async function saveCustomer(id: string | null, input: CustomerFormInput) {
+    if (db && companyId) {
+      const saved = id
+        ? await updateCustomerInDb(db, companyId, id, input)
+        : await createCustomerInDb(db, companyId, input);
+      replaceCustomers(
+        id
+          ? customers.map((c) => (c.id === id ? saved : c))
+          : [...customers, saved],
+      );
+      if (!selectedCustomerId) setSelectedCustomerId(saved.id);
+      flash(id ? "거래처를 수정했습니다." : "거래처를 추가했습니다.");
+      return;
+    }
+
+    const saved: Customer = {
+      id: id ?? crypto.randomUUID(),
+      name: input.name,
+      phone: input.phone || undefined,
+      address: input.address || undefined,
+      memo: input.memo || undefined,
+    };
+    replaceCustomers(id ? customers.map((c) => (c.id === id ? saved : c)) : [...customers, saved]);
+    if (!selectedCustomerId) setSelectedCustomerId(saved.id);
+    flash(id ? "거래처를 수정했습니다. (데모 모드)" : "거래처를 추가했습니다. (데모 모드)");
+  }
+
+  async function archiveCustomer(customer: Customer) {
+    if (db && companyId) {
+      await archiveCustomerInDb(db, companyId, customer.id);
+    }
+    replaceCustomers(customers.filter((c) => c.id !== customer.id));
+    flash(`${customer.name} 거래처를 보관했습니다.`);
   }
 
   async function confirmOrder() {
@@ -765,6 +859,15 @@ export default function HomePage() {
         </section>
       )}
 
+      {view === "customers" && (
+        <CustomerManagementView
+          customers={customers}
+          activeCustomerId={selectedCustomerId}
+          onSave={saveCustomer}
+          onArchive={archiveCustomer}
+        />
+      )}
+
       {view === "paste" && (
         <section className="card">
           <h2>발주 붙여넣기</h2>
@@ -820,7 +923,7 @@ export default function HomePage() {
           onSavePrice={savePrice}
           onRegisterAlias={registerAlias}
           onCreateProduct={createProductFromLine}
-          supplierNames={[...new Set(products.map((p) => p.purchaseSupplierName).filter(Boolean) as string[])]}
+          supplierNames={[...new Set(suppliers.map((s) => s.name))]}
           onUnit={(line, v) => updateLine(line.id, { unit: v })}
           onConfirm={confirmOrder}
           onBack={() => setView("paste")}

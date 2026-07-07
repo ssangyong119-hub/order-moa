@@ -7,7 +7,12 @@ import {
   toOrderInsert,
   type DbOrderRow,
 } from "./order-store";
-import { sampleCustomerPrices, sampleCustomers, sampleProducts } from "./sample-data";
+import {
+  sampleCustomerPrices,
+  sampleCustomers,
+  sampleProducts,
+  samplePurchaseSuppliers,
+} from "./sample-data";
 import type { Product } from "./domain/types";
 
 test("toOrderInsert: confirmed 주문 + 스냅샷 기준 필드", () => {
@@ -75,11 +80,12 @@ test("buildSeedRows: 샘플 전체를 회사 스코프 uuid로 매핑(참조 일
   let n = 0;
   const rows = buildSeedRows("comp1", () => `id-${++n}`);
   expect(rows.customers.length).toBe(sampleCustomers.length);
+  expect(rows.suppliers.length).toBe(samplePurchaseSuppliers.length);
   expect(rows.products.length).toBe(sampleProducts.length);
   expect(rows.prices.length).toBe(sampleCustomerPrices.length);
   expect(rows.aliases.length).toBe(sampleProducts.reduce((s, p) => s + (p.aliases?.length ?? 0), 0));
   // 모든 행이 같은 회사
-  for (const r of [...rows.customers, ...rows.products, ...rows.aliases, ...rows.prices]) {
+  for (const r of [...rows.customers, ...rows.suppliers, ...rows.products, ...rows.aliases, ...rows.prices]) {
     expect((r as { company_id: string }).company_id).toBe("comp1");
   }
   // 가격 행의 참조가 시드된 id 집합 안에 있는지(교차회사 트리거 통과 조건)
@@ -92,6 +98,12 @@ test("buildSeedRows: 샘플 전체를 회사 스코프 uuid로 매핑(참조 일
   for (const al of rows.aliases) {
     expect(prodIds.has(al.product_id)).toBe(true);
   }
+  const supplierIds = new Set(rows.suppliers.map((s) => s.id));
+  const productsWithSupplier = rows.products.filter((p) => p.purchase_supplier_id);
+  expect(productsWithSupplier.length).toBeGreaterThan(0);
+  for (const p of productsWithSupplier) {
+    expect(supplierIds.has(p.purchase_supplier_id!)).toBe(true);
+  }
   // 매입단가 nullable 유지(없는 품목은 null)
   const withNull = rows.products.filter((p) => p.base_purchase_price === null);
   expect(withNull.length).toBeGreaterThan(0);
@@ -101,7 +113,7 @@ test("부분 시드 오판 방지: customers만 존재하면 products/prices 누
   // 시나리오: 이전 시드가 customers insert 후 중단 → customers만 존재
   const existingCustomers = sampleCustomers.map((c, i) => ({ id: `old-c${i}`, name: c.name }));
   let n = 0;
-  const rows = diffSeedRows("comp1", existingCustomers, [], () => `new-${++n}`);
+  const rows = diffSeedRows("comp1", existingCustomers, [], [], () => `new-${++n}`);
 
   // 거래처는 이미 있으므로 재생성 0 (중복 생성 금지)
   expect(rows.customers.length).toBe(0);
@@ -126,12 +138,20 @@ test("부분 시드 오판 방지: customers만 존재하면 products/prices 누
 
 test("완전 시드 상태: insert 대상 0 + aliases/prices는 기존 id 기준 upsert rows만", () => {
   const existingCustomers = sampleCustomers.map((c, i) => ({ id: `c${i}`, name: c.name }));
-  const existingProducts = sampleProducts.map((p, i) => ({ id: `p${i}`, name: p.name }));
-  const rows = diffSeedRows("comp1", existingCustomers, existingProducts, () => {
+  const existingSuppliers = samplePurchaseSuppliers.map((s, i) => ({ id: `s${i}`, name: s.name }));
+  const supplierBySampleId = new Map(samplePurchaseSuppliers.map((s, i) => [s.id, `s${i}`]));
+  const existingProducts = sampleProducts.map((p, i) => ({
+    id: `p${i}`,
+    name: p.name,
+    purchase_supplier_id: p.purchaseSupplierId ? supplierBySampleId.get(p.purchaseSupplierId) ?? null : null,
+  }));
+  const rows = diffSeedRows("comp1", existingCustomers, existingProducts, existingSuppliers, () => {
     throw new Error("완전 시드 상태에선 새 id를 만들면 안 됨");
   });
   expect(rows.customers.length).toBe(0);
+  expect(rows.suppliers.length).toBe(0);
   expect(rows.products.length).toBe(0);
+  expect(rows.productSupplierUpdates.length).toBe(0);
   // upsert rows는 전부 기존 id 참조(ignoreDuplicates라 DB 변경 없음)
   const custIds = new Set(existingCustomers.map((c) => c.id));
   const prodIds = new Set(existingProducts.map((p) => p.id));
@@ -147,9 +167,11 @@ test("완전 시드 상태: insert 대상 0 + aliases/prices는 기존 id 기준
 test("products만 존재(역방향 부분 시드): customers/prices 보충 + 기존 품목 id 재사용", () => {
   const existingProducts = sampleProducts.map((p, i) => ({ id: `p${i}`, name: p.name }));
   let n = 0;
-  const rows = diffSeedRows("comp1", [], existingProducts, () => `new-${++n}`);
+  const rows = diffSeedRows("comp1", [], existingProducts, [], () => `new-${++n}`);
   expect(rows.customers.length).toBe(sampleCustomers.length);
+  expect(rows.suppliers.length).toBe(samplePurchaseSuppliers.length);
   expect(rows.products.length).toBe(0);
+  expect(rows.productSupplierUpdates.length).toBeGreaterThan(0);
   const prodIds = new Set(existingProducts.map((p) => p.id));
   for (const al of rows.aliases) {
     expect(prodIds.has(al.product_id)).toBe(true);
@@ -158,5 +180,22 @@ test("products만 존재(역방향 부분 시드): customers/prices 보충 + 기
   for (const pr of rows.prices) {
     expect(newCustIds.has(pr.customer_id)).toBe(true);
     expect(prodIds.has(pr.product_id)).toBe(true);
+  }
+});
+
+test("부분 시드 보정: 매입처만 없으면 기존 품목에 매입처 id를 이어 붙인다", () => {
+  const existingCustomers = sampleCustomers.map((c, i) => ({ id: `c${i}`, name: c.name }));
+  const existingProducts = sampleProducts.map((p, i) => ({ id: `p${i}`, name: p.name, purchase_supplier_id: null }));
+  let n = 0;
+  const rows = diffSeedRows("comp1", existingCustomers, existingProducts, [], () => `new-${++n}`);
+
+  expect(rows.customers.length).toBe(0);
+  expect(rows.products.length).toBe(0);
+  expect(rows.suppliers.length).toBe(samplePurchaseSuppliers.length);
+  expect(rows.productSupplierUpdates.length).toBeGreaterThan(0);
+
+  const insertedSupplierIds = new Set(rows.suppliers.map((s) => s.id));
+  for (const patch of rows.productSupplierUpdates) {
+    expect(insertedSupplierIds.has(patch.purchase_supplier_id)).toBe(true);
   }
 });

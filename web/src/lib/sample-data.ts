@@ -1,6 +1,6 @@
 // 오더모아 시연/검증용 가명 샘플 데이터 (sample-data-definition.md).
 // 개인정보·실거래처명·전화·사업자번호 없음. 모든 값은 가명·테스트용.
-import type { Customer, CustomerPrice, Product } from "./domain/types";
+import type { Customer, CustomerPrice, Product, Supplier } from "./domain/types";
 
 /** 공급자(회사) 정보 — 거래명세서 상단용. 가짜/공란(민감정보 없음). */
 export const sampleCompany = {
@@ -19,7 +19,7 @@ export const sampleCustomers: Customer[] = [
   { id: "cust_neulbom", name: "늘봄분식", memo: "소량 다품목" },
 ];
 
-export const samplePurchaseSuppliers = [
+export const samplePurchaseSuppliers: Supplier[] = [
   { id: "sup_veg", name: "야채매입처" },
   { id: "sup_tofu", name: "두부콩나물매입처" },
   { id: "sup_root", name: "뿌리채소매입처" },
@@ -235,6 +235,7 @@ export function loadSampleData() {
   return {
     company: { ...sampleCompany },
     customers: sampleCustomers.map((c) => ({ ...c })),
+    suppliers: samplePurchaseSuppliers.map((s) => ({ ...s })),
     products: sampleProducts.map((p) => ({ ...p, aliases: [...(p.aliases ?? [])] })),
     customerPrices: sampleCustomerPrices.map((cp) => ({ ...cp })),
     orderExamples: sampleOrderExamples.map((e) => ({ ...e })),

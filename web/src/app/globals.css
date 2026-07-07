@@ -220,6 +220,39 @@ td input.qty,td input.price{max-width:96px}
 }
 .steps span.active{background:var(--accent-soft);color:var(--accent-dark)}
 
+/* ── 기준정보: 거래처 관리 ── */
+.section-head{
+  display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;
+}
+.section-head h2{margin:0 0 4px}
+.section-head p{margin:0;color:var(--soft);font-size:.85rem}
+.master-grid{display:grid;grid-template-columns:minmax(260px,.85fr) minmax(0,1.15fr);gap:14px}
+.master-list,.master-form{
+  border:1px solid var(--line);border-radius:var(--radius);padding:14px;background:#fbfcfd;
+}
+.customer-list{display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:520px;overflow:auto}
+.customer-row{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;
+  background:var(--paper);min-height:58px;padding:9px 11px;
+}
+.customer-row strong{display:block;font-size:.92rem}
+.customer-row small{display:block;color:var(--soft);font-size:.75rem;margin-top:2px}
+.customer-row em{
+  flex:0 0 auto;font-style:normal;color:var(--ok-fg);background:var(--ok-bg);
+  border-radius:999px;padding:2px 8px;font-size:.7rem;font-weight:700;
+}
+.customer-row.selected{border-color:var(--accent);background:#fff9f6}
+.master-form h3{margin:0 0 10px}
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.form-grid label{margin:0}
+.form-grid .span-2{grid-column:1 / -1}
+.form-grid textarea{min-height:92px}
+.actions-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+button.secondary{background:#f8fafc}
+button.ghost{background:transparent}
+button.danger{color:var(--err-fg);border-color:var(--err-bg)}
+.notice.warn{background:var(--warn-bg);color:var(--warn-fg);margin-top:10px}
+
 /* ── 거래명세서(인쇄 문서) — 앱 테마와 분리된 문서 스타일 유지 ── */
 .note-doc{
   background:#fff;color:#000;border:1px solid #999;padding:20px;
@@ -272,10 +305,15 @@ td input.qty,td input.price{max-width:96px}
   .dashboard-grid{grid-template-columns:1fr}
   .supplier-sections{grid-template-columns:1fr}
   .product-results button{grid-template-columns:1fr 54px;gap:4px}
+  .section-head{flex-direction:column}
+  .master-grid{grid-template-columns:1fr}
+  .customer-list{max-height:320px}
 }
 @media (max-width:480px){
   .summary-grid,.ops-grid{grid-template-columns:1fr}
   .nav-glyph{display:none}
+  .form-grid{grid-template-columns:1fr}
+  .form-grid .span-2{grid-column:auto}
 }
 
 /* ── 인쇄: 앱 UI 숨기고 명세서만 A4 ── */
