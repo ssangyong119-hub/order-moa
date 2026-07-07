@@ -1295,3 +1295,30 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
 - 남은 확인:
   - root `npm test`, web audit, 브라우저 스모크, 최종 커밋.
   - Supabase 실제 적용은 아직 안 함. 적용 순서: 기존 0001~0003 이후 `0004_suppliers.sql`.
+
+## 2026-07-07 Claude (Codex 매입처/거래처 변경분 리뷰 + 보관 가드 패치)
+
+- 목적: 7d3de93(거래처 관리 + 매입처 영속화)·34d30df(진행판) 리뷰. 특히 0004_suppliers.sql의 RLS/트리거/공유 프로젝트 안전성, 시드 보정, 즉석 등록 매입처 저장 흐름.
+- 리뷰 결과(통과):
+  - 0004_suppliers.sql — ordermoa_ 접두사 전 객체 준수, RLS 4정책(기존 is_company_member 헬퍼 재사용), 교차회사 트리거(null 허용 FK 가드 포함), unique(company_id,name), 인덱스 2종. anon은 정책 부재로 기본 차단. FK는 NO ACTION이라 참조 중 매입처 하드삭제는 시끄럽게 실패(의도적 soft delete 우선과 부합).
+  - diffSeedRows/ensureSeed — suppliers 이름 기준 누락 보충 + productSupplierUpdates(샘플명 품목의 매입처 백필, 기존 매입처 지정 시 미변경) 멱등 설계 적절. unique 제약 덕에 동시 실행 중복도 이제 DB가 차단.
+  - 즉석 등록 매입처 저장 — 기존 매입처 재사용/신규 insert/실패 시 "매입처 미지정으로 저장" 강등 처리 적절.
+- 발견·패치(1건): `customer-management-view.tsx` 보관 가드가 `선택 중 && 마지막`일 때만 차단 → 마지막 거래처가 "선택 중"이 아니면 0개까지 보관 가능(발주 붙여넣기 불능 상태). `customers.length <= 1` 단독 조건으로 수정.
+- 브라우저 실측(데모 모드, dev 3021): 샘플 로드 → 거래처 5개 → 4개 보관 → 마지막 1개 보관 시 "마지막 거래처는 보관할 수 없습니다" 차단 확인, 신규 "테스트마트" 추가 정상, 콘솔 오류 0.
+- 신규 문서: `docs/guide-apply-0004-suppliers.md` — 비개발자용 Supabase SQL Editor 적용 안내(적용 전 DB 모드 오류가 정상임을 명시, 재실행 시 already exists 안내 포함).
+- 검증: root npm test 5/5 · web npm test 83/83(12파일) · build 성공 · audit 0건 · git diff --check 통과 · 민감정보 grep 미검출.
+- 커밋하지 않음 — Codex 판단 대기.
+- [위험] 0004 적용 전까지 DB 모드는 로드 오류(코드가 suppliers를 조회) — 가이드에 명시. 기존 회사에 최초 로드 시 샘플 매입처 5개가 자동 설치됨(시드 정책상 의도된 동작이나 실데이터 회사에선 어색할 수 있음). [나중] 보관된 매입처와 동일 이름 재등록은 unique 충돌로 실패 → W07 매입처 관리 화면에서 보관 해제로 해결.
+
+## 2026-07-07 Codex (0004 재실행 안전성 보강)
+
+- 목적: 비개발자가 Supabase SQL Editor에 직접 적용할 `0004_suppliers.sql`을 중간 실패/재실행에도 더 안전하게 보강.
+- 수정:
+  - `create table/index`에 `if not exists` 적용.
+  - `purchase_supplier_id` 컬럼을 `add column if not exists`로 변경하고 FK 제약은 별도 `do $$` 블록으로 중복 확인 후 추가.
+  - unique(company_id, name) 제약도 중복 확인 후 추가.
+  - trigger/policy는 `drop ... if exists` 후 재생성해 재실행 가능하게 변경.
+  - `docs/guide-apply-0004-suppliers.md`의 오류 안내를 "재실행 시 Success가 정상" 기준으로 갱신.
+- 판단:
+  - Claude의 마지막 거래처 보관 가드 패치는 타당해 유지.
+  - Supabase 적용 전 DB 모드 오류 가능성은 여전히 정상 상태이며, 0004 적용 후 해결되는 구조.

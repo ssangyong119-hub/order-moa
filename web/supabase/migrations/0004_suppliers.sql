@@ -1,23 +1,51 @@
 -- 오더모아 1차 보강(W05): 매입처 DB화.
 -- 기존 양산 재고 프로젝트와 충돌하지 않도록 모든 public 객체는 ordermoa_ 접두사를 유지한다.
 
-create table public.ordermoa_suppliers (
+create table if not exists public.ordermoa_suppliers (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references public.ordermoa_companies(id) on delete cascade,
   name text not null check (char_length(trim(name)) > 0),
   memo text,
   created_at timestamptz not null default now(),
-  archived_at timestamptz,
-  unique (company_id, name)
+  archived_at timestamptz
 );
 
-create index ordermoa_idx_suppliers_company on public.ordermoa_suppliers(company_id);
-create index ordermoa_idx_suppliers_company_name on public.ordermoa_suppliers(company_id, name);
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.ordermoa_suppliers'::regclass
+      and conname = 'ordermoa_suppliers_company_id_name_key'
+  ) then
+    alter table public.ordermoa_suppliers
+      add constraint ordermoa_suppliers_company_id_name_key unique (company_id, name);
+  end if;
+end;
+$$;
+
+create index if not exists ordermoa_idx_suppliers_company on public.ordermoa_suppliers(company_id);
+create index if not exists ordermoa_idx_suppliers_company_name on public.ordermoa_suppliers(company_id, name);
 
 alter table public.ordermoa_products
-  add column purchase_supplier_id uuid references public.ordermoa_suppliers(id);
+  add column if not exists purchase_supplier_id uuid;
 
-create index ordermoa_idx_products_purchase_supplier
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'public.ordermoa_products'::regclass
+      and conname = 'ordermoa_products_purchase_supplier_id_fkey'
+  ) then
+    alter table public.ordermoa_products
+      add constraint ordermoa_products_purchase_supplier_id_fkey
+      foreign key (purchase_supplier_id) references public.ordermoa_suppliers(id);
+  end if;
+end;
+$$;
+
+create index if not exists ordermoa_idx_products_purchase_supplier
   on public.ordermoa_products(company_id, purchase_supplier_id);
 
 create or replace function public.ordermoa_check_products_supplier_company()
@@ -34,18 +62,23 @@ begin
 end;
 $$;
 
+drop trigger if exists ordermoa_trg_products_supplier_company on public.ordermoa_products;
 create trigger ordermoa_trg_products_supplier_company
   before insert or update on public.ordermoa_products
   for each row execute function public.ordermoa_check_products_supplier_company();
 
 alter table public.ordermoa_suppliers enable row level security;
 
+drop policy if exists ordermoa_suppliers_select on public.ordermoa_suppliers;
 create policy ordermoa_suppliers_select on public.ordermoa_suppliers
   for select using (public.ordermoa_is_company_member(company_id));
+drop policy if exists ordermoa_suppliers_insert on public.ordermoa_suppliers;
 create policy ordermoa_suppliers_insert on public.ordermoa_suppliers
   for insert with check (public.ordermoa_is_company_member(company_id));
+drop policy if exists ordermoa_suppliers_update on public.ordermoa_suppliers;
 create policy ordermoa_suppliers_update on public.ordermoa_suppliers
   for update using (public.ordermoa_is_company_member(company_id))
   with check (public.ordermoa_is_company_member(company_id));
+drop policy if exists ordermoa_suppliers_delete on public.ordermoa_suppliers;
 create policy ordermoa_suppliers_delete on public.ordermoa_suppliers
   for delete using (public.ordermoa_is_company_member(company_id));

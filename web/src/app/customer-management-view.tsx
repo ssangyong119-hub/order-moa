@@ -73,7 +73,8 @@ export function CustomerManagementView({
   }
 
   async function archive(customer: Customer) {
-    if (customer.id === activeCustomerId && customers.length <= 1) {
+    // 거래처 0개가 되면 발주 붙여넣기 자체가 불가 → 선택 여부와 무관하게 마지막 1개는 보관 차단
+    if (customers.length <= 1) {
       setError("마지막 거래처는 보관할 수 없습니다.");
       return;
     }
