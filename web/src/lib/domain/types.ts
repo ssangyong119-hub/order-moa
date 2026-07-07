@@ -25,6 +25,8 @@ export interface Product {
 export interface Supplier {
   id: string;
   name: string;
+  phone?: string;
+  address?: string;
   memo?: string;
 }
 

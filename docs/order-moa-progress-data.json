@@ -5,7 +5,7 @@
     "updated": "2026-07-07",
     "branch": "codex/integrate-mvp-docs-web",
     "charter": "docs/order-moa-system-meta-prompt.md (헌장 — 차수·범위의 기준. 이 진행판과 어긋나면 헌장이 우선)",
-    "currentFocus": "W03 품목·별칭 관리 완료(product-store + 화면: 품목 CRUD·보관/복원·별칭 칩·기본 매입처 드롭다운, 데모 실측·DB는 코드 검증). W17·W07도 완료. 다음: W04 단가 관리 또는 W09~W11(8c).",
+    "currentFocus": "W04 단가 관리 완료 + W07 확장(매입처 연락처/주소, 0005 마이그레이션 — [적용 필요] docs/guide-apply-0005-supplier-contact.md). 기준정보 4종(거래처/매입처/품목·별칭/단가) 완성. 다음: W09~W11(8c).",
     "recentCommits": [
       "a696a36 feat: add password login fallback",
       "38f4e6c fix: harden supplier migration guidance",
@@ -83,7 +83,7 @@
     {
       "id": "W04",
       "name": "기준정보 CRUD — 단가 관리",
-      "status": "다음",
+      "status": "완료",
       "phase": "1차",
       "plain": "거래처마다 다른 판매 단가표를 직접 관리하는 화면. 지금도 파싱 화면에서 즉석 저장은 되지만, 한눈에 보고 고치는 표가 없습니다.",
       "why": "단가가 등록돼 있어야 붙여넣기만으로 금액까지 자동 완성됩니다. 0원 경고를 줄이는 길.",
@@ -118,7 +118,7 @@
       "name": "매입처 관리 화면",
       "status": "완료",
       "phase": "1차 보강",
-      "plain": "매입처 이름을 추가·수정·보관하고, 품목별 기본 매입처를 바꾸는 화면(기준정보의 4번째 탭).",
+      "plain": "매입처 이름을 추가·수정·보관하고, 품목별 기본 매입처를 바꾸는 화면(기준정보의 4번째 탭). 2026-07-07 확장: 거래처처럼 연락처·주소 기본정보 추가(0005 마이그레이션 — Supabase 적용 필요).",
       "why": "매입처가 바뀌거나 늘어날 때 개발자 없이 사장님이 직접 고칠 수 있어야 합니다.",
       "prereq": "W05·W06 + 기준정보 화면 틀(W02~W04).",
       "verify": "매입처 추가/이름 수정→발주 문장 섹션 이름 즉시 반영. 테스트+빌드 통과.",

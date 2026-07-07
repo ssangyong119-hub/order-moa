@@ -224,7 +224,7 @@ async function fetchCompanyData(db: SupabaseClient, companyId: string) {
       .order("created_at", { ascending: true }),
     db
       .from("ordermoa_suppliers")
-      .select("id,name,memo")
+      .select("id,name,phone,address,memo") // phone/address: 0005 적용 필요
       .eq("company_id", companyId)
       .is("archived_at", null)
       .order("created_at", { ascending: true }),
@@ -259,6 +259,8 @@ async function fetchCompanyData(db: SupabaseClient, companyId: string) {
   const suppliers: Supplier[] = (supplier.data ?? []).map((s) => ({
     id: s.id,
     name: s.name,
+    phone: s.phone ?? undefined,
+    address: s.address ?? undefined,
     memo: s.memo ?? undefined,
   }));
   const supplierById = new Map(suppliers.map((s) => [s.id, s.name]));

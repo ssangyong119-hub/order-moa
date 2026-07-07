@@ -10,7 +10,7 @@ import {
   type SupplierFormInput,
 } from "@/lib/supplier-store";
 
-const EMPTY_FORM: SupplierFormInput = { name: "", memo: "" };
+const EMPTY_FORM: SupplierFormInput = { name: "", phone: "", address: "", memo: "" };
 
 interface SupplierManagementViewProps {
   suppliers: Supplier[];
@@ -37,7 +37,7 @@ export function SupplierManagementView({
     const q = query.trim().toLowerCase();
     if (!q) return suppliers;
     return suppliers.filter((s) =>
-      [s.name, s.memo].some((v) => (v ?? "").toLowerCase().includes(q)),
+      [s.name, s.phone, s.address, s.memo].some((v) => (v ?? "").toLowerCase().includes(q)),
     );
   }, [suppliers, query]);
 
@@ -49,7 +49,12 @@ export function SupplierManagementView({
 
   function startEdit(supplier: Supplier) {
     setEditingId(supplier.id);
-    setForm({ name: supplier.name, memo: supplier.memo ?? "" });
+    setForm({
+      name: supplier.name,
+      phone: supplier.phone ?? "",
+      address: supplier.address ?? "",
+      memo: supplier.memo ?? "",
+    });
     setError(null);
   }
 
@@ -118,7 +123,7 @@ export function SupplierManagementView({
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="매입처명, 메모 검색"
+              placeholder="매입처명, 연락처, 주소, 메모 검색"
             />
           </label>
           <div className="customer-list">
@@ -131,7 +136,7 @@ export function SupplierManagementView({
               >
                 <span>
                   <strong>{s.name}</strong>
-                  <small>{s.memo || "메모 없음"}</small>
+                  <small>{s.memo || s.phone || "메모 없음"}</small>
                 </span>
               </button>
             ))}
@@ -159,12 +164,28 @@ export function SupplierManagementView({
         <div className="master-form">
           <h3>{editingId ? "매입처 수정" : "새 매입처 추가"}</h3>
           <div className="form-grid">
-            <label className="span-2">
+            <label>
               매입처명
               <input
                 value={form.name}
                 onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                 placeholder="예: 야채매입처"
+              />
+            </label>
+            <label>
+              연락처
+              <input
+                value={form.phone ?? ""}
+                onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+                placeholder="선택"
+              />
+            </label>
+            <label className="span-2">
+              주소
+              <input
+                value={form.address ?? ""}
+                onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
+                placeholder="선택"
               />
             </label>
             <label className="span-2">

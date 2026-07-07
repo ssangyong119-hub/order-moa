@@ -1404,3 +1404,30 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
 - 주의 발견: dev 서버 실행 중 `npm run build`를 돌리면 .next가 덮여 dev가 500/404로 깨짐 → 서버 재시작으로 해결. 다음부터 빌드는 dev 중지 후 또는 검증 마지막에.
 - 미커밋(협업 규칙 — Codex 판단). 진행판 W03 → 완료, HTML/XLSX 재생성.
 - [다음] W04 단가 관리 또는 W09~W11(8c — 원문 저장/저장 주문 합산표/명세서 재출력). [위험 유지] 공유 Supabase 무료 쿼터 경고 — 전용 프로젝트 분리 논의.
+
+## 2026-07-07 Claude (W04 단가 관리 + W07 확장(매입처 연락처/주소) 구현 완료)
+
+### W04 단가 관리 화면 (마이그레이션 없음 — 기존 ordermoa_customer_prices)
+- 신규: `web/src/lib/price-store.ts` — `buildPriceRows`(거래처별 품목 단가표, 품목명+별칭 검색, 미등록만 필터), `validatePriceValue`(0 이상 정수), `upsertCustomerPriceInDb`(기존 '이 단가 저장'과 동일 onConflict 규칙). `web/src/lib/price-store.test.ts` 4테스트(TDD).
+- 신규: `web/src/app/price-management-view.tsx` — 거래처 select + 품목/별칭 검색 + "미등록만 보기" 토글 + 요약 카운터(품목 N·등록 M·미등록 K) + 행별 인라인 단가 입력(Enter 저장). 미등록은 노란 뱃지.
+- page.tsx: View "prices" + "단가 관리" 메뉴 실화면 연결 + `saveCustomerPrice`(데모/DB 분기). customerPrices 상태가 파싱의 단일 소스라 저장 즉시 다음 파싱에 반영.
+- 과거 주문 unit_price 스냅샷은 안 건드림(현재 단가표만 수정) — 화면 안내문에도 명시.
+
+### W07 확장 — 매입처 기본정보(연락처/주소)
+- **마이그레이션 신규: `web/supabase/migrations/0005_supplier_contact.sql`** — `add column if not exists phone/address text`. 데이터 삭제 없음, RLS 기존 정책 그대로(테이블 단위). contact_name은 보류(쓸 곳 없음 — 필요 시 text 컬럼 1개).
+  - **[적용 필요]** 비개발자용 가이드: `docs/guide-apply-0005-supplier-contact.md`. **DB 모드는 0005 적용 전까지 로딩 오류가 정상**(select에 phone/address 포함됨). 데모 모드 무관.
+- Supplier 타입 + supplier-store(normalize/validate/insert/update/select SUPPLIER_COLS) + order-store 로드에 phone/address 추가. supplier-store.test.ts 확장(TDD).
+- supplier-management-view: 거래처와 같은 배치(매입처명/연락처/주소(span-2)/메모), 검색도 4필드.
+- 발주 문장은 이름만 사용(연락처/주소 미포함 — 요청대로 관리 화면 전용). 품목별 매입처 지정 로직 무변경.
+- 버그 픽스: page.tsx 데모 모드 saveSupplier가 phone/address를 버리던 것 수정(실측에서 발견).
+
+### 검증
+- root 5/5 · web `npm test` **100/100** · build 성공 · audit 0건.
+- 브라우저 실측(데모): 단가 관리 — 거래처 선택/검색/미등록 필터(28건)/단가 저장(콩나물 8,000→9,999) → **발주 붙여넣기 '콩나물 2박스' = 19,998원 즉시 반영**. 매입처 — 연락처/주소 추가·수정·검색(전화번호/주소로 검색 OK), 합산표 발주 문장에 연락처 미포함 확인. 콘솔 오류 0.
+- DB 모드 실측 못 함(로그인 필요). **0005 적용 후** 매입처 연락처 저장→F5 유지, 단가 저장→F5 유지 확인 권장.
+
+### Codex 검수용 변경 파일 목록
+- 신규: `web/src/lib/price-store.ts`, `web/src/lib/price-store.test.ts`, `web/src/app/price-management-view.tsx`, `web/supabase/migrations/0005_supplier_contact.sql`, `docs/guide-apply-0005-supplier-contact.md`
+- 수정: `web/src/lib/domain/types.ts`(Supplier phone/address), `web/src/lib/supplier-store.ts`(+테스트), `web/src/lib/order-store.ts`(suppliers select), `web/src/app/supplier-management-view.tsx`, `web/src/app/page.tsx`(View prices·핸들러·데모 saveSupplier 픽스), `docs/order-moa-progress-data.json`(W04 완료·W07 확장 반영) + HTML/XLSX 재생성
+- 미커밋 — Codex 검수·커밋. 0005는 Supabase 적용도 필요(가이드 참조).
+- [다음] W09~W11(8c). [위험 유지] 공유 Supabase 무료 쿼터.

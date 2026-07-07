@@ -7,12 +7,21 @@ import {
   validateSupplierInput,
 } from "./supplier-store";
 
-test("normalizeSupplierInput: 공백 정리", () => {
-  expect(normalizeSupplierInput({ name: "  야채매입처 ", memo: " 새벽 배송 " })).toEqual({
+test("normalizeSupplierInput: 공백 정리 (연락처/주소 포함)", () => {
+  expect(
+    normalizeSupplierInput({ name: "  야채매입처 ", phone: " 010-1234-5678 ", address: " 부산 ", memo: " 새벽 배송 " }),
+  ).toEqual({
     name: "야채매입처",
+    phone: "010-1234-5678",
+    address: "부산",
     memo: "새벽 배송",
   });
-  expect(normalizeSupplierInput({ name: "야채매입처" })).toEqual({ name: "야채매입처", memo: "" });
+  expect(normalizeSupplierInput({ name: "야채매입처" })).toEqual({
+    name: "야채매입처",
+    phone: "",
+    address: "",
+    memo: "",
+  });
 });
 
 test("validateSupplierInput: 이름 필수", () => {
@@ -20,14 +29,18 @@ test("validateSupplierInput: 이름 필수", () => {
   expect(validateSupplierInput({ name: "야채매입처" })).toBeNull();
 });
 
-test("toSupplierInsert / toSupplierUpdate: 빈 메모는 null", () => {
+test("toSupplierInsert / toSupplierUpdate: 빈 선택 필드는 null", () => {
   expect(toSupplierInsert("co1", { name: "야채매입처", memo: "" })).toEqual({
     company_id: "co1",
     name: "야채매입처",
+    phone: null,
+    address: null,
     memo: null,
   });
-  expect(toSupplierUpdate({ name: "야채매입처", memo: "새벽" })).toEqual({
+  expect(toSupplierUpdate({ name: "야채매입처", phone: "010-1", address: "부산", memo: "새벽" })).toEqual({
     name: "야채매입처",
+    phone: "010-1",
+    address: "부산",
     memo: "새벽",
   });
 });

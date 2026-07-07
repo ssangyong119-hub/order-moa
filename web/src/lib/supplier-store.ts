@@ -5,12 +5,16 @@ import type { Supplier } from "./domain/types";
 
 export interface SupplierFormInput {
   name: string;
+  phone?: string;
+  address?: string;
   memo?: string;
 }
 
 export function normalizeSupplierInput(input: SupplierFormInput): Required<SupplierFormInput> {
   return {
     name: input.name.trim(),
+    phone: (input.phone ?? "").trim(),
+    address: (input.address ?? "").trim(),
     memo: (input.memo ?? "").trim(),
   };
 }
@@ -20,14 +24,29 @@ export function validateSupplierInput(input: SupplierFormInput): string | null {
   return null;
 }
 
+function nullable(value: string): string | null {
+  return value ? value : null;
+}
+
 export function toSupplierInsert(companyId: string, input: SupplierFormInput) {
   const clean = normalizeSupplierInput(input);
-  return { company_id: companyId, name: clean.name, memo: clean.memo || null };
+  return {
+    company_id: companyId,
+    name: clean.name,
+    phone: nullable(clean.phone),
+    address: nullable(clean.address),
+    memo: nullable(clean.memo),
+  };
 }
 
 export function toSupplierUpdate(input: SupplierFormInput) {
   const clean = normalizeSupplierInput(input);
-  return { name: clean.name, memo: clean.memo || null };
+  return {
+    name: clean.name,
+    phone: nullable(clean.phone),
+    address: nullable(clean.address),
+    memo: nullable(clean.memo),
+  };
 }
 
 /** Supabase unique 충돌(23505)을 사장님이 이해할 문구로 바꾼다. */
@@ -39,9 +58,23 @@ export function friendlySupplierError(e: unknown): string {
   return "매입처 저장에 실패했습니다.";
 }
 
-function mapSupplier(row: { id: string; name: string; memo: string | null }): Supplier {
-  return { id: row.id, name: row.name, memo: row.memo ?? undefined };
+function mapSupplier(row: {
+  id: string;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  memo: string | null;
+}): Supplier {
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone ?? undefined,
+    address: row.address ?? undefined,
+    memo: row.memo ?? undefined,
+  };
 }
+
+const SUPPLIER_COLS = "id,name,phone,address,memo";
 
 export async function createSupplier(
   db: SupabaseClient,
@@ -53,7 +86,7 @@ export async function createSupplier(
   const res = await db
     .from("ordermoa_suppliers")
     .insert(toSupplierInsert(companyId, input))
-    .select("id,name,memo")
+    .select(SUPPLIER_COLS)
     .single();
   if (res.error) throw res.error;
   return mapSupplier(res.data);
@@ -72,7 +105,7 @@ export async function updateSupplier(
     .update(toSupplierUpdate(input))
     .eq("company_id", companyId)
     .eq("id", supplierId)
-    .select("id,name,memo")
+    .select(SUPPLIER_COLS)
     .single();
   if (res.error) throw res.error;
   return mapSupplier(res.data);
@@ -101,7 +134,7 @@ export async function unarchiveSupplier(
     .update({ archived_at: null })
     .eq("company_id", companyId)
     .eq("id", supplierId)
-    .select("id,name,memo")
+    .select(SUPPLIER_COLS)
     .single();
   if (res.error) throw res.error;
   return mapSupplier(res.data);
@@ -113,7 +146,7 @@ export async function listArchivedSuppliers(
 ): Promise<Supplier[]> {
   const res = await db
     .from("ordermoa_suppliers")
-    .select("id,name,memo")
+    .select(SUPPLIER_COLS)
     .eq("company_id", companyId)
     .not("archived_at", "is", null)
     .order("created_at", { ascending: true });

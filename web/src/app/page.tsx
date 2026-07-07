@@ -51,6 +51,8 @@ import { searchProductsForOrder } from "@/lib/product-search";
 import { CustomerManagementView } from "./customer-management-view";
 import { SupplierManagementView } from "./supplier-management-view";
 import { ProductManagementView } from "./product-management-view";
+import { PriceManagementView } from "./price-management-view";
+import { upsertCustomerPriceInDb } from "@/lib/price-store";
 import {
   addAliasInDb,
   archiveProduct as archiveProductInDb,
@@ -88,7 +90,8 @@ type View =
   | "note"
   | "customers"
   | "suppliers"
-  | "products";
+  | "products"
+  | "prices";
 
 /** 앱 데이터 묶음 — 데모 모드(샘플)와 DB 모드(Supabase 로드) 공용 형태 */
 interface AppData {
@@ -127,7 +130,7 @@ const NAV_GROUPS: Array<{
       { view: "customers", label: "거래처 관리", icon: "□" },
       { view: "suppliers", label: "매입처 관리", icon: "▣" },
       { view: "products", label: "품목·별칭 관리", icon: "◇" },
-      { label: "단가 관리", icon: "₩", soon: true, phase: "1차" },
+      { view: "prices", label: "단가 관리", icon: "₩" },
     ],
   },
   { label: "자금", icon: "₩", items: [{ label: "미수금", icon: "◌", soon: true, phase: "2차" }] },
@@ -144,6 +147,7 @@ const VIEW_TITLES: Record<View, string> = {
   customers: "거래처 관리",
   suppliers: "매입처 관리",
   products: "품목·별칭 관리",
+  prices: "단가 관리",
 };
 
 function Shell(props: {
@@ -586,7 +590,13 @@ export default function HomePage() {
     if (suppliers.some((s) => s.name === clean && s.id !== id)) {
       throw new Error("같은 이름의 매입처가 이미 있습니다.");
     }
-    const saved: Supplier = { id: id ?? crypto.randomUUID(), name: clean, memo: input.memo || undefined };
+    const saved: Supplier = {
+      id: id ?? crypto.randomUUID(),
+      name: clean,
+      phone: input.phone?.trim() || undefined,
+      address: input.address?.trim() || undefined,
+      memo: input.memo || undefined,
+    };
     setSuppliers((prev) => (id ? prev.map((s) => (s.id === id ? saved : s)) : [...prev, saved]));
     if (id) syncSupplierNameToProducts(id, saved.name);
     flash(id ? "매입처를 수정했습니다. (데모 모드)" : "매입처를 추가했습니다. (데모 모드)");
@@ -684,6 +694,20 @@ export default function HomePage() {
       ),
     );
     flash(`'${alias}' 별칭을 추가했습니다. 발주 붙여넣기에서 바로 매칭됩니다.`);
+  }
+
+  // ---- 단가 관리 (W04) ----
+  // customerPrices 상태가 파싱의 단일 소스 → 갱신 즉시 다음 파싱에 반영. 과거 주문 스냅샷은 무관.
+  async function saveCustomerPrice(custId: string, productId: string, price: number) {
+    if (db && companyId) {
+      await upsertCustomerPriceInDb(db, companyId, custId, productId, price);
+    }
+    setCustomerPrices((prev) => [
+      ...prev.filter((cp) => !(cp.customerId === custId && cp.productId === productId)),
+      { customerId: custId, productId, price },
+    ]);
+    const productName = products.find((p) => p.id === productId)?.name ?? "품목";
+    flash(`${productName} 단가를 저장했습니다. 다음 발주 붙여넣기부터 자동 적용됩니다.${db ? "" : " (데모 모드)"}`);
   }
 
   async function removeProductAlias(product: Product, alias: string) {
@@ -1111,6 +1135,15 @@ export default function HomePage() {
           onUnarchive={unarchiveProduct}
           onAddAlias={addProductAlias}
           onRemoveAlias={removeProductAlias}
+        />
+      )}
+
+      {view === "prices" && (
+        <PriceManagementView
+          customers={customers}
+          products={products}
+          prices={customerPrices}
+          onSave={saveCustomerPrice}
         />
       )}
 
