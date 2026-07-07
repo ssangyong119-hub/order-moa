@@ -1212,3 +1212,38 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
   - web npm run build 성공.
   - npm audit --audit-level=low 0건.
   - 새 개발 서버 `http://localhost:3011` 응답 200.
+
+## 2026-07-07 Claude (시스템 메타 프롬프트 기획 문서 4종 작성)
+
+- 목적: 오더모아를 좁은 MVP에서 1차/2차/3차로 키워가기 위한 전체 시스템 메타 프롬프트(헌장) 작성. 앱 코드/마이그레이션 변경 없음 — 문서 작업만.
+- 사전 검수: 지정 문서(progress-data.json, db-schema-definition, function-specification, supabase-rls-policy, task-prompt-unit-8)와 코드(page.tsx, sample-data, order-parser, aggregate, product-search, product-registration, order-store, 마이그레이션 0001~0003)를 실제로 읽고 현행 상태 기준으로 작성.
+- 산출물(신규 4종):
+  - `docs/order-moa-system-meta-prompt.md` — 전체 헌장: 제품 정체성, 핵심 흐름, 데이터 보존 불변 규칙 8개, 모듈별 차수 경계표, 화면 구조, DB/보안(매입처 테이블 검토 포함), 테스트 원칙, AI 작업 방식, 장기 아이디어 + 개선 TOP10/리스크 TOP10/하지 말 것 TOP10/다음 구현 5개/Codex 검수 체크리스트. 구버전 `meta-prompt-order-moa.md`(2026-06-06)를 대체하는 관계 명시.
+  - `docs/order-moa-expanded-roadmap.md` — 1차(잔여 4작업)/1.5차/2차/3차/장기/제외, 단계별 목표·포함·제외·선행조건·위험 + 단계 이동 판정 기준.
+  - `docs/order-moa-module-map.md` — M01~M16 모듈별 역할/화면/코드/DB/차수 + DB 객체 매핑 + 모듈 간 의존 규칙.
+  - `docs/order-moa-ai-working-rules.md` — AI 작업 규칙(시작 전 git status·문서 읽기, 차수 딱지, 검증 한 세트, worklog/진행현황 기록, 비개발자 보고 형식, 민감정보, Codex 게이트).
+- 검수 중 발견한 핵심 쟁점(문서에 반영):
+  - `purchaseSupplierId/Name`은 화면 상태/샘플에만 있고 **DB에 매입처 컬럼/테이블이 없음** → 즉석 등록의 기본 매입처가 영구 저장 안 됨. `ordermoa_suppliers` + `products.purchase_supplier_id` FK를 1.5차 권장안으로 제안(마이그레이션은 Codex 승인 후).
+  - function-specification §7의 `order_items.confirmed` 컬럼은 실제 스키마에 없음(문서-코드 드리프트) — Codex 검수 포인트로 표기.
+- 검증: 문서 작업만이라 테스트/빌드 생략(코드 무변경). git diff --check 통과, 신규 문서 TBD/TODO 없음, 민감정보(키/실거래처명) 미포함 확인.
+- 커밋하지 않음 — Codex 검수·커밋 판단 대기.
+- 참고: 작업 도중 Codex가 잔여분을 `a97dca8`(inline product creation)로 커밋 완료 — 본 문서 작업과 충돌 없음(문서 신규 4종 + worklog만 변경). [나중] 진행현황 JSON의 currentFocus는 기준정보 작업 재개 시 갱신.
+
+## 2026-07-07 Codex (시스템 메타 프롬프트 문서 검수 반영)
+
+- 목적: Claude가 작성한 시스템 헌장/로드맵/모듈맵/AI 작업 규칙을 실제 코드 상태와 다시 대조해 커밋 가능한 문서로 정리.
+- 수정:
+  - `docs/NEXT-SESSION.md`를 최신 인계 문서로 재작성. 이전 문서의 stale 정보(ahead 14, 이미 커밋된 미커밋 목록, 오래된 테스트 수치)를 제거.
+  - 매입처 DB화를 1.5차에서 **1차 보강(8c 전 권장)** 으로 상향. 이유: 즉석 신규 품목의 기본 매입처가 현재 DB에 저장되지 않아 합산표/매입처별 발주 흐름과 직접 충돌.
+  - raw_text 저장·거래처별 월 합계는 `8c` 범위로 문서 표기를 통일.
+  - `function-specification.md`의 실제 스키마에 없는 `order_items.confirmed` 컬럼을 제거하고, `amount`는 generated 컬럼이라 insert payload에 넣지 않는다는 설명으로 정정.
+  - AI 작업 규칙에서 마이그레이션은 "적용/커밋은 Codex 승인 전 금지, 초안 작성은 승인된 단위에서 가능"으로 구체화.
+  - 진행현황 3종의 web 테스트 수치를 최신 78/78로 동기화.
+- 검증:
+  - 문서 충돌 grep: stale `NEXT-SESSION` 수치, `order_items.confirmed`, 매입처 1.5차 표기, web test 77/77 현재 문서 0건.
+  - `git diff --check` 통과(CRLF 경고만 표시, whitespace error 없음).
+  - 민감정보 grep: API key/service role key 없음(정상 문서명·"비밀번호 저장 금지" 문구만 매칭).
+  - root `npm test` 5/5.
+  - web `npm test` 78/78.
+  - web `npm run build` 성공.
+  - web `npm audit --audit-level=low` 0건.

@@ -509,8 +509,7 @@
 | quantity | numeric | ✅ | | >0 |
 | unit | text | | null | |
 | unit_price | integer | ✅ | 0 | ≥0, KRW |
-| amount | integer | ✅ | 0 | 라인 금액 `round(quantity × unit_price)`(원 단위 반올림, integer). 주문/명세 합계는 이 값들의 합 (C2/B) |
-| confirmed | boolean | ✅ | false | 확정 여부 |
+| amount | integer | ✅ | generated | 라인 금액 `round(quantity × unit_price)`(원 단위 반올림, integer). 주문/명세 합계는 이 값들의 합 (C2/B). insert payload에 포함하지 않음 |
 - 관계: N:1 주문 / MVP: ✅
 - 상태 규칙(C1/A 확정): **1차 MVP `order_items`에는 확정 주문 라인만 저장**한다. 파싱 후보/draft 라인은 DB에 영구 저장하지 않고 **S8 화면 상태 + `order_imports.raw_text`** 로 관리한다. 따라서 `order_items.product_id`는 **NOT NULL**. 미매칭/수량 불확실 라인은 S8에서 해결해야 하며, 미해결 시 F10 저장을 차단한다. 후보 라인 영구 저장 테이블은 후순위.
 

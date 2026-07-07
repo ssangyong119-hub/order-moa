@@ -232,7 +232,7 @@
     {
       "item": "web npm test",
       "plain": "파서/합산/검색/주문 저장 빌더 자동 테스트",
-      "result": "통과 77/77"
+      "result": "통과 78/78"
     },
     {
       "item": "web npm run build",
