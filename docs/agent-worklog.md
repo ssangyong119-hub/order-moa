@@ -1336,3 +1336,19 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
   - web `npm run build` 성공.
   - git diff --check 통과.
   - 민감정보 grep은 `password === ""` 코드 조건만 오탐으로 확인.
+
+## 2026-07-07 Claude (W05/W06/W08 실측 완료 + 실사용 피드백 설계)
+
+- 실측 결과(사용자 직접 수행):
+  - 0004_suppliers.sql Supabase 적용 성공(Table Editor에서 ordermoa_suppliers 확인) → W05 완료.
+  - 매직링크가 email rate limit으로 반복 차단 → auth-gate에 비밀번호 로그인 추가(Codex가 a696a36으로 커밋), Supabase Auth에 password 계정(Auto Confirm) 생성.
+  - 비밀번호 로그인 → 발주 여러 건 확정 → F5 후 주문 목록 유지 → **W08(8b 실측) 성공**. 시드에 매입처 포함 → W06 완료.
+  - 참고: 매직링크 근본 원인은 Auth URL Configuration에 localhost:3021 미등록(기본 3000). 비밀번호 로그인으로 우회, 정식화는 [나중].
+- 실사용 피드백 8건 설계: `docs/order-moa-feedback-design-2026-07-07.md` 신규.
+  - 용어 정리(주문 확정=판매 저장 / 매입처 발주=구매 문장 / 매입처 명세서는 매입처가 발행).
+  - F1 문구 통일, F2 발주 문장 템플릿("OO입니다/발주 품목입니다/번호 목록"), F3 매입처 파스텔 색 구분, F4 누락 검수(카운터·복사 전 경고·미지정 뱃지) = **1차 즉시, DB 변경 0건**.
+  - F5 보냄 체크(1차 보강 화면만→2차 DB), F6 W07 매입처 관리(품목별 매입처 지정은 W03으로 분담), F7 명세서 하단 1차 보정, F8 발주 이력/입고/매입 기록=2차 유지.
+  - Codex 즉시 구현용 프롬프트 포함(§6 — 합산표 개선 팩).
+- 진행판 갱신: W05/W06/W08 → 완료, **W17(합산표 개선 팩) 신규 추가**, currentFocus/최근 커밋 갱신 → HTML/XLSX 재생성(17항목 검증 통과).
+- 검증: 문서/진행판 작업만(앱 코드 무변경 — auth-gate는 a696a36으로 이미 커밋됨). JSON 파싱·HTML 17카드·XLSX 18행 확인. 커밋하지 않음 — Codex 판단.
+- [다음] W17 구현(설계 §6 프롬프트) → W07 → W03. [위험] 공유 Supabase 무료 쿼터 경고(Grace period is over) — 전용 프로젝트 분리 논의 필요.
