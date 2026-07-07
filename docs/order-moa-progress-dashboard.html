@@ -56,11 +56,11 @@
   </div>
 </header>
 <div class="wrap">
-  <div class="focus">📌 <strong>지금 하는 일:</strong> W05/W06/W08 실측 완료(0004 적용 + 비밀번호 로그인 + 주문 저장 F5 유지). 다음: W17 합산표 개선 팩(발주 문장 템플릿·누락 검수·색상) → W07 매입처 관리 → W03 품목·별칭.</div>
+  <div class="focus">📌 <strong>지금 하는 일:</strong> W17 합산표 개선 팩 완료(발주 문장 템플릿·누락 검수 카운터/경고·미지정 뱃지·매입처 파스텔 색·F1 문구, 브라우저 실측). 다음: W07 매입처 관리 → W03 품목·별칭.</div>
 
   <h2>전체 진행률 (작업 보드 17개 기준)</h2>
-  <div class="progressbar"><div style="width:29%"></div></div>
-  <p class="counts">완료 5 · 다음 9 · 보류 3 — 1차 트랙(보류 제외) 5/14 완료</p>
+  <div class="progressbar"><div style="width:35%"></div></div>
+  <p class="counts">완료 6 · 다음 8 · 보류 3 — 1차 트랙(보류 제외) 6/14 완료</p>
   <div class="legend"><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span><span class="badge" style="background:#fef7e0;color:#946200">다음</span><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span><span class="badge" style="background:#fde8e8;color:#b02a2a">제외</span></div>
 
   <h2>핵심 흐름 (이 순서가 제품의 전부)</h2>
@@ -171,8 +171,8 @@
   </dl>
   <details><summary>관련 문서/파일</summary><ul><li><code>docs/order-moa-real-order-test-plan.md</code></li><li><code>web/src/lib/order-parser.ts</code></li></ul></details>
 </div>
-<div class="card s-next">
-  <div class="card-head"><span class="wid">W17</span><strong>합산표 개선 팩 — 발주 문장 템플릿·누락 검수·색상</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>
+<div class="card s-done">
+  <div class="card-head"><span class="wid">W17</span><strong>합산표 개선 팩 — 발주 문장 템플릿·누락 검수·색상</strong><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span></div>
   <p class="plain">매입처 발주 문장을 &quot;OO상사입니다 / 발주 품목입니다 / 1. 콩나물 3박스&quot; 형식으로 바꾸고, 안 담은 품목 카운터·복사 전 경고·매입처 미지정 뱃지·매입처별 연한 색 구분을 넣습니다. 실사용 피드백(2026-07-07) 반영.</p>
   <dl>
     <dt>왜 필요한가</dt><dd>사장님이 실발주 테스트에서 바로 느낀 불편 3가지(문장 형식, 누락 걱정, 매입처 구분)를 한 번에 해결. 전부 화면 작업이라 DB 변경 없음.</dd>

@@ -41,9 +41,11 @@ import { padDeliveryNoteLines } from "@/lib/delivery-note";
 import {
   buildAggregateRows,
   buildContributionText,
+  buildPurchaseChecklistSummary,
   buildSupplierPurchaseSections,
   formatPurchaseOrderText,
   formatSupplierPurchaseText,
+  supplierColorIndex,
 } from "@/lib/aggregate";
 import { searchProductsForOrder } from "@/lib/product-search";
 import { CustomerManagementView } from "./customer-management-view";
@@ -618,13 +620,20 @@ export default function HomePage() {
     [aggregate, purchaseTitle],
   );
   const purchaseSelectedSet = useMemo(() => new Set(purchaseSelectedIds), [purchaseSelectedIds]);
+  // 발주 문장 인사말용 회사명 (DB=로그인 회사명, 데모=샘플 회사명)
+  const companyName =
+    session.status === "ready" ? (session.companyName ?? "") : (data?.company.name ?? "");
   const supplierPurchaseSections = useMemo(
     () => buildSupplierPurchaseSections(aggregate, products, purchaseSelectedSet),
     [aggregate, products, purchaseSelectedSet],
   );
   const supplierPurchaseText = useMemo(
-    () => formatSupplierPurchaseText(supplierPurchaseSections),
-    [supplierPurchaseSections],
+    () => formatSupplierPurchaseText(supplierPurchaseSections, { companyName, withSupplierHeader: true }),
+    [supplierPurchaseSections, companyName],
+  );
+  const purchaseSummary = useMemo(
+    () => buildPurchaseChecklistSummary(aggregate, purchaseSelectedSet, products),
+    [aggregate, purchaseSelectedSet, products],
   );
 
   function togglePurchaseRow(productId: string) {
@@ -655,6 +664,12 @@ export default function HomePage() {
     if (!supplierPurchaseText.trim()) {
       flash("매입처에 보낼 품목을 먼저 체크해주세요.");
       return;
+    }
+    if (purchaseSummary.excluded > 0) {
+      const ok = window.confirm(
+        `아직 문장에 안 담은 품목이 ${purchaseSummary.excluded}개 있습니다. 그래도 복사할까요?`,
+      );
+      if (!ok) return;
     }
     await copyTextToClipboard(supplierPurchaseText, "매입처별 발주 문장을 복사했습니다.");
   }
@@ -934,7 +949,9 @@ export default function HomePage() {
         <section className="card">
           <h2>품목별 합산표</h2>
           <p className="muted" style={{ marginTop: 0 }}>
-            여러 거래처 발주를 품목별로 합쳤습니다 — <strong>매입처에 보낼 총 발주 수량</strong>입니다.
+            여러 거래처 주문을 품목별로 합쳤습니다. 아래에서 품목을 체크하면 매입처에 보낼{" "}
+            <strong>발주 문장</strong>이 만들어집니다.{" "}
+            <em>(여기서 체크해도 판매 주문은 바뀌지 않습니다)</em>
           </p>
           <div className="row-actions no-print" style={{ marginBottom: 8 }}>
             <select value={aggCustomer} onChange={(e) => setAggCustomer(e.target.value)} style={{ maxWidth: 200 }}>
@@ -999,8 +1016,15 @@ export default function HomePage() {
                             <span>{a.name}</span>
                           </label>
                         </td>
-                        <td className="muted">
-                          {products.find((p) => p.id === a.productId)?.purchaseSupplierName ?? "매입처 미지정"}
+                        <td>
+                          {(() => {
+                            const sup = products.find((p) => p.id === a.productId)?.purchaseSupplierName;
+                            return sup ? (
+                              <span className={`sup-tag sup-c${supplierColorIndex(sup)}`}>{sup}</span>
+                            ) : (
+                              <span className="badge amber">미지정</span>
+                            );
+                          })()}
                         </td>
                         <td>{a.unit}</td>
                         <td className="num">
@@ -1023,6 +1047,17 @@ export default function HomePage() {
                 <p className="muted" style={{ marginTop: 0 }}>
                   처음에는 비워져 있습니다. 매입처에 보낼 품목만 체크하면 아래 발주 문장에 들어갑니다.
                 </p>
+                <p className="purchase-counter">
+                  발주 대상 <strong>{purchaseSummary.total}</strong>개 · 문장에 담음{" "}
+                  <strong>{purchaseSummary.included}</strong>개 ·{" "}
+                  <span className={purchaseSummary.excluded > 0 ? "count-warn" : ""}>
+                    안 담음 <strong>{purchaseSummary.excluded}</strong>개
+                  </span>{" "}
+                  ·{" "}
+                  <span className={purchaseSummary.unassigned > 0 ? "count-warn" : ""}>
+                    매입처 미지정 <strong>{purchaseSummary.unassigned}</strong>개
+                  </span>
+                </p>
                 <div className="supplier-sections">
                   {supplierPurchaseSections.length === 0 ? (
                     <div className="empty-state compact">
@@ -1030,25 +1065,38 @@ export default function HomePage() {
                       <p className="muted">위 표에서 발주할 품목을 체크하면 매입처별 문장이 만들어집니다.</p>
                     </div>
                   ) : (
-                    supplierPurchaseSections.map((section) => (
-                      <div className="supplier-section" key={section.supplierName}>
-                        <div className="supplier-section-head">
-                          <strong>{section.supplierName}</strong>
-                          <button
-                            className="link"
-                            onClick={() =>
-                              copyTextToClipboard(
-                                formatSupplierPurchaseText([section]),
-                                `${section.supplierName} 발주 문장을 복사했습니다.`,
-                              )
-                            }
-                          >
-                            이 매입처만 복사
-                          </button>
+                    supplierPurchaseSections.map((section) => {
+                      const sectionText = formatSupplierPurchaseText([section], {
+                        companyName,
+                        withSupplierHeader: false,
+                      });
+                      const assigned = section.supplierName !== "매입처 미지정";
+                      return (
+                        <div
+                          className={`supplier-section${assigned ? ` sup-c${supplierColorIndex(section.supplierName)}` : " sup-unassigned"}`}
+                          key={section.supplierName}
+                        >
+                          <div className="supplier-section-head">
+                            <strong>
+                              {section.supplierName}{" "}
+                              <span className="muted">(품목 {section.rows.length}개)</span>
+                            </strong>
+                            <button
+                              className="link"
+                              onClick={() =>
+                                copyTextToClipboard(
+                                  sectionText,
+                                  `${section.supplierName} 발주 문장을 복사했습니다.`,
+                                )
+                              }
+                            >
+                              이 매입처만 복사
+                            </button>
+                          </div>
+                          <pre>{sectionText}</pre>
                         </div>
-                        <pre>{formatSupplierPurchaseText([section])}</pre>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
                 <textarea
@@ -1071,7 +1119,9 @@ export default function HomePage() {
 
       {view === "orders" && (
         <section className="card">
-          <h2>주문 목록</h2>
+          <h2>
+            주문 목록 <span className="muted">저장된 판매 주문 (거래처가 시킨 것)</span>
+          </h2>
           {orders.length === 0 ? (
             <div className="empty-state">
               <strong>확정된 주문이 없습니다.</strong>
@@ -1451,6 +1501,9 @@ function ReviewView(props: {
           {props.busy ? "저장 중…" : "주문 확정"}
         </button>
       </div>
+      <p className="muted" style={{ marginTop: 8 }}>
+        확정하면 이 거래처의 판매 주문으로 저장됩니다. 매입처 발주는 &lsquo;품목별 합산표&rsquo;에서 따로 합니다.
+      </p>
     </section>
   );
 }

@@ -123,13 +123,63 @@ export function buildSupplierPurchaseSections(
   }));
 }
 
-export function formatSupplierPurchaseText(sections: SupplierPurchaseSection[]): string {
+export interface SupplierPurchaseTextOptions {
+  /** DB=회사명(ordermoa_companies.name), 데모=회사명. 비어 있으면 인사말 줄 생략 */
+  companyName?: string | null;
+  /** 여러 매입처 구분용 [매입처명] 헤더. 전체 복사=true, 개별 복사=false (기본 true) */
+  withSupplierHeader?: boolean;
+}
+
+/**
+ * 매입처 발주 문장.
+ * 형식) "{회사명}입니다\n발주 품목입니다\n1. 콩나물 3박스\n2. 두부 8판"
+ * - 회사명 없으면 첫 줄 생략, 품목은 1부터 번호
+ * - withSupplierHeader=true면 섹션마다 [매입처명] 헤더, 섹션 사이 빈 줄
+ */
+export function formatSupplierPurchaseText(
+  sections: SupplierPurchaseSection[],
+  options: SupplierPurchaseTextOptions = {},
+): string {
+  const { companyName, withSupplierHeader = true } = options;
+  const greeting = companyName?.trim() ? `${companyName.trim()}입니다` : null;
   return sections
     .map((section) => {
-      const body = section.rows.map((row) => `${row.name} ${formatQtyUnit(row.qty, row.unit)}`).join("\n");
-      return `[${section.supplierName}]\n${body}`;
+      const items = section.rows.map(
+        (row, i) => `${i + 1}. ${row.name} ${formatQtyUnit(row.qty, row.unit)}`,
+      );
+      const lines = [greeting, "발주 품목입니다", ...items].filter(Boolean) as string[];
+      if (withSupplierHeader) lines.unshift(`[${section.supplierName}]`);
+      return lines.join("\n");
     })
     .join("\n\n");
+}
+
+/**
+ * 발주 누락 검수 요약 (화면 상태 파생값, DB 변경 없음).
+ * - total: 합산 대상 품목 수
+ * - included/excluded: 발주 문장에 담김/안 담김 (체크 여부)
+ * - unassigned: 매입처 미지정 품목 수 (체크 무관)
+ */
+export function buildPurchaseChecklistSummary(
+  rows: AggregateRow[],
+  selectedProductIds: Set<string>,
+  products: PurchaseSupplierProduct[],
+): { total: number; included: number; excluded: number; unassigned: number } {
+  const supplierByProduct = new Map(products.map((p) => [p.id, p.purchaseSupplierName || ""]));
+  let included = 0;
+  let unassigned = 0;
+  for (const row of rows) {
+    if (selectedProductIds.has(row.productId)) included += 1;
+    if (!supplierByProduct.get(row.productId)) unassigned += 1;
+  }
+  return { total: rows.length, included, excluded: rows.length - included, unassigned };
+}
+
+/** 매입처 이름 → 파스텔 팔레트 인덱스(0..7). 같은 이름은 항상 같은 색. */
+export function supplierColorIndex(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i += 1) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return h % 8;
 }
 
 /** 거래처별 기여 내역 문장 (예: "가람식당 3박스, 한빛카페 2박스") */

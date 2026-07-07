@@ -5,7 +5,7 @@
     "updated": "2026-07-07",
     "branch": "codex/integrate-mvp-docs-web",
     "charter": "docs/order-moa-system-meta-prompt.md (헌장 — 차수·범위의 기준. 이 진행판과 어긋나면 헌장이 우선)",
-    "currentFocus": "W05/W06/W08 실측 완료(0004 적용 + 비밀번호 로그인 + 주문 저장 F5 유지). 다음: W17 합산표 개선 팩(발주 문장 템플릿·누락 검수·색상) → W07 매입처 관리 → W03 품목·별칭.",
+    "currentFocus": "W17 합산표 개선 팩 완료(발주 문장 템플릿·누락 검수 카운터/경고·미지정 뱃지·매입처 파스텔 색·F1 문구, 브라우저 실측). 다음: W07 매입처 관리 → W03 품목·별칭.",
     "recentCommits": [
       "a696a36 feat: add password login fallback",
       "38f4e6c fix: harden supplier migration guidance",
@@ -193,7 +193,7 @@
     {
       "id": "W17",
       "name": "합산표 개선 팩 — 발주 문장 템플릿·누락 검수·색상",
-      "status": "다음",
+      "status": "완료",
       "phase": "1차",
       "plain": "매입처 발주 문장을 \"OO상사입니다 / 발주 품목입니다 / 1. 콩나물 3박스\" 형식으로 바꾸고, 안 담은 품목 카운터·복사 전 경고·매입처 미지정 뱃지·매입처별 연한 색 구분을 넣습니다. 실사용 피드백(2026-07-07) 반영.",
       "why": "사장님이 실발주 테스트에서 바로 느낀 불편 3가지(문장 형식, 누락 걱정, 매입처 구분)를 한 번에 해결. 전부 화면 작업이라 DB 변경 없음.",

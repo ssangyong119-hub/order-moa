@@ -1352,3 +1352,22 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
 - 진행판 갱신: W05/W06/W08 → 완료, **W17(합산표 개선 팩) 신규 추가**, currentFocus/최근 커밋 갱신 → HTML/XLSX 재생성(17항목 검증 통과).
 - 검증: 문서/진행판 작업만(앱 코드 무변경 — auth-gate는 a696a36으로 이미 커밋됨). JSON 파싱·HTML 17카드·XLSX 18행 확인. 커밋하지 않음 — Codex 판단.
 - [다음] W17 구현(설계 §6 프롬프트) → W07 → W03. [위험] 공유 Supabase 무료 쿼터 경고(Grace period is over) — 전용 프로젝트 분리 논의 필요.
+
+## 2026-07-07 Claude (W17 합산표 개선 팩 F1~F4 구현 완료)
+
+- 범위: 1차 즉시 / DB 변경 0건 / 마이그레이션 없음 (설계 §6 프롬프트 그대로).
+- 순수 함수(TDD, `web/src/lib/aggregate.ts` + `aggregate.test.ts`):
+  - `formatSupplierPurchaseText(sections, { companyName?, withSupplierHeader? })` 재작성 — "회사명입니다 / 발주 품목입니다 / 1. 품목 수량단위" 번호 목록. 회사명 없으면 인사말 줄 생략. 전체 복사=`[매입처명]` 헤더 O, 개별 복사=헤더 X.
+  - `buildPurchaseChecklistSummary(rows, selectedSet, products)` 신규 → { total, included, excluded, unassigned }.
+  - `supplierColorIndex(name): 0..7` 신규(문자 해시, 같은 이름=같은 색).
+- 화면(`web/src/app/page.tsx`):
+  - F2 회사명 주입(DB=session.companyName, 데모=data.company.name) → 전체 textarea + 매입처 카드 pre 모두 새 형식.
+  - F4 카운터 줄("발주 대상 N · 담음 · 안 담음 · 미지정"), 복사 시 excluded>0이면 window.confirm 경고, 미지정 품목은 노란 "미지정" 뱃지.
+  - F3 매입처 셀 파스텔 색 태그(.sup-tag.sup-cN) + 매입처 카드 왼쪽 3px 보더. 카드 제목에 (품목 N개).
+  - F1 문구 3곳: 주문 확정 버튼 아래 안내, 합산표 상단 설명, 주문 목록 제목 옆.
+- CSS(`globals.css`): `.sup-c0~7` 파스텔 8색(custom prop --sup-bg/--sup-fg), `.sup-tag`, `.purchase-counter`/`.count-warn`, `@media print`에서 `.sup-tag` 배경 제거(텍스트 유지).
+- 검증: root `npm test` 5/5 · web `npm test` 87/87 · web `npm run build` 성공 · `npm audit --audit-level=low` 0건.
+  - 브라우저 실측(데모 모드, 발주 ⑪·⑫ 2건 확정): 카운터/색 태그/미지정 뱃지 표시, 체크 시 카운터 갱신, 개별/전체 발주문장 새 형식(회사명 "오더모아 샘플상사" 인사말), 안 담음 9개 상태 복사 시 confirm 경고, 모바일 375px 가로 넘침 없음, 콘솔 오류 0.
+- 미커밋(협업 규칙 — Codex 판단). 진행판 W17 → 완료, currentFocus 갱신 후 HTML/XLSX 재생성.
+- [알려진 한계] supplierColorIndex는 8색 해시라 매입처가 많으면 색 충돌 가능(실측 샘플에서 야채매입처·뿌리채소매입처가 같은 sup-c7). 색은 보조이고 이름 텍스트 항상 표시라 허용(설계대로). 필요 시 2차에서 충돌 회피 배정으로 승격.
+- [다음] W07 매입처 관리(supplier-store + supplier-management-view, customer 패턴 복제) → W03 품목·별칭(품목 폼에 매입처 드롭다운).

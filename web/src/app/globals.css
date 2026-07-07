@@ -155,6 +155,28 @@ td input.qty,td input.price{max-width:96px}
   color:var(--ok-fg);background:var(--ok-bg);border-radius:999px;
   padding:1px 7px;font-size:.68rem;font-weight:700;
 }
+
+/* ── 매입처 파스텔 팔레트(연하게, 업무 톤) · 이름 해시로 배정 ── */
+.sup-c0{--sup-bg:#eef2fb;--sup-fg:#35507a}
+.sup-c1{--sup-bg:#eef6ee;--sup-fg:#3a6b45}
+.sup-c2{--sup-bg:#fbf1ea;--sup-fg:#8a5a34}
+.sup-c3{--sup-bg:#f3eefa;--sup-fg:#5f4784}
+.sup-c4{--sup-bg:#e9f5f4;--sup-fg:#2f6b66}
+.sup-c5{--sup-bg:#faeef2;--sup-fg:#8a4159}
+.sup-c6{--sup-bg:#f6f3e6;--sup-fg:#6d5f22}
+.sup-c7{--sup-bg:#eef1f4;--sup-fg:#465262}
+.sup-tag{
+  display:inline-block;padding:2px 9px;border-radius:8px;font-size:.82rem;font-weight:600;
+  background:var(--sup-bg,#eef1f4);color:var(--sup-fg,#465262);
+}
+.supplier-section[class*="sup-c"]{border-left:3px solid var(--sup-fg)}
+.supplier-section.sup-unassigned{border-left:3px solid var(--amber-fg)}
+
+/* ── 발주 누락 검수 카운터 ── */
+.purchase-counter{margin:0 0 10px;font-size:.85rem;color:var(--soft)}
+.purchase-counter strong{color:var(--ink)}
+.count-warn{color:var(--warn-fg);font-weight:600}
+.count-warn strong{color:var(--warn-fg)}
 .product-picker{min-width:260px}
 .selected-product{font-size:.74rem;color:var(--soft);margin-top:4px}
 .product-results{
@@ -327,4 +349,5 @@ button.danger{color:var(--err-fg);border-color:var(--err-bg)}
   table{min-width:0}
   .note-doc{border:none;padding:0;width:100%;min-height:0}
   .note-table th,.note-table td{height:32px}
+  .sup-tag{background:none !important;color:inherit !important;padding:0}
 }

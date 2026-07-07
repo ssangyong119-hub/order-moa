@@ -1,66 +1,45 @@
-# 세션 인계 - 오더모아 (Order-Moa) MVP
+# 세션 인계 — 오더모아 (Order-Moa) MVP
 
-작성일: 2026-07-07
-작업 폴더: `D:\Documents\ERP-1`
+작성일: 2026-07-07 (저녁 세션 종료 시점)
+작업 폴더: `D:\Documents\ERP-1` ← **Claude Code를 반드시 이 폴더에서 열 것** (자동낙찰기 `D:\Projects\new app`에서 열면 문서 클릭·경로가 어긋남)
 브랜치: `codex/integrate-mvp-docs-web`
 
-> 새 세션은 이 문서와 `docs/order-moa-system-meta-prompt.md`를 먼저 읽고 시작한다.
+> 새 세션은 이 문서 + `docs/order-moa-system-meta-prompt.md`(헌장) + `docs/order-moa-progress-data.json`(진행 단일 소스)를 먼저 읽고 시작한다.
 
-## 현재 프로젝트 위치
+## 환경
+- 스택: Next.js 15 + TS + Vitest, Supabase(Auth+Postgres+RLS). 배포 없음 — 로컬(`cd web; npm run dev`).
+- Supabase: 기존 `yangsan-inventory` 프로젝트 **공유** → 오더모아 객체는 전부 `ordermoa_` 접두사. `web/.env.local`(미추적) 있으면 DB 모드, 없으면 데모 모드.
+- **로그인**: 매직링크는 무료 메일 rate limit으로 자주 막힘 → **비밀번호 로그인 추가됨**(`a696a36`). 실측 계정은 Supabase Auth에 password+Auto Confirm으로 사용자가 생성(예: `admin@ordermoa.app`).
+- 협업: **Claude는 커밋/머지/push 안 함 — 보고만.** 커밋은 Codex 판단. 마이그레이션·스키마는 Codex 승인 게이트.
+- ⚠️ cwd가 매 명령 후 리셋될 수 있음 → git/npm 전 항상 `cd "D:/Documents/ERP-1"`.
 
-- 오더모아는 전체 ERP가 아니라, 도소매/식당납품 사장님을 위한 좁은 웹 ERP MVP다.
-- 핵심 흐름은 `발주 원문 붙여넣기 -> 파싱 확인 -> 주문 확정 -> 품목 합산표 -> 매입처별 발주 문장 -> 주문 목록 -> 거래명세서 인쇄`다.
-- Supabase는 새 프로젝트 한도 때문에 기존 `yangsan-inventory` 프로젝트를 공유한다. 오더모아 DB 객체는 모두 `ordermoa_` 접두사를 쓴다.
-- `web/.env.local`에 Supabase URL/anon key가 있으면 DB 모드, 없으면 데모 모드로 동작한다.
+## 이번 세션(2026-07-07)에 한 일 — 커밋
+- `73b0595` docs: 피드백 로드맵(설계 문서 + 진행판 갱신)
+- `a696a36` feat: 비밀번호 로그인 fallback (매직링크 rate limit 우회)
+- `38f4e6c` fix: 매입처 마이그레이션 가이드/SQL 재실행 안전화(0004 idempotent)
+- `7d3de93` feat: 거래처 관리 CRUD + 매입처 영속화(0004_suppliers.sql)
+- (앞선 세션) `fc59baa`~ 헌장 4종, 진행판 세분화(W01~W17), 즉석 품목 등록
 
-## 최근 완료된 큰 줄기
+## 현재 상태
+- git: `codex/integrate-mvp-docs-web` · origin 대비 여러 커밋 ahead(미push). 정확한 최신 커밋은 `git log -1 --oneline`으로 확인.
+- **✅ 완료**: W01(헌장) · W02(거래처 관리) · **W05·W06(매입처 DB화)** · **W08(주문 DB 저장 실측)** · **W17(합산표 개선 팩)**
+  - 0004_suppliers.sql **Supabase 적용 완료**(Table Editor에 `ordermoa_suppliers` 확인).
+  - 비밀번호 로그인 → 발주 여러 건 확정 → **F5 후 주문 유지 실측 성공**.
+- W17: 발주 문장 템플릿, 누락 검수 카운터/복사 전 경고, 매입처 미지정 뱃지, 매입처 파스텔 색상, 문구 정리까지 구현.
+- **⏸ 다음(우선순위)**: W07 → W03 → W09~W12 (아래)
+- 검증 최신값: root `npm test` 5/5 · web `npm test` 87/87 · `npm run build` 성공 · `npm audit` 0건.
 
-- 8a: Supabase 인증, 회사 생성, RLS, A/B 회사 격리 실측 완료.
-- 8b 코드: 주문 저장/조회, 샘플 시드 멱등화, `orders`/`order_items` 저장 경로 구현.
-- UI: 좌측 사이드바형 업무 화면, 품목 검색, 다중 후보 확인, 신규 품목 즉석 등록, 매입처별 발주 문장, 거래명세서 인쇄 보정.
-- 파서: 실제 발주 fixture 기반 테스트, 규격 숫자 뒤 수량 인식, 단위 사전 확장.
-- 문서: 전체 시스템 헌장/로드맵/모듈맵/AI 작업 규칙 초안 작성 및 Codex 검수 반영.
+## 다음에 이어서 할 일 (우선순위)
+1. **W07 매입처 관리 화면** (1차 보강) — `customer-management-view.tsx` + `customer-store.ts` 패턴 복제 → `supplier-*`. 보관/복구/이름 수정/신규 등록까지 거래처 관리와 같은 느낌으로.
+2. **W03 품목·별칭 관리 CRUD** (1차) — 품목 폼에 매입처 드롭다운 포함(W06 분담분).
+3. **W09~W12 = 8c** — raw_text 저장, 저장 주문 기반 합산표/명세서 재출력, 거래처별 월 합계.
+4. **F7 거래명세서 하단 보정** — 인수자란/빈행/합계 문구 다듬기. 짧은 보정 작업으로 중간에 끼워도 됨.
 
-## 다음 작업 우선순위
-
-1. **기준정보 관리 1차**
-   - 거래처 관리, 품목·별칭 관리, 단가 관리 화면을 만든다.
-   - `page.tsx`가 커졌으므로 화면 단위 분리를 함께 진행한다.
-
-2. **매입처 DB화 (1차 보강, 8c 전 권장)**
-   - 현재 매입처는 화면/샘플 상태에만 있어 새로고침 후 사라질 수 있다.
-   - `ordermoa_suppliers` + `ordermoa_products.purchase_supplier_id`를 추가하는 방향으로 설계한다.
-   - RLS, `ordermoa_` 접두사, 교차회사 트리거를 반드시 포함한다.
-
-3. **8b 실사용 DB 저장 실측**
-   - 실제 로그인 상태에서 발주 확정 후 F5 새로고침.
-   - 주문 목록이 유지되고 Supabase Table Editor에서 `ordermoa_orders`/`ordermoa_order_items` row가 보이면 완료 처리.
-
-4. **8c**
-   - 저장된 주문 기반 합산표/거래명세서 재출력.
-   - 거래처별 월 합계.
-   - `order_imports.raw_text` 저장/삭제 연결.
-
-## 불변 규칙
-
-- `order_items.unit_price`는 확정 시점 스냅샷이다.
-- `order_items.amount`는 DB generated 컬럼이므로 insert payload에 넣지 않는다.
-- 과거 거래명세서를 `customer_prices` 재조회로 만들지 않는다.
-- 예상 마진은 저장하지 않고 표시 시점 참고값으로 계산한다.
-- 미매칭/수량 불확실/다중 후보 미확인 라인이 있으면 주문 확정 불가다.
-- 원본 실데이터 엑셀, API 키, service role key, `.env.local`은 커밋 금지다.
-
-## 검증 한 세트
-
-코드 변경 후 기본 검증:
-
-```powershell
-npm test
-cd web
-npm test
-npm run build
-npm audit --audit-level=low
-```
-
-UI 변경이면 브라우저 smoke도 함께 본다.
-
+## 꼭 알아야 할 맥락·주의
+- **좁은 MVP**: 세금계산서 발행·회계 마진·재고평가·매입처 원가이력·OCR·카톡 자동·이카운트 연동 = 후순위/제외. 사이드바에 2차 메뉴 추가 금지.
+- **용어(피드백 정리)**: 주문 확정=거래처 발주를 우리 판매 장부에 저장 / 매입처 발주=우리가 매입처에 보낼 구매 문장. **매입처 쪽 거래명세서는 매입처가 발행 — 우리가 안 만듦.** (상세 `docs/order-moa-feedback-design-2026-07-07.md` §0)
+- **DB 불변 규칙(헌장 §3)**: `order_items.amount`는 generated → insert 제외. `unit_price`=확정 시점 스냅샷, 과거 명세서는 customer_prices 재조회 금지. 예상 마진 저장 안 함. raw_text 삭제 가능(확정 주문 유지). soft delete.
+- **검증 한 세트**: root `npm test` · web `npm test` · web `npm run build` · web `npm audit --audit-level=low`. UI 변경은 브라우저 확인까지. 진행판 고치면 `py -3 scripts/generate-progress.py`로 HTML/XLSX 재생성(JSON이 단일 소스).
+- **[위험] 공유 Supabase 무료 쿼터 경고**("Grace period is over")가 대시보드에 떠 있음 → 한도 소진 시 로그인·저장 막힐 수 있음. 오더모아 전용 프로젝트 분리 시점 논의 필요.
+- **[나중]** 매직링크 정식화(Supabase Auth URL Configuration에 개발 URL 등록 — 기본 localhost:3000만 허용됨), 발주 문장 템플릿 설정 화면(2차).
+- 관련 문서: `order-moa-system-meta-prompt.md`(헌장) · `order-moa-expanded-roadmap.md` · `order-moa-module-map.md` · `order-moa-ai-working-rules.md` · `order-moa-feedback-design-2026-07-07.md` · `order-moa-progress-{data.json,dashboard.html,tracker.xlsx}`.

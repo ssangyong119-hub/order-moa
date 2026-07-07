@@ -2,10 +2,12 @@ import { expect, test } from "vitest";
 import {
   buildAggregateRows,
   buildContributionText,
+  buildPurchaseChecklistSummary,
   buildSupplierPurchaseSections,
   formatPurchaseOrderText,
   formatSupplierPurchaseText,
   formatQtyUnit,
+  supplierColorIndex,
   type AggregatableOrder,
 } from "./aggregate";
 
@@ -108,10 +110,55 @@ test("buildSupplierPurchaseSections: 체크된 품목이 없으면 매입처 발
   expect(buildSupplierPurchaseSections(rows, productsWithSuppliers, new Set())).toEqual([]);
 });
 
-test("formatSupplierPurchaseText: 매입처별 제목과 품목 발주문장을 만든다", () => {
+test("formatSupplierPurchaseText: 전체 복사 — 매입처 헤더 + 인사말 + 번호 목록", () => {
   const rows = buildAggregateRows(orders, productOrder);
   const sections = buildSupplierPurchaseSections(rows, productsWithSuppliers, new Set(["p01", "p05"]));
-  expect(formatSupplierPurchaseText(sections)).toBe(
-    "[두부콩나물매입처]\n콩나물 7박스\n\n[야채매입처]\n양파 3망",
+  expect(formatSupplierPurchaseText(sections, { companyName: "오더모아유통" })).toBe(
+    [
+      "[두부콩나물매입처]",
+      "오더모아유통입니다",
+      "발주 품목입니다",
+      "1. 콩나물 7박스",
+      "",
+      "[야채매입처]",
+      "오더모아유통입니다",
+      "발주 품목입니다",
+      "1. 양파 3망",
+    ].join("\n"),
   );
+});
+
+test("formatSupplierPurchaseText: 개별 복사 — 매입처 헤더 없이 인사말부터", () => {
+  const rows = buildAggregateRows(orders, productOrder);
+  const [section] = buildSupplierPurchaseSections(rows, productsWithSuppliers, new Set(["p01"]));
+  expect(
+    formatSupplierPurchaseText([section], { companyName: "오더모아유통", withSupplierHeader: false }),
+  ).toBe("오더모아유통입니다\n발주 품목입니다\n1. 콩나물 7박스");
+});
+
+test("formatSupplierPurchaseText: 회사명 없으면 인사말 줄 생략", () => {
+  const rows = buildAggregateRows(orders, productOrder);
+  const [section] = buildSupplierPurchaseSections(rows, productsWithSuppliers, new Set(["p01"]));
+  expect(formatSupplierPurchaseText([section], { withSupplierHeader: false })).toBe(
+    "발주 품목입니다\n1. 콩나물 7박스",
+  );
+});
+
+test("buildPurchaseChecklistSummary: 전체/담음/안담음/미지정 카운트", () => {
+  const rows = buildAggregateRows(orders, productOrder); // 콩나물(두부콩나물), 양파(야채)
+  const withUnassigned = [
+    { id: "p01", purchaseSupplierName: "두부콩나물매입처" },
+    { id: "p05", purchaseSupplierName: null }, // 미지정
+  ];
+  const summary = buildPurchaseChecklistSummary(rows, new Set(["p01"]), withUnassigned);
+  expect(summary).toEqual({ total: 2, included: 1, excluded: 1, unassigned: 1 });
+});
+
+test("supplierColorIndex: 같은 이름은 항상 같은 색, 0..7 범위", () => {
+  const a = supplierColorIndex("야채매입처");
+  const b = supplierColorIndex("야채매입처");
+  expect(a).toBe(b);
+  expect(a).toBeGreaterThanOrEqual(0);
+  expect(a).toBeLessThanOrEqual(7);
+  expect(Number.isInteger(supplierColorIndex("두부콩나물매입처"))).toBe(true);
 });
