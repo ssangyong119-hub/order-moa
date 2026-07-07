@@ -1,24 +1,245 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>오더모아 진행현황</title>
+<title>오더모아 진행현황 — 2026-07-07</title>
 <style>
-:root {--bg:#f5f7fb;--panel:#ffffff;--ink:#172033;--muted:#66758a;--line:#dce4ef;--brand:#d07559;--green:#d9fbe7;--green-ink:#08753f;--blue:#dbeafe;--blue-ink:#1d4ed8;--yellow:#fff3c4;--yellow-ink:#915f00;--purple:#eee7ff;--purple-ink:#6841bd;--red:#ffe5e0;--red-ink:#b33b2e;}
-*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);letter-spacing:0}header{padding:32px 36px 24px;background:linear-gradient(180deg,#fff 0%,#f8fafc 100%);border-bottom:1px solid var(--line)}h1{margin:0 0 8px;font-size:32px}.subtitle{color:var(--muted);font-size:16px;line-height:1.6;max-width:980px}.meta{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px;color:var(--muted);font-size:14px}.meta span{border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 11px}main{width:min(1240px,calc(100% - 32px));margin:24px auto 56px;display:grid;gap:22px}section{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px}section h2{margin:0 0 14px;font-size:22px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.flow{display:flex;flex-wrap:wrap;gap:8px;padding:0;margin:0;list-style:none}.flow li{background:#eef3f8;border:1px solid var(--line);border-radius:999px;padding:8px 12px;color:#334155}table{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid var(--line);border-radius:10px}th,td{padding:12px 14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{background:#eef3f8;color:#475569;font-weight:700}tr:last-child td{border-bottom:0}td span{color:var(--muted)}.badge{display:inline-block;border-radius:999px;padding:4px 9px;font-weight:700;font-size:12px;white-space:nowrap}.badge.done{background:var(--green);color:var(--green-ink)}.badge.doing{background:var(--blue);color:var(--blue-ink)}.badge.partial{background:var(--purple);color:var(--purple-ink)}.badge.next{background:var(--yellow);color:var(--yellow-ink)}.badge.hold{background:#eef2f7;color:#64748b}.badge.later{background:var(--red);color:var(--red-ink)}.now{display:inline-block;margin-left:8px;color:#fff;background:var(--brand);border-radius:999px;padding:3px 8px;font-size:12px}.list{display:grid;gap:10px;padding:0;margin:0;list-style:none}.list li{border:1px solid var(--line);border-radius:8px;padding:13px 14px;background:#fbfdff}.list strong{display:block;margin-bottom:4px}.list span{color:var(--muted);line-height:1.5}.next-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.next-card{border:1px solid var(--line);border-radius:10px;padding:16px;background:#fbfdff}.next-card>div{width:32px;height:32px;display:grid;place-items:center;border-radius:50%;background:var(--brand);color:#fff;font-weight:800}.next-card h3{margin:12px 0 8px;font-size:18px}.next-card p{margin:0 0 10px;color:var(--muted);line-height:1.55}.next-card small{color:#475569;font-weight:700}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#334155}.footer-note{color:var(--muted);line-height:1.6}@media(max-width:900px){.grid2,.next-grid{grid-template-columns:1fr}header{padding:24px 18px}main{width:calc(100% - 20px)}table{font-size:14px}th:nth-child(4),td:nth-child(4){display:none}}@media print{body{background:#fff}header,section{break-inside:avoid}main{width:100%;margin:0}}
+  * { box-sizing: border-box; }
+  body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; margin: 0; background: #f6f7f9; color: #202124; line-height: 1.55; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; }
+  header.top { background: #1f2a44; color: #fff; padding: 28px 16px; }
+  header.top .wrap { padding: 0 16px; }
+  h1 { margin: 0 0 6px; font-size: 24px; }
+  .sub { color: #c8d0e0; font-size: 14px; margin: 2px 0; }
+  .focus { background: #fff3cd; border: 1px solid #f0d47a; color: #6b5200; padding: 10px 14px; border-radius: 8px; margin: 18px 0; font-size: 15px; }
+  .progressbar { background: #e3e6ea; border-radius: 999px; height: 18px; overflow: hidden; margin: 8px 0 4px; }
+  .progressbar > div { background: #34a853; height: 100%; }
+  .counts { font-size: 13px; color: #5f6368; }
+  .flow { background: #fff; border: 1px solid #e0e3e8; border-radius: 10px; padding: 12px 16px; font-size: 13px; color: #3c4043; }
+  .flow span { white-space: nowrap; }
+  h2 { font-size: 18px; margin: 32px 0 12px; border-left: 5px solid #1f2a44; padding-left: 10px; }
+  h2.phase { border-left-color: #34a853; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+  .card { background: #fff; border: 1px solid #e0e3e8; border-radius: 10px; padding: 14px 16px; }
+  .card.s-done { border-left: 5px solid #34a853; }
+  .card.s-doing { border-left: 5px solid #4285f4; }
+  .card.s-next { border-left: 5px solid #fbbc04; }
+  .card.s-hold { border-left: 5px solid #9aa0a6; }
+  .card.s-cut { border-left: 5px solid #ea4335; }
+  .card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+  .wid { font-size: 12px; color: #80868b; font-weight: 700; }
+  .badge { font-size: 12px; padding: 2px 10px; border-radius: 999px; font-weight: 700; margin-left: auto; }
+  .plain { margin: 4px 0 10px; font-size: 14px; }
+  dl { margin: 0; font-size: 13px; }
+  dt { font-weight: 700; color: #5f6368; margin-top: 6px; }
+  dd { margin: 0 0 2px; }
+  details { margin-top: 8px; font-size: 12px; color: #5f6368; }
+  details ul { margin: 4px 0 0 16px; padding: 0; }
+  code { background: #f1f3f4; padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+  ul.simple { background: #fff; border: 1px solid #e0e3e8; border-radius: 10px; margin: 0; padding: 14px 16px 14px 34px; font-size: 14px; }
+  ul.simple li { margin: 4px 0; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e0e3e8; border-radius: 10px; overflow: hidden; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eef0f3; }
+  th { background: #f1f3f4; }
+  td.ok { color: #1e7e34; font-weight: 700; }
+  .legend { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 0; }
+  footer { margin-top: 40px; font-size: 12px; color: #80868b; }
 </style>
 </head>
 <body>
-<header><h1>오더모아 (Order-Moa) 진행현황</h1><p class="subtitle">전체 ERP 대체가 아니라, 도소매/식당납품 사장님용 좁은 웹 ERP MVP. 핵심 가치: 카톡/문자 발주를 붙여넣으면 파싱, 합산표, 매입처별 발주 문장, 거래명세서까지 이어지는 것.</p><div class="meta"><span>업데이트: 2026-07-06</span><span>브랜치: codex/integrate-mvp-docs-web</span><span>현재 초점: 기준정보 관리 1차 준비: 매입처/품목/별칭/단가를 사용자가 직접 고칠 수 있게 만들기</span></div></header>
-<main>
-<section><h2>한눈에 보기</h2><p class="footer-note">지금은 “붙여넣기 데모”를 넘어, 품목 검색과 매입처별 발주 문장까지 들어간 상태입니다. 다음 큰 작업은 샘플로 박혀 있는 매입처/품목/단가를 사용자가 직접 고치는 기준정보 관리 화면입니다.</p><ul class="flow"><li>카톡/문자 발주 원문 붙여넣기</li><li>품목/수량/단가 정제(파싱+수정)</li><li>품목 검색으로 빠른 수정</li><li>거래처별 판매가 자동 적용</li><li>예상 마진 참고값 표시</li><li>주문 확정</li><li>품목별 합산표</li><li>매입처별 발주 문장 분리/복사</li><li>주문 목록(판매조회형)</li><li>거래명세서 미리보기/브라우저 인쇄</li></ul></section>
-<section><h2>로드맵</h2><table><thead><tr><th>단위</th><th>작업</th><th>상태</th><th>메모</th></tr></thead><tbody><tr><td>단위 1</td><td><strong>web 스캐폴드</strong><br><span>앱의 뼈대 만들기 - Next.js + 테스트 틀</span></td><td><span class="badge done">완료</span></td><td>기초 완료</td></tr><tr><td>단위 2</td><td><strong>DB 스키마/RLS 설계 문서</strong><br><span>장부 양식과 잠금 규칙을 문서로 설계</span></td><td><span class="badge done">완료</span></td><td>db-schema-definition / supabase-rls-policy</td></tr><tr><td>단위 3</td><td><strong>화면 설계·샘플 데이터 정의</strong><br><span>필요 화면과 시연용 샘플 데이터 정의</span></td><td><span class="badge done">완료</span></td><td>screen-specification / sample-data-definition</td></tr><tr><td>단위 4</td><td><strong>HTML 프로토타입</strong><br><span>영업/검증용 정적 데모 한 장</span></td><td><span class="badge done">완료</span></td><td>prototype/order-moa-demo.html</td></tr><tr><td>단위 5</td><td><strong>이카운트 벤치마크 반영</strong><br><span>실사용 ERP를 참고해 명세서/단가/마진 설계를 보정</span></td><td><span class="badge done">완료</span></td><td>좁은 MVP 범위로 재정리</td></tr><tr><td>단위 6</td><td><strong>Next.js 데모 핵심 흐름</strong><br><span>붙여넣기→파싱→확정→합산표→명세서를 앱 화면으로 구현</span></td><td><span class="badge done">완료</span></td><td>샘플 데이터 기반</td></tr><tr><td>단위 7</td><td><strong>품목별 합산+복사 문장</strong><br><span>여러 거래처 주문을 품목별로 합쳐 매입처에 보낼 문장 생성</span></td><td><span class="badge done">완료</span></td><td>복사 버튼+fallback textarea</td></tr><tr><td>단위 8a</td><td><strong>Supabase 인증/회사/RLS 기반</strong><br><span>로그인, 회사 만들기, 회사별 데이터 잠금 기반</span></td><td><span class="badge done">완료</span></td><td>SQL 3개 적용, 히든식품 회사 생성, RLS 기본 검증</td></tr><tr><td>8b 기반</td><td><strong>주문 DB 저장/조회 기반</strong><br><span>DB 모드에서 샘플 기준정보 시드와 주문 저장 흐름의 코드 기반 구현</span></td><td><span class="badge partial">부분 완료</span></td><td>이메일 rate limit 때문에 실사용 저장 실측은 남음</td></tr><tr><td>파서 개선</td><td><strong>단위 사전+다중 후보 확인</strong><br><span>키로/장/모 등 현장 단위를 보강하고, 숙주처럼 후보가 여러 개인 품목은 사용자가 선택</span></td><td><span class="badge done">완료</span></td><td>실제 발주 fixture 기반 테스트</td></tr><tr><td>화면 정리</td><td><strong>좌측 사이드바 업무 화면</strong><br><span>스크린샷처럼 업무 메뉴가 왼쪽에 고정되는 구조로 정리</span></td><td><span class="badge done">완료</span></td><td>데모 모드에서도 확인 가능</td></tr><tr><td>샘플/명세서</td><td><strong>긴 샘플 발주+명세서 빈행/인쇄 보정</strong><br><span>6줄/10줄 긴 샘플을 추가하고 품목이 적어도 명세서 모양이 유지되게 보정</span></td><td><span class="badge done">완료</span></td><td>인쇄는 브라우저 print 단계</td></tr><tr><td>매입처 1차</td><td><strong>품목 검색+기본 매입처별 발주 문장</strong><br><span>품목 검색으로 빠르게 수정하고, 합산표에서 매입처별로 발주 문장을 나눠 복사</span></td><td><span class="badge done">완료</span></td><td>기본 매입처는 샘플 데이터 기준, 체크 품목만 발주 문장 포함</td></tr><tr><td>기준정보 1차</td><td><strong>매입처/품목/별칭/단가 수정 화면</strong><br><span>사용자가 매입처 이름과 품목별 기본 매입처, 별칭, 단가를 직접 관리</span></td><td><span class="badge next">다음</span></td><td>현재 위치 <span class="now">현재 위치</span></td></tr><tr><td>단위 8c</td><td><strong>DB 기반 합산표/명세서 재출력/월 합계</strong><br><span>저장된 주문에서 합산표와 거래명세서를 다시 꺼내고 거래처별 금액 집계</span></td><td><span class="badge next">다음</span></td><td>기준정보/8b 실측 후 연결</td></tr><tr><td>2차</td><td><strong>미수금·세금계산서·PDF·OCR·이카운트 연동</strong><br><span>좁은 MVP 검증 뒤 결정할 큰 기능들</span></td><td><span class="badge later">2차</span></td><td>지금은 만들지 않음</td></tr></tbody></table></section>
-<section class="grid2"><div><h2>완료/구현됨</h2><ul class="list"><li><strong>개발용 데모 진입</strong><span>Supabase 이메일 rate limit이 걸려도 버튼으로 앱 화면을 볼 수 있음</span></li><li><strong>좌측 사이드바형 업무 화면</strong><span>홈/대시보드/발주/조회/기준정보/자금/설정 메뉴 구조로 정리</span></li><li><strong>샘플 발주 16개</strong><span>짧은 예시뿐 아니라 6줄/10줄 긴 발주도 선택 가능</span></li><li><strong>파서 단위 사전 확장</strong><span>키로, 장, 모, 봉지 등 현장 표현을 더 잘 인식</span></li><li><strong>다중 품목 후보 확인</strong><span>숙주처럼 여러 품목에 걸리는 경우 &#x27;후보 확인&#x27;으로 막고 사용자가 선택</span></li><li><strong>품목 검색 선택 UI</strong><span>수세미/김치처럼 검색하면 관련 품목, 단위, 단가, 매입처를 보고 선택</span></li><li><strong>기본 매입처별 발주 문장</strong><span>야채/두부콩나물/공산품 등 샘플 매입처별로 발주 문장을 분리</span></li><li><strong>합산표 체크박스</strong><span>보낼 품목을 체크하면 매입처별 발주 문장에 들어가고, 복사 가능</span></li><li><strong>매입처 발주 체크 기본 비움</strong><span>합산표가 열려도 처음엔 발주문장이 비어 있고, 사용자가 체크한 품목만 매입처별 문장에 들어감</span></li><li><strong>거래명세서 모양 보정</strong><span>품목이 적어도 빈행을 채워 명세서 형태가 무너지지 않음</span></li><li><strong>8b 저장 기반 코드</strong><span>DB 모드에서 샘플 기준정보 시드와 주문 저장 흐름 구현. 실사용 실측은 남음</span></li></ul></div><div><h2>아직 남음</h2><ul class="list"><li><strong>매입처 관리 화면</strong><span>야채매입처/두부콩나물매입처 같은 이름을 사용자가 추가·수정·삭제하는 화면</span></li><li><strong>품목별 기본 매입처 수정</strong><span>콩나물은 A매입처, 양파는 B매입처처럼 품목별 매입처를 사용자가 바꾸는 기능</span></li><li><strong>품목/별칭/단가 기준정보 CRUD</strong><span>샘플 데이터가 아니라 사용자가 직접 품목, 별칭, 거래처별 단가를 관리</span></li><li><strong>8b 실사용 DB 저장 실측</strong><span>로그인 후 주문 확정→새로고침→주문 목록 유지 확인이 아직 남음</span></li><li><strong>DB 기반 합산표/명세서 재출력</strong><span>현재 데모 화면 흐름은 좋지만 저장된 DB 장부에서 다시 꺼내는 8c 연결은 다음</span></li><li><strong>서버 PDF 생성</strong><span>현재 인쇄는 브라우저 인쇄창(window.print) 단계. PDF 파일 생성은 2차</span></li></ul></div></section>
-<section><h2>검증 체크리스트</h2><table><thead><tr><th>항목</th><th>의미</th><th>결과</th></tr></thead><tbody><tr><td>root npm test</td><td>정적 데모 회귀 테스트</td><td><strong>통과 5/5</strong></td></tr><tr><td>web npm test</td><td>파서/합산/검색/주문 저장 빌더 자동 테스트</td><td><strong>통과 78/78</strong></td></tr><tr><td>web npm run build</td><td>배포용 빌드가 깨지지 않는지</td><td><strong>성공</strong></td></tr><tr><td>npm audit --audit-level=low</td><td>알려진 보안 취약점 검사</td><td><strong>0건</strong></td></tr><tr><td>local web</td><td>현재 앱 확인 주소</td><td><strong>http://localhost:3010 응답 200</strong></td></tr><tr><td>Supabase SQL 0001/0002/0003</td><td>장부 테이블/RLS/회사생성 함수 설치</td><td><strong>적용 성공</strong></td></tr><tr><td>8a RLS 검증</td><td>회사 row, anon 차단, policy, A/B 격리, 위조 insert 차단</td><td><strong>통과</strong></td></tr><tr><td>민감정보</td><td>service role key 커밋/번들 포함 여부</td><td><strong>미포함</strong></td></tr></tbody></table></section>
-<section><h2>다음 작업 후보</h2><div class="next-grid"><article class="next-card"><div>A</div><h3>기준정보 관리 1차</h3><p>지금 사용자가 바로 느끼는 불편은 &#x27;매입처/품목/단가를 내가 바꿀 수 있나&#x27;입니다. 매입처 이름 수정, 품목별 기본 매입처 지정, 품목/별칭/단가 관리 화면을 먼저 만들면 샘플 데모에서 실제 운영 도구로 넘어갑니다.</p><small>예상 작업량: 중간</small></article><article class="next-card"><div>B</div><h3>8b 실사용 DB 저장 실측/보강</h3><p>이메일 rate limit을 피하는 개발용 진입은 생겼지만, 실제 로그인 상태에서 주문 저장→새로고침 유지 확인은 마무리해야 합니다.</p><small>예상 작업량: 짧음~중간</small></article><article class="next-card"><div>C</div><h3>8c DB 기반 합산표/명세서 재출력/월 합계</h3><p>저장된 주문 장부에서 합산표와 거래명세서를 다시 꺼내고, 거래처별 일/월 금액을 보는 단계입니다.</p><small>예상 작업량: 중간</small></article><article class="next-card"><div>D</div><h3>실제 발주 테스트 라운드</h3><p>엑셀에서 뽑은 실제 발주품목으로 긴 주문을 여러 번 넣어보고 파서/검색/매입처 분리가 현장감 있게 맞는지 확인합니다.</p><small>예상 작업량: 반복</small></article></div></section>
-<section><h2>보류/2차 기능</h2><table><thead><tr><th>분류</th><th>기능</th><th>이유</th></tr></thead><tbody><tr><td>2차</td><td>미수금/입금 본격 관리</td><td>1차는 주문·합산·명세서 흐름 검증 우선</td></tr><tr><td>2차</td><td>세금계산서 발행</td><td>근거 데이터는 보존하되 직접 발행은 나중</td></tr><tr><td>2차</td><td>PDF 파일 생성</td><td>현재는 브라우저 인쇄. 서버 PDF는 추후</td></tr><tr><td>제외</td><td>OCR/사진 인식</td><td>정확도와 운영 리스크가 커서 후순위</td></tr><tr><td>제외</td><td>카카오톡 자동 읽기</td><td>정책/권한 리스크. 지금은 복사→붙여넣기</td></tr><tr><td>제외</td><td>이카운트 연동</td><td>전체 ERP 대체가 아니라 좁은 MVP 검증 우선</td></tr><tr><td>2차</td><td>매입처별 원가 이력/복수 매입처 견적</td><td>1차는 기본 매입처와 발주 문장 분리까지</td></tr><tr><td>2차</td><td>정확 회계 마진/재고평가</td><td>1차 예상 마진은 참고값</td></tr><tr><td>2차</td><td>직원 권한 UI</td><td>스키마 기반은 있으나 운영 화면은 나중</td></tr></tbody></table></section>
-<section><h2>최근 커밋</h2><ul><li><code>490ca0b feat: add product search and supplier purchase grouping</code></li><li><code>57f2721 feat: expand samples and polish delivery notes</code></li><li><code>aef9ba9 feat: require confirmation for ambiguous product matches</code></li><li><code>204a08f feat: add development demo entry</code></li><li><code>cbd3574 fix: expand order parser unit dictionary</code></li></ul><p class="footer-note">Supabase: 신규 Supabase 프로젝트 한도 때문에 기존 yangsan-inventory 프로젝트를 공유. 충돌 방지를 위해 모든 오더모아 DB 객체는 ordermoa_ 접두사 사용. 이 문서는 비개발자용 진행판이며, 실제 구현 검증은 테스트/빌드 결과와 함께 봅니다.</p></section>
-</main>
+<header class="top">
+  <div class="wrap">
+    <h1>오더모아 진행현황</h1>
+    <p class="sub">전체 ERP 대체가 아니라, 도소매/식당납품 사장님용 좁은 웹 ERP MVP. 핵심 가치: 카톡/문자 발주를 붙여넣으면 파싱, 합산표, 매입처별 발주 문장, 거래명세서까지 이어지는 것.</p>
+    <p class="sub">기준일 2026-07-07 · 브랜치 <code style="background:#33405f;color:#dfe6f5">codex/integrate-mvp-docs-web</code></p>
+  </div>
+</header>
+<div class="wrap">
+  <div class="focus">📌 <strong>지금 하는 일:</strong> 기준정보 관리 1차 (거래처/품목·별칭/단가 CRUD) + 매입처 DB화 설계 승인</div>
+
+  <h2>전체 진행률 (작업 보드 16개 기준)</h2>
+  <div class="progressbar"><div style="width:6%"></div></div>
+  <p class="counts">완료 1 · 다음 12 · 보류 3 — 1차 트랙(보류 제외) 1/13 완료</p>
+  <div class="legend"><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span><span class="badge" style="background:#fef7e0;color:#946200">다음</span><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span><span class="badge" style="background:#fde8e8;color:#b02a2a">제외</span></div>
+
+  <h2>핵심 흐름 (이 순서가 제품의 전부)</h2>
+  <div class="flow"><span>카톡/문자 발주 원문 붙여넣기</span> → <span>품목/수량/단가 정제(파싱+수정)</span> → <span>품목 검색·신규 품목 즉석 등록</span> → <span>거래처별 판매가 자동 적용</span> → <span>예상 마진 참고값 표시</span> → <span>주문 확정 (단가 스냅샷 저장)</span> → <span>품목별 합산표</span> → <span>매입처별 발주 문장 분리/복사</span> → <span>주문 목록(판매조회형)</span> → <span>거래명세서 미리보기/브라우저 인쇄</span></div>
+
+  <h2>완료된 기반 (여기까지 왔습니다)</h2>
+  <ul class="simple"><li><strong>앱 뼈대 + 문서 설계 (단위 1~5)</strong> — Next.js 앱 틀, DB 장부 양식/잠금 규칙 설계, 화면 설계, 정적 데모, 이카운트 벤치마크 반영</li><li><strong>핵심 흐름 데모 (단위 6~7)</strong> — 붙여넣기→파싱→확정→합산표→명세서가 화면에서 돌아감. 복사용 발주 문장 포함</li><li><strong>로그인·회사·데이터 잠금 (8a)</strong> — 로그인, 회사 만들기, 회사별 데이터 격리를 실제로 검증 완료 (다른 회사 데이터는 0건 조회, 위조 저장은 DB가 거부)</li><li><strong>주문 DB 저장 코드 (8b)</strong> — 확정한 주문이 DB에 저장되는 코드 완성. 실사용 확인(W08)만 남음</li><li><strong>파서 현장 보강</strong> — 키로/장/모 단위, 규격 숫자 구분(청양고추 1kg 2봉), 숙주처럼 여러 후보가 잡히면 사용자 확인, 실제 발주 예시 테스트</li><li><strong>업무 화면 정리</strong> — 좌측 사이드바 메뉴, 품목 검색, 미매칭 품목 즉석 등록, 매입처별 발주 문장(체크한 품목만), 명세서 빈행/인쇄 보정</li><li><strong>헌장/로드맵 고정 (W01)</strong> — 앞으로의 발전 방향을 담은 헌장 4종 문서를 확정하고 커밋(fc59baa)</li></ul>
+
+  <h2 style="border-left-color:#fbbc04">작업 보드 — 다음에 채울 것</h2>
+  <h2 class="phase">1차</h2><div class="grid">
+<div class="card s-done">
+  <div class="card-head"><span class="wid">W01</span><strong>헌장/로드맵 고정</strong><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span></div>
+  <p class="plain">오더모아가 무엇을 만들고 무엇을 만들지 않는지, 어떤 순서로 갈지를 문서 4종(헌장/로드맵/모듈맵/AI규칙)으로 고정했습니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>세션이 바뀌어도 방향이 흔들리지 않게 하는 기준점. 모든 작업의 차수(1차/2차) 판단 기준.</dd>
+    <dt>선행 조건</dt><dd>없음</dd>
+    <dt>확인 방법</dt><dd>fc59baa 커밋 확인. 기능정의서/DB스키마/화면설계/단위8 문서가 헌장과 모순 없는지 확인(2026-07-07 정렬 완료).</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>docs/order-moa-system-meta-prompt.md</code></li><li><code>docs/order-moa-expanded-roadmap.md</code></li><li><code>docs/order-moa-module-map.md</code></li><li><code>docs/order-moa-ai-working-rules.md</code></li></ul></details>
+</div>
+<div class="card s-next">
+  <div class="card-head"><span class="wid">W02</span><strong>기준정보 CRUD — 거래처 관리</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>
+  <p class="plain">가람식당 같은 거래처(파는 곳)를 사용자가 직접 추가·수정·보관하는 화면. 지금은 샘플 5곳이 박혀 있어 못 고칩니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>샘플 데모에서 실제 운영 도구로 넘어가는 첫 단추. 내 거래처를 넣어야 발주 붙여넣기가 진짜 일이 됩니다.</dd>
+    <dt>선행 조건</dt><dd>없음 (DB 테이블·잠금 규칙은 이미 준비됨). page.tsx 화면 분리와 함께 진행 권장.</dd>
+    <dt>확인 방법</dt><dd>거래처 추가→새로고침 후 유지, 수정 반영, 보관(숨김) 동작. web npm test + build 통과.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>web/src/app/page.tsx</code></li><li><code>web/src/lib/order-store.ts</code></li><li><code>docs/screen-specification.md(S5)</code></li></ul></details>
+</div>
+<div class="card s-next">
+  <div class="card-head"><span class="wid">W03</span><strong>기준정보 CRUD — 품목/별칭 관리</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>
+  <p class="plain">콩나물·두부 같은 품목과 &#x27;콩&#x27;, &#x27;콩박스&#x27; 같은 별칭을 직접 관리하는 화면. 별칭이 많을수록 발주 문장이 잘 읽힙니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>파싱 정확도의 핵심이 별칭 사전입니다. 사용자가 자기 현장 용어를 등록할 수 있어야 미매칭이 줄어듭니다.</dd>
+    <dt>선행 조건</dt><dd>W02와 같은 화면 틀 재사용(거래처 먼저 만들면 빠름).</dd>
+    <dt>확인 방법</dt><dd>품목/별칭 추가 후 발주 붙여넣기에서 바로 매칭되는지. 중복 별칭 경고. 테스트+빌드 통과.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>web/src/app/page.tsx</code></li><li><code>web/src/lib/order-store.ts</code></li><li><code>docs/screen-specification.md(S6)</code></li></ul></details>
+</div>
+<div class="card s-next">
+  <div class="card-head"><span class="wid">W04</span><strong>기준정보 CRUD — 단가 관리</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>
+  <p class="plain">거래처마다 다른 판매 단가표를 직접 관리하는 화면. 지금도 파싱 화면에서 즉석 저장은 되지만, 한눈에 보고 고치는 표가 없습니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>단가가 등록돼 있어야 붙여넣기만으로 금액까지 자동 완성됩니다. 0원 경고를 줄이는 길.</dd>
+    <dt>선행 조건</dt><dd>W02(거래처)·W03(품목)이 있어야 단가 조합을 만들 수 있음.</dd>
+    <dt>확인 방법</dt><dd>거래처 선택→품목별 단가 입력/수정→다음 발주에 자동 적용. 음수 차단. 테스트+빌드 통과.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>web/src/app/page.tsx</code></li><li><code>web/src/lib/order-store.ts</code></li><li><code>docs/screen-specification.md(S7)</code></li></ul></details>
+</div>
+<div class="card s-next">
+  <div class="card-head"><span class="wid">W08</span><strong>8b DB 저장 실측</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>
+  <p class="plain">실제 로그인 상태로 발주를 확정하고 F5 새로고침 후에도 주문이 남아 있는지 사람이 직접 확인합니다. 코드는 이미 완성.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>&#x27;저장된다&#x27;를 코드가 아니라 실사용으로 증명하는 마지막 단계. 이게 통과해야 8c(저장 데이터 활용)에 의미가 생깁니다.</dd>
+    <dt>선행 조건</dt><dd>실로그인 가능해야 함(이메일 매직링크 rate limit 주의 — 시간 두고 시도).</dd>
+    <dt>확인 방법</dt><dd>로그인→샘플 설치→발주 확정→F5 후 주문 목록 유지 + Supabase Table Editor에서 ordermoa_orders/order_items row 확인.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>docs/task-prompt-unit-8-supabase-persistence-flow.md</code></li><li><code>web/src/lib/order-store.ts</code></li></ul></details>
+</div>
+<div class="card s-next">
+  <div class="card-head"><span class="wid">W09</span><strong>8c — 발주 원문(raw_text) 저장/삭제</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>
+  <p class="plain">붙여넣은 카톡 원문을 DB에 보관하고, 원하면 삭제할 수 있게 합니다. 삭제해도 확정 주문은 그대로 남습니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>&quot;내가 뭐라고 보냈는데?&quot; 분쟁이나 파싱 실수 확인 때 원문이 근거가 됩니다. 테이블은 이미 있는데 앱이 안 쓰고 있음.</dd>
+    <dt>선행 조건</dt><dd>W08(저장 실측) 통과.</dd>
+    <dt>확인 방법</dt><dd>발주 확정→order_imports에 원문 row 확인→원문 삭제→주문은 유지되고 원문만 비워짐.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>web/supabase/migrations/0001_schema.sql(order_imports)</code></li><li><code>docs/function-specification.md(F7, Q1)</code></li></ul></details>
+</div>
+<div class="card s-next">
+  <div class="card-head"><span class="wid">W10</span><strong>8c — 저장 주문 기반 합산표</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>
+  <p class="plain">오늘 것뿐 아니라 과거 저장된 주문에서도 날짜/거래처를 골라 합산표를 다시 뽑을 수 있게 합니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>어제 발주를 다시 봐야 할 때, 앱을 껐다 켜도 합산표가 나와야 진짜 장부입니다.</dd>
+    <dt>선행 조건</dt><dd>W08 통과. (합산 계산 함수는 이미 완성 — DB 조회 결과를 넣기만 하면 됨)</dd>
+    <dt>확인 방법</dt><dd>주문 저장→앱 재시작→날짜 필터로 같은 합산표 재현.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/aggregate.ts</code></li><li><code>docs/task-prompt-unit-8-supabase-persistence-flow.md(§8)</code></li></ul></details>
+</div>
+<div class="card s-next">
+  <div class="card-head"><span class="wid">W11</span><strong>8c — 거래명세서 재출력</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>
+  <p class="plain">과거 주문의 거래명세서를 언제든 다시 열어 인쇄합니다. 금액은 확정 당시 단가 그대로(지금 단가가 바뀌어도 과거 명세서는 안 변함).</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>거래처가 &quot;지난주 명세서 다시 주세요&quot; 할 때 필요합니다. 확정 시점 금액 보존은 헌장의 불변 규칙.</dd>
+    <dt>선행 조건</dt><dd>W08 통과.</dd>
+    <dt>확인 방법</dt><dd>주문 저장→단가 변경→과거 명세서 재출력 시 금액이 그대로인지 확인.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>docs/delivery-note-print-spec.md</code></li><li><code>docs/order-moa-system-meta-prompt.md(§3)</code></li></ul></details>
+</div>
+<div class="card s-next">
+  <div class="card-head"><span class="wid">W12</span><strong>8c — 거래처별 월 합계</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>
+  <p class="plain">거래처별로 이번 달 얼마 팔았는지 합계를 보여줍니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>월말 정산·세금계산서 발행 금액의 근거 숫자. 별도 계산 없이 저장된 주문에서 바로 나옵니다.</dd>
+    <dt>선행 조건</dt><dd>W08 통과.</dd>
+    <dt>확인 방법</dt><dd>주문 여러 건 저장→거래처×월 합계가 라인 금액 합과 일치.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>docs/task-prompt-unit-8-supabase-persistence-flow.md(§6)</code></li><li><code>docs/function-specification.md(F12, §5.2)</code></li></ul></details>
+</div>
+<div class="card s-next">
+  <div class="card-head"><span class="wid">W13</span><strong>실제 발주 테스트 라운드</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>
+  <p class="plain">실제 받았던 발주(가명 처리)를 길게 여러 번 넣어보며 파싱·검색·매입처 분리가 현장에서 통하는지 반복 확인합니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>샘플로는 못 잡는 현장 표현(오타·줄임말·규격)이 반드시 나옵니다. 손님 받기 전 마지막 관문.</dd>
+    <dt>선행 조건</dt><dd>W02~W04(내 품목·별칭·단가 등록 가능해야 진짜 테스트가 됨).</dd>
+    <dt>확인 방법</dt><dd>장문 발주 10건 이상 투입→미매칭/오인식을 fixture 테스트로 남기고 파서 보강.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>docs/order-moa-real-order-test-plan.md</code></li><li><code>web/src/lib/order-parser.ts</code></li></ul></details>
+</div></div><h2 class="phase">1차 보강</h2><div class="grid">
+<div class="card s-next">
+  <div class="card-head"><span class="wid">W05</span><strong>매입처 DB화 — suppliers 테이블 설계</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>
+  <p class="plain">야채매입처 같은 매입처(사 오는 곳)를 DB에 정식 저장하는 설계. 지금은 화면에만 있어서 새로고침하면 매입처 지정이 사라질 수 있습니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>매입처별 발주 문장이 오더모아의 강점인데, 그 근거가 DB에 없으면 반쪽 기능입니다. 8c 전에 하는 것을 권장.</dd>
+    <dt>선행 조건</dt><dd>Codex 마이그레이션 승인 (ordermoa_suppliers + RLS + 교차회사 트리거 + unique 이름).</dd>
+    <dt>확인 방법</dt><dd>마이그레이션 적용 후 RLS A/B 격리 확인, 테이블 생성 확인.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>docs/order-moa-system-meta-prompt.md(§6.4)</code></li><li><code>docs/db-schema-definition.md</code></li><li><code>web/supabase/migrations/</code></li></ul></details>
+</div>
+<div class="card s-next">
+  <div class="card-head"><span class="wid">W06</span><strong>매입처 DB화 — 품목별 기본 매입처 연결</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>
+  <p class="plain">품목마다 &#x27;이건 야채매입처에서 산다&#x27;를 DB에 저장(products에 매입처 연결 컬럼 추가). 신규 품목 즉석 등록의 기본 매입처도 진짜 저장됩니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>이게 저장돼야 합산표의 매입처별 발주 문장이 새로고침 후에도 똑같이 나옵니다.</dd>
+    <dt>선행 조건</dt><dd>W05(테이블) 적용 완료.</dd>
+    <dt>확인 방법</dt><dd>품목의 매입처 지정→F5 후 유지→합산표 매입처별 문장에 반영. 테스트+빌드 통과.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/order-store.ts</code></li><li><code>web/src/lib/product-registration.ts</code></li><li><code>web/src/lib/aggregate.ts</code></li></ul></details>
+</div>
+<div class="card s-next">
+  <div class="card-head"><span class="wid">W07</span><strong>매입처 관리 화면</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>
+  <p class="plain">매입처 이름을 추가·수정·보관하고, 품목별 기본 매입처를 바꾸는 화면(기준정보의 4번째 탭).</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>매입처가 바뀌거나 늘어날 때 개발자 없이 사장님이 직접 고칠 수 있어야 합니다.</dd>
+    <dt>선행 조건</dt><dd>W05·W06 + 기준정보 화면 틀(W02~W04).</dd>
+    <dt>확인 방법</dt><dd>매입처 추가/이름 수정→발주 문장 섹션 이름 즉시 반영. 테스트+빌드 통과.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>web/src/app/page.tsx</code></li><li><code>docs/screen-specification.md(S15)</code></li></ul></details>
+</div></div><h2 class="phase">1.5차</h2><div class="grid">
+<div class="card s-hold">
+  <div class="card-head"><span class="wid">W14</span><strong>인쇄/명세서 양식 보정</strong><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span></div>
+  <p class="plain">거래명세서를 더 실서류답게(공급자/거래처 정보 블록, 규격 칸, 금액 한글 표기 등) 다듬습니다. 인쇄는 계속 브라우저 인쇄창.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>지금 양식도 쓸 수는 있어서 1차 완성 뒤로 미룹니다. PDF 파일 생성은 2차.</dd>
+    <dt>선행 조건</dt><dd>1차 완료(W02~W13). 기준: delivery-note-print-spec.md.</dd>
+    <dt>확인 방법</dt><dd>인쇄 미리보기에서 A4 한 장 정돈 확인, 품목 적을 때 빈행 유지.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>docs/delivery-note-print-spec.md</code></li></ul></details>
+</div>
+<div class="card s-hold">
+  <div class="card-head"><span class="wid">W15</span><strong>엑셀/백업/내보내기</strong><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span></div>
+  <p class="plain">거래처/품목/단가를 엑셀로 한 번에 올리고, 내 데이터를 엑셀/파일로 내려받아 보관합니다. 샘플 초기화 버튼도 포함.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>초기 세팅을 빠르게 하고, 공유 DB에 대한 보험(백업)이 됩니다. 1차 흐름 완성이 먼저라 보류.</dd>
+    <dt>선행 조건</dt><dd>기준정보 CRUD(W02~W04) 완성.</dd>
+    <dt>확인 방법</dt><dd>엑셀 업로드 미리보기→확인→반영, 실패 행 리포트. 내보내기 파일 열림 확인.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>docs/order-moa-expanded-roadmap.md(1.5차)</code></li></ul></details>
+</div></div><h2 class="phase">2차</h2><div class="grid">
+<div class="card s-hold">
+  <div class="card-head"><span class="wid">W16</span><strong>2차 보류: 미수금·세금계산서 근거·원가/재고</strong><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span></div>
+  <p class="plain">못 받은 돈(미수금) 체크, 월별 세금계산서 발행 금액 대조, 매입처별 원가 이력, 좁은 재고. 지금은 만들지 않습니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>1차 주문 데이터가 4주 이상 실사용으로 쌓인 뒤에 만들어야 추측이 아닌 설계가 됩니다. 근거 데이터(주문 금액)는 1차부터 이미 보존 중.</dd>
+    <dt>선행 조건</dt><dd>1차+1.5차 완료 + 실사용 4주. OCR/카톡 자동 읽기/이카운트 연동/직접 발행은 별도로 &#x27;제외&#x27;(착수 금지).</dd>
+    <dt>확인 방법</dt><dd>착수 시점에 로드맵 2차 선행 조건 재확인.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>docs/order-moa-expanded-roadmap.md(2차·제외)</code></li></ul></details>
+</div></div>
+
+  <h2>검증 체크리스트 (마지막 확인 기준)</h2>
+  <table><tr><th>항목</th><th>쉬운 설명</th><th>결과</th></tr><tr><td>root npm test</td><td>정적 데모 회귀 테스트</td><td class='ok'>통과 5/5</td></tr><tr><td>web npm test</td><td>파서/합산/검색/주문 저장 빌더 자동 테스트</td><td class='ok'>통과 78/78</td></tr><tr><td>web npm run build</td><td>배포용 빌드가 깨지지 않는지</td><td class='ok'>성공</td></tr><tr><td>npm audit --audit-level=low</td><td>알려진 보안 취약점 검사</td><td class='ok'>0건</td></tr><tr><td>Supabase SQL 0001/0002/0003</td><td>장부 테이블/RLS/회사생성 함수 설치</td><td class='ok'>적용 성공</td></tr><tr><td>8a RLS 검증</td><td>회사 row, anon 차단, policy, A/B 격리, 위조 insert 차단</td><td class='ok'>통과</td></tr><tr><td>민감정보</td><td>service role key 커밋/번들 포함 여부</td><td class='ok'>미포함</td></tr></table>
+
+  <h2 style="border-left-color:#ea4335">만들지 않는 것 (착수 금지)</h2>
+  <ul class="simple"><li><strong>OCR/사진 발주 인식</strong> — 정확도와 운영 리스크가 커서 착수 금지</li><li><strong>카카오톡 자동 읽기</strong> — 정책/권한 리스크. 지금은 복사→붙여넣기</li><li><strong>이카운트 연동</strong> — 오더모아는 이카운트 앞단 도구 — 전체 대체 아님</li><li><strong>세금계산서 직접 발행</strong> — 법적 책임 영역. 근거 데이터 정리(2차)까지만</li><li><strong>은행 자동 매칭</strong> — 연동 비용 대비 가치 미검증</li><li><strong>전체 재고 ERP(평가·실사)</strong> — 범위 폭발. 3차에 수량 기록만 좁게 검토</li></ul>
+
+  <footer>단일 원본: <code>docs/order-moa-progress-data.json</code> — 고친 뒤 <code>py -3 scripts/generate-progress.py</code>로 이 파일과 XLSX를 재생성합니다.
+  차수·범위 기준: <code>docs/order-moa-system-meta-prompt.md (헌장 — 차수·범위의 기준. 이 진행판과 어긋나면 헌장이 우선)</code></footer>
+</div>
 </body>
 </html>

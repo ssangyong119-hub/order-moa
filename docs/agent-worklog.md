@@ -1247,3 +1247,25 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
   - web `npm test` 78/78.
   - web `npm run build` 성공.
   - web `npm audit --audit-level=low` 0건.
+
+## 2026-07-07 Claude (헌장 고정화 — 기존 문서 정렬 + 진행현황 세분화)
+
+- 목적: `fc59baa`로 확정된 헌장 4종을 "고정 헌장"으로 삼아 ① 기존 설계 문서들의 충돌을 문서만 수정으로 정렬, ② 진행현황 3종을 16개 작업 단위(W01~W16)로 세분화.
+- 문서 정렬(충돌 수정):
+  - `docs/function-specification.md` — 상단에 [2026-07-07 헌장 정렬] 노트 추가(헌장 우선 원칙 + 매입처 1차 편입/1차 보강, raw_text·재출력·월합계=8c, amount generated). F11 제품 메모에 갱신 문단(매입처별 발주 문장은 1차 구현 완료, DB화는 1차 보강). §12 후순위 목록 문구 보정(발주 "기록" 저장/전송만 2차).
+  - `docs/db-schema-definition.md` — 헌장 정렬 노트 + §3 테이블 목록에 `suppliers`(1차 보강, 승인 대기) 행 추가.
+  - `docs/task-prompt-unit-8-supabase-persistence-flow.md` — 헌장 정렬 노트 + §3 금지 범위에서 매입처 테이블·품목별 기본 매입처를 1차 보강 이동으로 표기(발주 기록 저장/전송은 2차 유지), §8 문구 현행화(그룹핑 UI는 1차 구현됨, 컬럼명 purchase_supplier_id로 통일).
+  - `docs/screen-specification.md` — 헌장 정렬 노트(사이드바 셸·합산표 매입처 기능·즉석 등록 반영) + S15 매입처 관리 화면 행 추가.
+  - `order_items.confirmed` 드리프트는 Codex가 fc59baa에서 이미 수정한 것 확인.
+- 진행현황 세분화:
+  - `docs/order-moa-progress-data.json`(단일 소스) 재구성 — workItems 16개(W01 헌장 고정=완료 ~ W16 2차 보류), 각 항목에 상태/차수/쉬운 설명/왜 필요한가/선행 조건/확인 방법/관련 문서. foundation(완료된 기반 7항목)·checklist·excluded(착수 금지 6항목) 분리. statusLegend를 완료/진행 중/다음/보류/제외 5종으로 정리.
+  - `scripts/generate-progress.py` **신규**(앱 코드 아님·문서 생성 도구): JSON→HTML+XLSX 재생성 스크립트를 리포에 포함. 이유: 기존 생성 스크립트가 세션 스크래치패드에서 유실된 전례(헌장 §10 개선 7). 사용: `py -3 scripts/generate-progress.py` (openpyxl 필요).
+  - `docs/order-moa-progress-dashboard.html` 재생성 — 진행률 바, 핵심 흐름, 완료 기반, 차수별(1차/1차 보강/1.5차/2차) 작업 카드 16장, 검증 체크리스트, 착수 금지 목록.
+  - `docs/order-moa-progress-tracker.xlsx` 재생성 — 시트 5개(요약/작업보드/완료된 기반/검증 체크리스트/제외 기능), 작업보드 상태 셀 색상. 수식 없음(항상 JSON에서 재생성).
+- 검증:
+  - JSON 파싱+필드 검증(16항목 전 필드), HTML 구조(16카드·섹션), XLSX 열기(시트 5·작업보드 17행×9열·셀 값 스팟체크) 통과.
+  - HTML 생성기 잠재 버그 수정: 상태 "진행 중"의 공백이 CSS 클래스를 가르던 문제 → 슬러그 매핑(s-done/doing/next/hold/cut).
+  - `git diff --check` 통과(CRLF 경고만), 민감정보 grep 미검출(초회 매치는 "task-prompt" 문자열의 `sk-p` 오탐 확인).
+  - root `npm test` 통과 · web `npm test` 78/78 · `npm run build` 성공 · `npm audit --audit-level=low` 0건.
+- 커밋하지 않음 — Codex 검수·커밋 판단 대기.
+- [위험] progress JSON 스키마 변경으로 이전 형식을 기억하는 세션은 혼동 가능(단일 소스 원칙은 유지, 생성 스크립트가 새 스키마의 기준). [나중] suppliers 마이그레이션 초안은 Codex 승인 후 별도 단위(W05).

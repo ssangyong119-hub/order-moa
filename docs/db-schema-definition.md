@@ -7,6 +7,8 @@
 
 > 본 문서는 Supabase(PostgreSQL) 기준 **테이블 설계 문서**다. SQL은 **초안(참고용)**이며, 실제 Supabase 적용·마이그레이션 파일 생성은 하지 않는다(별도 단위). RLS 정책은 `supabase-rls-policy.md`에 둔다.
 
+> **[2026-07-07 헌장 정렬]** 차수·범위가 어긋나면 `docs/order-moa-system-meta-prompt.md`(헌장)가 우선한다. 본 문서 이후 확정: **매입처 테이블 `ordermoa_suppliers`(id, company_id, name, memo, created_at, archived_at) + `products.purchase_supplier_id uuid nullable FK`가 1차 보강(8c 전 권장)으로 추가 예정**(additive, Codex 승인 후 마이그레이션 — 헌장 §6.4). RLS 4정책 + 교차 회사 트리거 + unique(company_id, name) 포함 조건. §4.12의 purchase_prices(매입처별 원가 이력)는 그대로 2차.
+
 ---
 
 ## 1. 문서 목적
@@ -61,6 +63,7 @@
 | order_imports | ✅ | 붙여넣기 원문/세션 |
 | orders | ✅ | 확정 주문 |
 | order_items | ✅ | 확정 라인(generated amount) |
+| suppliers | 🔶 1차 보강(8c 전 권장, 승인 대기) | 매입처 — 헌장 §6.4, products.purchase_supplier_id FK와 세트 |
 | delivery_notes | 🔶 선택/후순위 | 미리보기 우선 |
 | receivables | 🔶 수동만 | 자동화 2차 |
 | price_history | ⛔ 2차 | 단가 이력 |
