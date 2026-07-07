@@ -5,7 +5,7 @@
     "updated": "2026-07-07",
     "branch": "codex/integrate-mvp-docs-web",
     "charter": "docs/order-moa-system-meta-prompt.md (헌장 — 차수·범위의 기준. 이 진행판과 어긋나면 헌장이 우선)",
-    "currentFocus": "W17 합산표 개선 팩 완료(발주 문장 템플릿·누락 검수 카운터/경고·미지정 뱃지·매입처 파스텔 색·F1 문구, 브라우저 실측). 다음: W07 매입처 관리 → W03 품목·별칭.",
+    "currentFocus": "W07 매입처 관리 완료(supplier-store + 화면, 추가/수정/보관/복원, 데모 실측·DB 모드는 코드 검증). W17 완료. 다음: W03 품목·별칭 관리(품목 폼에 매입처 드롭다운 포함).",
     "recentCommits": [
       "a696a36 feat: add password login fallback",
       "38f4e6c fix: harden supplier migration guidance",
@@ -116,7 +116,7 @@
     {
       "id": "W07",
       "name": "매입처 관리 화면",
-      "status": "다음",
+      "status": "완료",
       "phase": "1차 보강",
       "plain": "매입처 이름을 추가·수정·보관하고, 품목별 기본 매입처를 바꾸는 화면(기준정보의 4번째 탭).",
       "why": "매입처가 바뀌거나 늘어날 때 개발자 없이 사장님이 직접 고칠 수 있어야 합니다.",

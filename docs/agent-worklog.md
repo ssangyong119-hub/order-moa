@@ -1371,3 +1371,20 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
 - 미커밋(협업 규칙 — Codex 판단). 진행판 W17 → 완료, currentFocus 갱신 후 HTML/XLSX 재생성.
 - [알려진 한계] supplierColorIndex는 8색 해시라 매입처가 많으면 색 충돌 가능(실측 샘플에서 야채매입처·뿌리채소매입처가 같은 sup-c7). 색은 보조이고 이름 텍스트 항상 표시라 허용(설계대로). 필요 시 2차에서 충돌 회피 배정으로 승격.
 - [다음] W07 매입처 관리(supplier-store + supplier-management-view, customer 패턴 복제) → W03 품목·별칭(품목 폼에 매입처 드롭다운).
+
+## 2026-07-07 Claude (W07 매입처 관리 화면 구현 완료)
+
+- 범위: 1차 보강 / 새 마이그레이션 없음(0004 ordermoa_suppliers 이미 적용). customer 패턴 최대 재사용.
+- 신규 파일:
+  - `web/src/lib/supplier-store.ts` — customer-store 패턴 복제(normalize/validate/toInsert/toUpdate + create/update/archive/**unarchive**/listArchivedSuppliers). `friendlySupplierError`: unique(company_id,name) 충돌(23505)을 "보관된 매입처라면 복원" 안내로 변환.
+  - `web/src/lib/supplier-store.test.ts` — 순수 함수 4테스트(TDD).
+  - `web/src/app/supplier-management-view.tsx` — customer-management-view 복제·치환(폼은 이름/메모만). 좌측 목록(검색)+보관 목록(복원 버튼)+우측 폼.
+- page.tsx 배선: View에 "suppliers" 추가, 기준정보 메뉴 "매입처 관리" 실화면 연결, saveSupplier/archiveSupplier/unarchiveSupplier(데모/DB 분기), DB 모드는 화면 진입 시 listArchivedSuppliers 로드. 이름 변경 시 products의 purchaseSupplierName 스냅샷 동기화(설계 F6 주의 지점 — 데모/DB 모두 화면 상태 기준).
+- 정책 결정(범위 6번): **마지막 매입처 보관 허용, 가드 없음** — 설계 F6대로 매입처 0개여도 품목이 "매입처 미지정"으로 흘러가 앱 동작. 거래처(마지막 1개 차단)와 다른 점을 화면 안내문으로 보완.
+- 데모 모드 중복 이름은 코드에서 차단(DB unique와 동일 동작).
+- CSS: `.archived-row`(점선 테두리+저채도)만 추가.
+- 검증: root 5/5 · web `npm test` 91/91 · build 성공 · audit 0건.
+  - 브라우저 실측(데모 모드): 메뉴 연결, 목록 5건 표시, 추가(테스트정육점), 중복 이름 오류 표시, 수정(정육매입처), 보관→보관 목록 표시→복원, 이름 변경(야채매입처→싱싱야채상회)이 합산표 매입처 태그에 즉시 반영, 콘솔 오류 0.
+  - DB 모드는 로그인 계정 필요해 실측 못 함 — customer와 동일 패턴 + RLS 정책 기적용이라 코드 검증까지. [다음 실측 때 확인 권장]
+- 미커밋(협업 규칙 — Codex 판단). 진행판 W07 → 완료, HTML/XLSX 재생성.
+- [다음] W03 품목·별칭 관리 CRUD(품목 폼에 매입처 드롭다운 — F6 분담분 포함).

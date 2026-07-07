@@ -49,6 +49,16 @@ import {
 } from "@/lib/aggregate";
 import { searchProductsForOrder } from "@/lib/product-search";
 import { CustomerManagementView } from "./customer-management-view";
+import { SupplierManagementView } from "./supplier-management-view";
+import {
+  archiveSupplier as archiveSupplierInDb,
+  createSupplier as createSupplierInDb,
+  friendlySupplierError,
+  listArchivedSuppliers,
+  unarchiveSupplier as unarchiveSupplierInDb,
+  updateSupplier as updateSupplierInDb,
+  type SupplierFormInput,
+} from "@/lib/supplier-store";
 import {
   CompanySetupView,
   LoginView,
@@ -56,7 +66,7 @@ import {
   type CompanySession,
 } from "./auth-gate";
 
-type View = "dashboard" | "paste" | "review" | "aggregate" | "orders" | "note" | "customers";
+type View = "dashboard" | "paste" | "review" | "aggregate" | "orders" | "note" | "customers" | "suppliers";
 
 /** 앱 데이터 묶음 — 데모 모드(샘플)와 DB 모드(Supabase 로드) 공용 형태 */
 interface AppData {
@@ -93,6 +103,7 @@ const NAV_GROUPS: Array<{
     icon: "◇",
     items: [
       { view: "customers", label: "거래처 관리", icon: "□" },
+      { view: "suppliers", label: "매입처 관리", icon: "▣" },
       { label: "품목·별칭 관리", icon: "◇", soon: true, phase: "1차" },
       { label: "단가 관리", icon: "₩", soon: true, phase: "1차" },
     ],
@@ -109,6 +120,7 @@ const VIEW_TITLES: Record<View, string> = {
   orders: "주문 목록",
   note: "거래명세서",
   customers: "거래처 관리",
+  suppliers: "매입처 관리",
 };
 
 function Shell(props: {
@@ -183,6 +195,7 @@ export default function HomePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [archivedSuppliers, setArchivedSuppliers] = useState<Supplier[]>([]);
   const [customerPrices, setCustomerPrices] = useState<CustomerPrice[]>([]);
   const [examples, setExamples] = useState<SampleOrderExample[]>([]);
 
@@ -522,6 +535,59 @@ export default function HomePage() {
     flash(`${customer.name} 거래처를 보관했습니다.`);
   }
 
+  // ---- 매입처 관리 (W07) ----
+  // 이름 변경 시 products의 purchaseSupplierName 스냅샷도 함께 갱신(데모/DB 모두 화면 상태 기준).
+  function syncSupplierNameToProducts(supplierId: string, name: string) {
+    setProducts((prev) =>
+      prev.map((p) => (p.purchaseSupplierId === supplierId ? { ...p, purchaseSupplierName: name } : p)),
+    );
+  }
+
+  async function saveSupplier(id: string | null, input: SupplierFormInput) {
+    if (db && companyId) {
+      try {
+        const saved = id
+          ? await updateSupplierInDb(db, companyId, id, input)
+          : await createSupplierInDb(db, companyId, input);
+        setSuppliers((prev) => (id ? prev.map((s) => (s.id === id ? saved : s)) : [...prev, saved]));
+        if (id) syncSupplierNameToProducts(id, saved.name);
+        flash(id ? "매입처를 수정했습니다." : "매입처를 추가했습니다.");
+        return;
+      } catch (e) {
+        throw new Error(friendlySupplierError(e));
+      }
+    }
+
+    const clean = input.name.trim();
+    if (suppliers.some((s) => s.name === clean && s.id !== id)) {
+      throw new Error("같은 이름의 매입처가 이미 있습니다.");
+    }
+    const saved: Supplier = { id: id ?? crypto.randomUUID(), name: clean, memo: input.memo || undefined };
+    setSuppliers((prev) => (id ? prev.map((s) => (s.id === id ? saved : s)) : [...prev, saved]));
+    if (id) syncSupplierNameToProducts(id, saved.name);
+    flash(id ? "매입처를 수정했습니다. (데모 모드)" : "매입처를 추가했습니다. (데모 모드)");
+  }
+
+  async function archiveSupplier(supplier: Supplier) {
+    if (db && companyId) {
+      await archiveSupplierInDb(db, companyId, supplier.id);
+    }
+    // 보관된 매입처를 참조하는 품목은 그대로 둔다(발주 문장에 이름 유지) — 설계 F6.
+    setSuppliers((prev) => prev.filter((s) => s.id !== supplier.id));
+    setArchivedSuppliers((prev) => [...prev, supplier]);
+    flash(`${supplier.name} 매입처를 보관했습니다.`);
+  }
+
+  async function unarchiveSupplier(supplier: Supplier) {
+    let restored = supplier;
+    if (db && companyId) {
+      restored = await unarchiveSupplierInDb(db, companyId, supplier.id);
+    }
+    setArchivedSuppliers((prev) => prev.filter((s) => s.id !== supplier.id));
+    setSuppliers((prev) => [...prev, restored]);
+    flash(`${restored.name} 매입처를 복원했습니다.`);
+  }
+
   async function confirmOrder() {
     if (!canConfirm(lines) || saving) return;
     const customer = customers.find((c) => c.id === selectedCustomerId);
@@ -608,6 +674,22 @@ export default function HomePage() {
       return ids.filter((id) => prevSet.has(id));
     });
   }, [aggregate]);
+
+  // DB 모드: 매입처 관리 화면에 들어올 때 보관 목록을 불러온다 (데모 모드는 화면 상태로만 유지)
+  useEffect(() => {
+    if (view !== "suppliers" || !db || !companyId) return;
+    let live = true;
+    listArchivedSuppliers(db, companyId)
+      .then((rows) => {
+        if (live) setArchivedSuppliers(rows);
+      })
+      .catch(() => {
+        if (live) flash("보관된 매입처 목록을 불러오지 못했습니다.");
+      });
+    return () => {
+      live = false;
+    };
+  }, [view, db, companyId]);
 
   // 복사용 발주 문장 (현재 필터 기준)
   const purchaseTitle = useMemo(() => {
@@ -880,6 +962,16 @@ export default function HomePage() {
           activeCustomerId={selectedCustomerId}
           onSave={saveCustomer}
           onArchive={archiveCustomer}
+        />
+      )}
+
+      {view === "suppliers" && (
+        <SupplierManagementView
+          suppliers={suppliers}
+          archivedSuppliers={archivedSuppliers}
+          onSave={saveSupplier}
+          onArchive={archiveSupplier}
+          onUnarchive={unarchiveSupplier}
         />
       )}
 

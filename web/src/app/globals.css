@@ -264,6 +264,11 @@ td input.qty,td input.price{max-width:96px}
   border-radius:999px;padding:2px 8px;font-size:.7rem;font-weight:700;
 }
 .customer-row.selected{border-color:var(--accent);background:#fff9f6}
+.archived-row{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:7px 11px;border:1px dashed var(--line);border-radius:var(--radius);
+  background:var(--paper);opacity:.75;margin-top:6px;font-size:.88rem;
+}
 .master-form h3{margin:0 0 10px}
 .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .form-grid label{margin:0}
