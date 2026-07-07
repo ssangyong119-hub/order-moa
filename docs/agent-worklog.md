@@ -1388,3 +1388,19 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
   - DB 모드는 로그인 계정 필요해 실측 못 함 — customer와 동일 패턴 + RLS 정책 기적용이라 코드 검증까지. [다음 실측 때 확인 권장]
 - 미커밋(협업 규칙 — Codex 판단). 진행판 W07 → 완료, HTML/XLSX 재생성.
 - [다음] W03 품목·별칭 관리 CRUD(품목 폼에 매입처 드롭다운 — F6 분담분 포함).
+
+## 2026-07-07 Claude (W03 품목·별칭 관리 CRUD 구현 완료)
+
+- 범위: 1차 / 새 마이그레이션 없음 — 기존 ordermoa_products·ordermoa_product_aliases·ordermoa_suppliers 사용.
+- 신규 파일:
+  - `web/src/lib/product-store.ts` — normalize/validate(이름·단위 필수, 매입단가 0 이상 정수)/toInsert/toUpdate + create/update/archive/unarchive/listArchivedProducts(별칭 포함) + addAliasInDb/removeAliasInDb. `validateNewAlias`: DB unique(company_id,alias) 규칙을 화면에서 선검증(품목명 충돌·자기 별칭·타 품목 별칭 구분 메시지). `friendlyAliasError`(23505 → 중복 안내).
+  - `web/src/lib/product-store.test.ts` — 순수 함수 5테스트(TDD).
+  - `web/src/app/product-management-view.tsx` — supplier 뷰 패턴 + 폼 4필드(품목명/기본 단위/기준 매입단가(선택)/기본 매입처 드롭다운·미지정 옵션) + 별칭 칩(× 삭제)·별칭 추가 input(Enter 지원). 별칭은 수정 모드에서만 관리(신규 폼 단순화). 검색은 품목명·별칭·단위·매입처 통합.
+- page.tsx 배선: View "products" 추가, "품목·별칭 관리" soon 해제·실화면 연결, saveProduct/archiveProduct/unarchiveProduct/addProductAlias/removeProductAlias(데모/DB 분기), DB 모드 화면 진입 시 listArchivedProducts 로드. products 상태가 파싱·합산표의 단일 소스라 상태 갱신만으로 즉시 반영(별도 동기화 코드 불필요).
+- CSS: `.alias-box`/`.alias-chips`/`.alias-chip`만 추가.
+- 검증: root 5/5 · web `npm test` 96/96 · build 성공 · audit 0건.
+  - 브라우저 실측(데모): 메뉴 연결, 품목 추가(삼겹살/근/12000원/두부콩나물매입처 드롭다운), 별칭 추가('숙주박스'→숙주)·중복 경고 2종('이미 이 품목의 별칭'/'이미 품목명')·삭제, **발주 붙여넣기에서 '숙주박스 2봉' → 숙주 즉시 매칭 확인**, 보관→복원, 별칭으로 검색('숙주나물'→숙주), 콘솔 오류 0.
+  - DB 모드는 로그인 계정 필요해 실측 못 함 — 기존 즉석 등록과 같은 테이블/패턴 + RLS 기적용이라 코드 검증까지. [다음 실측 때 품목 추가·별칭 추가 F5 유지 확인 권장]
+- 주의 발견: dev 서버 실행 중 `npm run build`를 돌리면 .next가 덮여 dev가 500/404로 깨짐 → 서버 재시작으로 해결. 다음부터 빌드는 dev 중지 후 또는 검증 마지막에.
+- 미커밋(협업 규칙 — Codex 판단). 진행판 W03 → 완료, HTML/XLSX 재생성.
+- [다음] W04 단가 관리 또는 W09~W11(8c — 원문 저장/저장 주문 합산표/명세서 재출력). [위험 유지] 공유 Supabase 무료 쿼터 경고 — 전용 프로젝트 분리 논의.

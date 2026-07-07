@@ -56,11 +56,11 @@
   </div>
 </header>
 <div class="wrap">
-  <div class="focus">📌 <strong>지금 하는 일:</strong> W07 매입처 관리 완료(supplier-store + 화면, 추가/수정/보관/복원, 데모 실측·DB 모드는 코드 검증). W17 완료. 다음: W03 품목·별칭 관리(품목 폼에 매입처 드롭다운 포함).</div>
+  <div class="focus">📌 <strong>지금 하는 일:</strong> W03 품목·별칭 관리 완료(product-store + 화면: 품목 CRUD·보관/복원·별칭 칩·기본 매입처 드롭다운, 데모 실측·DB는 코드 검증). W17·W07도 완료. 다음: W04 단가 관리 또는 W09~W11(8c).</div>
 
   <h2>전체 진행률 (작업 보드 17개 기준)</h2>
-  <div class="progressbar"><div style="width:41%"></div></div>
-  <p class="counts">완료 7 · 다음 7 · 보류 3 — 1차 트랙(보류 제외) 7/14 완료</p>
+  <div class="progressbar"><div style="width:47%"></div></div>
+  <p class="counts">완료 8 · 다음 6 · 보류 3 — 1차 트랙(보류 제외) 8/14 완료</p>
   <div class="legend"><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span><span class="badge" style="background:#fef7e0;color:#946200">다음</span><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span><span class="badge" style="background:#fde8e8;color:#b02a2a">제외</span></div>
 
   <h2>핵심 흐름 (이 순서가 제품의 전부)</h2>
@@ -91,8 +91,8 @@
   </dl>
   <details><summary>관련 문서/파일</summary><ul><li><code>web/src/app/page.tsx</code></li><li><code>web/src/lib/order-store.ts</code></li><li><code>docs/screen-specification.md(S5)</code></li></ul></details>
 </div>
-<div class="card s-next">
-  <div class="card-head"><span class="wid">W03</span><strong>기준정보 CRUD — 품목/별칭 관리</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>
+<div class="card s-done">
+  <div class="card-head"><span class="wid">W03</span><strong>기준정보 CRUD — 품목/별칭 관리</strong><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span></div>
   <p class="plain">콩나물·두부 같은 품목과 &#x27;콩&#x27;, &#x27;콩박스&#x27; 같은 별칭을 직접 관리하는 화면. 별칭이 많을수록 발주 문장이 잘 읽힙니다.</p>
   <dl>
     <dt>왜 필요한가</dt><dd>파싱 정확도의 핵심이 별칭 사전입니다. 사용자가 자기 현장 용어를 등록할 수 있어야 미매칭이 줄어듭니다.</dd>

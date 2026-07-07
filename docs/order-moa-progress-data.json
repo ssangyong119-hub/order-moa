@@ -5,7 +5,7 @@
     "updated": "2026-07-07",
     "branch": "codex/integrate-mvp-docs-web",
     "charter": "docs/order-moa-system-meta-prompt.md (헌장 — 차수·범위의 기준. 이 진행판과 어긋나면 헌장이 우선)",
-    "currentFocus": "W07 매입처 관리 완료(supplier-store + 화면, 추가/수정/보관/복원, 데모 실측·DB 모드는 코드 검증). W17 완료. 다음: W03 품목·별칭 관리(품목 폼에 매입처 드롭다운 포함).",
+    "currentFocus": "W03 품목·별칭 관리 완료(product-store + 화면: 품목 CRUD·보관/복원·별칭 칩·기본 매입처 드롭다운, 데모 실측·DB는 코드 검증). W17·W07도 완료. 다음: W04 단가 관리 또는 W09~W11(8c).",
     "recentCommits": [
       "a696a36 feat: add password login fallback",
       "38f4e6c fix: harden supplier migration guidance",
@@ -72,7 +72,7 @@
     {
       "id": "W03",
       "name": "기준정보 CRUD — 품목/별칭 관리",
-      "status": "다음",
+      "status": "완료",
       "phase": "1차",
       "plain": "콩나물·두부 같은 품목과 '콩', '콩박스' 같은 별칭을 직접 관리하는 화면. 별칭이 많을수록 발주 문장이 잘 읽힙니다.",
       "why": "파싱 정확도의 핵심이 별칭 사전입니다. 사용자가 자기 현장 용어를 등록할 수 있어야 미매칭이 줄어듭니다.",

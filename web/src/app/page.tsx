@@ -50,6 +50,19 @@ import {
 import { searchProductsForOrder } from "@/lib/product-search";
 import { CustomerManagementView } from "./customer-management-view";
 import { SupplierManagementView } from "./supplier-management-view";
+import { ProductManagementView } from "./product-management-view";
+import {
+  addAliasInDb,
+  archiveProduct as archiveProductInDb,
+  createProduct as createProductInDb,
+  friendlyAliasError,
+  listArchivedProducts,
+  normalizeProductInput,
+  removeAliasInDb,
+  unarchiveProduct as unarchiveProductInDb,
+  updateProduct as updateProductInDb,
+  type ProductFormInput,
+} from "@/lib/product-store";
 import {
   archiveSupplier as archiveSupplierInDb,
   createSupplier as createSupplierInDb,
@@ -66,7 +79,16 @@ import {
   type CompanySession,
 } from "./auth-gate";
 
-type View = "dashboard" | "paste" | "review" | "aggregate" | "orders" | "note" | "customers" | "suppliers";
+type View =
+  | "dashboard"
+  | "paste"
+  | "review"
+  | "aggregate"
+  | "orders"
+  | "note"
+  | "customers"
+  | "suppliers"
+  | "products";
 
 /** 앱 데이터 묶음 — 데모 모드(샘플)와 DB 모드(Supabase 로드) 공용 형태 */
 interface AppData {
@@ -104,7 +126,7 @@ const NAV_GROUPS: Array<{
     items: [
       { view: "customers", label: "거래처 관리", icon: "□" },
       { view: "suppliers", label: "매입처 관리", icon: "▣" },
-      { label: "품목·별칭 관리", icon: "◇", soon: true, phase: "1차" },
+      { view: "products", label: "품목·별칭 관리", icon: "◇" },
       { label: "단가 관리", icon: "₩", soon: true, phase: "1차" },
     ],
   },
@@ -121,6 +143,7 @@ const VIEW_TITLES: Record<View, string> = {
   note: "거래명세서",
   customers: "거래처 관리",
   suppliers: "매입처 관리",
+  products: "품목·별칭 관리",
 };
 
 function Shell(props: {
@@ -196,6 +219,7 @@ export default function HomePage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [archivedSuppliers, setArchivedSuppliers] = useState<Supplier[]>([]);
+  const [archivedProducts, setArchivedProducts] = useState<Product[]>([]);
   const [customerPrices, setCustomerPrices] = useState<CustomerPrice[]>([]);
   const [examples, setExamples] = useState<SampleOrderExample[]>([]);
 
@@ -588,6 +612,92 @@ export default function HomePage() {
     flash(`${restored.name} 매입처를 복원했습니다.`);
   }
 
+  // ---- 품목·별칭 관리 (W03) ----
+  // products 상태가 파싱·합산표의 단일 소스라 상태 갱신만으로 즉시 반영된다.
+  function supplierNameById(id: string | null): string | null {
+    return id ? suppliers.find((s) => s.id === id)?.name ?? null : null;
+  }
+
+  async function saveProduct(id: string | null, input: ProductFormInput) {
+    const clean = normalizeProductInput(input);
+    const supplierName = supplierNameById(clean.purchaseSupplierId);
+
+    if (db && companyId) {
+      const existingAliases = id ? products.find((p) => p.id === id)?.aliases ?? [] : [];
+      const saved = id
+        ? await updateProductInDb(db, companyId, id, input, existingAliases, supplierName)
+        : await createProductInDb(db, companyId, input, supplierName);
+      setProducts((prev) => (id ? prev.map((p) => (p.id === id ? saved : p)) : [...prev, saved]));
+      flash(id ? "품목을 수정했습니다." : "품목을 추가했습니다.");
+      return;
+    }
+
+    const saved: Product = {
+      id: id ?? crypto.randomUUID(),
+      name: clean.name,
+      baseUnit: clean.baseUnit,
+      aliases: id ? products.find((p) => p.id === id)?.aliases ?? [] : [],
+      purchaseSupplierId: clean.purchaseSupplierId,
+      purchaseSupplierName: supplierName,
+      basePurchasePrice: clean.basePurchasePrice,
+    };
+    setProducts((prev) => (id ? prev.map((p) => (p.id === id ? saved : p)) : [...prev, saved]));
+    flash(id ? "품목을 수정했습니다. (데모 모드)" : "품목을 추가했습니다. (데모 모드)");
+  }
+
+  async function archiveProduct(product: Product) {
+    if (db && companyId) {
+      await archiveProductInDb(db, companyId, product.id);
+    }
+    // 확정된 주문·명세서는 스냅샷이라 보관해도 그대로 남는다.
+    setProducts((prev) => prev.filter((p) => p.id !== product.id));
+    setArchivedProducts((prev) => [...prev, product]);
+    flash(`${product.name} 품목을 보관했습니다.`);
+  }
+
+  async function unarchiveProduct(product: Product) {
+    if (db && companyId) {
+      await unarchiveProductInDb(db, companyId, product.id);
+    }
+    const restored = {
+      ...product,
+      purchaseSupplierName: supplierNameById(product.purchaseSupplierId ?? null),
+    };
+    setArchivedProducts((prev) => prev.filter((p) => p.id !== product.id));
+    setProducts((prev) => [...prev, restored]);
+    flash(`${restored.name} 품목을 복원했습니다.`);
+  }
+
+  async function addProductAlias(product: Product, alias: string) {
+    if (db && companyId) {
+      try {
+        await addAliasInDb(db, companyId, product.id, alias);
+      } catch (e) {
+        throw new Error(friendlyAliasError(e));
+      }
+    }
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === product.id && !(p.aliases ?? []).includes(alias)
+          ? { ...p, aliases: [...(p.aliases ?? []), alias] }
+          : p,
+      ),
+    );
+    flash(`'${alias}' 별칭을 추가했습니다. 발주 붙여넣기에서 바로 매칭됩니다.`);
+  }
+
+  async function removeProductAlias(product: Product, alias: string) {
+    if (db && companyId) {
+      await removeAliasInDb(db, companyId, alias);
+    }
+    setProducts((prev) =>
+      prev.map((p) =>
+        p.id === product.id ? { ...p, aliases: (p.aliases ?? []).filter((a) => a !== alias) } : p,
+      ),
+    );
+    flash(`'${alias}' 별칭을 삭제했습니다.`);
+  }
+
   async function confirmOrder() {
     if (!canConfirm(lines) || saving) return;
     const customer = customers.find((c) => c.id === selectedCustomerId);
@@ -685,6 +795,22 @@ export default function HomePage() {
       })
       .catch(() => {
         if (live) flash("보관된 매입처 목록을 불러오지 못했습니다.");
+      });
+    return () => {
+      live = false;
+    };
+  }, [view, db, companyId]);
+
+  // DB 모드: 품목·별칭 관리 화면에 들어올 때 보관 품목을 불러온다
+  useEffect(() => {
+    if (view !== "products" || !db || !companyId) return;
+    let live = true;
+    listArchivedProducts(db, companyId)
+      .then((rows) => {
+        if (live) setArchivedProducts(rows);
+      })
+      .catch(() => {
+        if (live) flash("보관된 품목 목록을 불러오지 못했습니다.");
       });
     return () => {
       live = false;
@@ -972,6 +1098,19 @@ export default function HomePage() {
           onSave={saveSupplier}
           onArchive={archiveSupplier}
           onUnarchive={unarchiveSupplier}
+        />
+      )}
+
+      {view === "products" && (
+        <ProductManagementView
+          products={products}
+          archivedProducts={archivedProducts}
+          suppliers={suppliers}
+          onSave={saveProduct}
+          onArchive={archiveProduct}
+          onUnarchive={unarchiveProduct}
+          onAddAlias={addProductAlias}
+          onRemoveAlias={removeProductAlias}
         />
       )}
 
