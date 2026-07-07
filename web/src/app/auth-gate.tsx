@@ -33,6 +33,7 @@ export interface CompanySession {
   enterDemoMode: () => void;
   exitDemoMode: () => void;
   signIn: (email: string) => Promise<void>;
+  signInWithPassword: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   createCompany: (name: string) => Promise<void>;
   selectCompany: (id: string) => void;
@@ -157,6 +158,26 @@ export function useCompanySession(): CompanySession {
     [supabase],
   );
 
+  // 개발/실측용 비밀번호 로그인 — Supabase 무료 메일 rate limit을 우회한다.
+  // (매직링크는 그대로 유지. 이메일+비밀번호 사용자는 대시보드에서 미리 생성)
+  const signInWithPassword = useCallback(
+    async (addr: string, password: string) => {
+      if (!supabase) return;
+      setBusy(true);
+      setError(null);
+      setInfo(null);
+      const { error: aErr } = await supabase.auth.signInWithPassword({
+        email: addr.trim(),
+        password,
+      });
+      if (!mounted.current) return;
+      setBusy(false);
+      if (aErr) setError(`비밀번호 로그인에 실패했습니다: ${aErr.message}`);
+      // 성공 시 onAuthStateChange가 세션을 받아 화면을 전환한다.
+    },
+    [supabase],
+  );
+
   const signOut = useCallback(async () => {
     if (!supabase) return;
     await supabase.auth.signOut();
@@ -204,6 +225,7 @@ export function useCompanySession(): CompanySession {
     enterDemoMode,
     exitDemoMode,
     signIn,
+    signInWithPassword,
     signOut,
     createCompany,
     selectCompany,
@@ -212,6 +234,7 @@ export function useCompanySession(): CompanySession {
 
 export function LoginView({ session }: { session: CompanySession }) {
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   return (
     <main className="gate">
       <div className="gate-box">
@@ -219,20 +242,49 @@ export function LoginView({ session }: { session: CompanySession }) {
           오더모아<small>발주 취합 MVP</small>
         </div>
         <div className="card">
-        <h2>이메일로 로그인</h2>
+        <h2>비밀번호로 로그인</h2>
         <p className="muted">
-          이메일을 입력하면 로그인 링크를 보내드립니다. 비밀번호는 저장하지 않습니다.
+          관리자가 등록한 이메일과 비밀번호로 바로 로그인합니다. 비밀번호는 오더모아가 저장하지 않습니다.
         </p>
         <label>이메일</label>
         <input
           type="email"
+          autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="you@example.com"
         />
+        <label>비밀번호</label>
+        <input
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="비밀번호"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && email.trim() && password && !session.busy) {
+              session.signInWithPassword(email, password);
+            }
+          }}
+        />
         <div className="row-actions" style={{ marginTop: 10 }}>
           <button
             className="primary"
+            disabled={session.busy || email.trim() === "" || password === ""}
+            onClick={() => session.signInWithPassword(email, password)}
+          >
+            로그인
+          </button>
+        </div>
+
+        <hr style={{ margin: "18px 0", border: 0, borderTop: "1px solid #eef0f3" }} />
+
+        <h2 style={{ fontSize: 16 }}>또는 이메일 링크로 로그인</h2>
+        <p className="muted">
+          이메일로 로그인 링크를 보냅니다. (무료 메일 한도로 자주 막힐 수 있음)
+        </p>
+        <div className="row-actions" style={{ marginTop: 10 }}>
+          <button
             disabled={session.busy || email.trim() === ""}
             onClick={() => session.signIn(email)}
           >

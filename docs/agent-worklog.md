@@ -1322,3 +1322,17 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
 - 판단:
   - Claude의 마지막 거래처 보관 가드 패치는 타당해 유지.
   - Supabase 적용 전 DB 모드 오류 가능성은 여전히 정상 상태이며, 0004 적용 후 해결되는 구조.
+
+## 2026-07-07 Codex (비밀번호 로그인 검수)
+
+- 목적: Supabase 무료 메일 `email rate limit exceeded`로 W08 실측이 막히는 문제를 우회하기 위해 Claude가 추가한 비밀번호 로그인 경로 검수.
+- 판단:
+  - `supabase.auth.signInWithPassword()`를 사용하는 표준 브라우저 로그인으로, service role key나 서버 비밀키 노출 없음.
+  - 매직링크 로그인은 fallback으로 유지되어 기존 흐름을 제거하지 않음.
+  - 화면 문구의 "테스트 계정" 표현은 향후 실제 사용자에게 어색할 수 있어 "관리자가 등록한 이메일과 비밀번호"로 수정.
+  - 이메일/비밀번호 input에 `autoComplete` 속성 추가, Enter 로그인은 busy 중 중복 호출하지 않도록 보강.
+- 검증:
+  - web `npm test` 83/83.
+  - web `npm run build` 성공.
+  - git diff --check 통과.
+  - 민감정보 grep은 `password === ""` 코드 조건만 오탐으로 확인.
