@@ -56,11 +56,11 @@
   </div>
 </header>
 <div class="wrap">
-  <div class="focus">📌 <strong>지금 하는 일:</strong> W10 저장 주문 기반 합산표 완료(기존 aggregate·loadOrders 재사용, 마이그레이션 없음) + 대시보드 문구 정합성 보정. 기준정보 4종·W09·W10 완료. 다음: W11(저장 주문 기반 거래명세서 재출력).</div>
+  <div class="focus">📌 <strong>지금 하는 일:</strong> W11 거래명세서 재출력 + 인쇄 양식 하단 마감 보정 완료(border-collapse·합계 tfoot·비고/인수확인·고정 15행, 데모 실측). 기준정보 4종·W09·W10·W11 완료 → 8c 대부분 마무리. 다음: W12(거래처별 월 합계) 또는 잔여 보강.</div>
 
   <h2>전체 진행률 (작업 보드 17개 기준)</h2>
-  <div class="progressbar"><div style="width:65%"></div></div>
-  <p class="counts">완료 11 · 다음 3 · 보류 3 — 1차 트랙(보류 제외) 11/14 완료</p>
+  <div class="progressbar"><div style="width:71%"></div></div>
+  <p class="counts">완료 12 · 다음 2 · 보류 3 — 1차 트랙(보류 제외) 12/14 완료</p>
   <div class="legend"><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span><span class="badge" style="background:#fef7e0;color:#946200">다음</span><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span><span class="badge" style="background:#fde8e8;color:#b02a2a">제외</span></div>
 
   <h2>핵심 흐름 (이 순서가 제품의 전부)</h2>
@@ -141,15 +141,15 @@
   </dl>
   <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/aggregate.ts</code></li><li><code>web/src/lib/order-store.ts</code></li><li><code>web/src/app/page.tsx</code></li></ul></details>
 </div>
-<div class="card s-next">
-  <div class="card-head"><span class="wid">W11</span><strong>8c — 거래명세서 재출력</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>
-  <p class="plain">과거 주문의 거래명세서를 언제든 다시 열어 인쇄합니다. 금액은 확정 당시 단가 그대로(지금 단가가 바뀌어도 과거 명세서는 안 변함).</p>
+<div class="card s-done">
+  <div class="card-head"><span class="wid">W11</span><strong>8c — 거래명세서 재출력 + 인쇄 양식 하단 마감</strong><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span></div>
+  <p class="plain">저장된 주문(주문 목록→보기)의 거래명세서를 다시 열어 인쇄합니다. 금액은 확정 당시 단가 그대로(order_items 스냅샷, customer_prices 재조회 없음). 인쇄 양식 하단 마감을 보정: 표 선 이어붙임(border-collapse), 공급가 합계를 표 tfoot에 붙여 정렬, 비고/인수확인 마감행, 고정 15행으로 A4 1장 균일 출력. &#x27;확정 당시 단가 기준&#x27; 안내는 no-print.</p>
   <dl>
-    <dt>왜 필요한가</dt><dd>거래처가 &quot;지난주 명세서 다시 주세요&quot; 할 때 필요합니다. 확정 시점 금액 보존은 헌장의 불변 규칙.</dd>
-    <dt>선행 조건</dt><dd>W08 통과.</dd>
-    <dt>확인 방법</dt><dd>주문 저장→단가 변경→과거 명세서 재출력 시 금액이 그대로인지 확인.</dd>
+    <dt>왜 필요한가</dt><dd>거래처가 &quot;지난주 명세서 다시 주세요&quot; 할 때 필요합니다. 확정 시점 금액 보존은 헌장의 불변 규칙. 실제 출력물처럼 하단이 깔끔해야 씀.</dd>
+    <dt>선행 조건</dt><dd>완료 — W08(저장). 거래명세서 화면은 이미 존재(주문 목록→보기).</dd>
+    <dt>확인 방법</dt><dd>데모 실측(2026-07-08): 6품목 명세서에서 표 선 연결·합계 tfoot 정렬(76,000)·비고/인수확인 마감·15행 채움 확인, 콘솔 0. 금액은 order.total(저장 스냅샷). DB 재출력 F5는 loadOrders 경로(W08/W09 검증분).</dd>
   </dl>
-  <details><summary>관련 문서/파일</summary><ul><li><code>docs/delivery-note-print-spec.md</code></li><li><code>docs/order-moa-system-meta-prompt.md(§3)</code></li></ul></details>
+  <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/delivery-note.ts</code></li><li><code>web/src/app/page.tsx</code></li><li><code>web/src/app/globals.css</code></li><li><code>docs/delivery-note-print-spec.md</code></li></ul></details>
 </div>
 <div class="card s-next">
   <div class="card-head"><span class="wid">W12</span><strong>8c — 거래처별 월 합계</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>

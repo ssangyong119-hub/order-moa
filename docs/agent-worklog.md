@@ -1504,3 +1504,33 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
 
 - Codex 검수 대상.
 - [다음] W11(저장 주문 기반 거래명세서 재출력 — 이미 주문 목록→보기로 열림. "확정 당시 단가 재출력" 문구/F5 검증 보강 위주로 추정). [위험 유지] 공유 Supabase 무료 쿼터.
+
+## 2026-07-08 Claude (W11 거래명세서 재출력 + 인쇄 양식 하단 마감 보정)
+
+### 판단: 재출력 로직은 이미 있음 — 스냅샷 검수 + 인쇄 양식 마감이 핵심 (마이그레이션 0건)
+- 주문 목록→보기는 `currentOrder`(loadOrders/데모 저장 주문)의 lines/unitPrice/amount·order.total만 사용. customer_prices 재조회 없음, 예상 마진 비저장. 단가표 바꿔도 과거 명세서 불변(스냅샷). raw_text 삭제와 명세서 재출력 상호 무관(별 경로). → 재출력은 이미 정상, 검수만.
+
+### 변경 (문구·CSS·행수 — web/src/app/page.tsx, globals.css, lib/delivery-note.ts + 테스트, docs/delivery-note-print-spec.md)
+- **작업1 재출력 명확화**: 명세서 상단 no-print 안내 추가 — "저장된 주문을 다시 연 것. 금액은 확정 당시 단가 기준, 단가표 바꿔도 안 변함". no-print라 인쇄본엔 안 나옴.
+- **작업2 하단 마감(피드백 3건 해결)**:
+  1) 표 선 끊김 → `.note-table{border-collapse:collapse}` (셀 경계 이어붙임).
+  2) 합계 떠 보임 → 표 밖 `.note-total` div 제거하고 표 `<tfoot>`에 "공급가 합계 (부가세 없음)"을 공급가액 열에 정렬한 합계 행으로 이동(표에 붙음).
+  3) 하단 마감 → tfoot에 "비고 / 인수확인(서명)" 최소 마감행 추가(태스크 허용 범위의 최소 비고/확인), 고정 행수 10→15(`DELIVERY_NOTE_MIN_ROWS` 상수화)로 A4 1장 균일·품목 적어도 표가 안 끊김. 인쇄 시 비고행 높이 44px 유지.
+- delivery-note.ts: `DELIVERY_NOTE_MIN_ROWS=15` export, 기본값으로 사용. page.tsx는 `padDeliveryNoteLines(order.lines)`(기본값).
+- delivery-note.test.ts: 1품목→15행 채움 락 테스트 추가.
+
+### 자체 리뷰
+- 제품 원칙: unit_price 스냅샷·customer_prices 재조회 없음·마진 비저장·raw_text 무관 전부 유지. 세금계산서/전자발행 표현 없음, VAT "부가세 없음(1차)" 유지.
+- CSS 영향 범위: 변경은 전부 `.note-*` 스코프 → 합산표/주문목록/단가 등 다른 표 무영향. 제거한 `.note-total`은 미사용. `.note-doc .table-wrap{overflow:visible}`는 note 한정.
+
+### 검증
+- root 5/5 · web 103/103(delivery-note +1) · build 성공 · audit 0건 · git diff --check clean.
+- 데모 smoke(콘솔 0): 6품목 명세서 — border-collapse 적용, 15행(6품목+9빈행) 채움, 표선 연결, tfoot 합계 76,000 공급가액 열 정렬, 비고/인수확인 마감행, 떠있던 total 제거, "확정 당시 단가" no-print 안내 확인. 화면 미리보기 육안 확인(스크린샷). 인쇄 미리보기는 @media print에서 no-print 숨김+tfoot 유지 구조 확인(브라우저 실제 인쇄창은 사용자 확인 권장).
+
+### 개선 아이디어 (승인 없이 구현 안 함)
+- 즉시(작음): 없음(현 마감으로 충분).
+- 나중: 명세서 번호 자동 채번(현재 "-"), 규격 별도 열, 보관용/거래처용 2부 출력(스펙 §4.1), 품목 15개↑ 다중 페이지 정돈.
+- 제외(범위 밖): 세금계산서 발행·전자문서·회계/재고/OCR/카톡 자동읽기/이카운트.
+
+- Codex 검수 대상.
+- [다음] W12(거래처별 월 합계) 또는 잔여 보강. [위험 유지] 공유 Supabase 무료 쿼터. 인쇄 실제 출력 육안 확인은 사용자 권장.

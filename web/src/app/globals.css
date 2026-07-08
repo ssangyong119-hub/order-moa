@@ -309,15 +309,20 @@ button.danger{color:var(--err-fg);border-color:var(--err-bg)}
 .note-title{font-size:1.6rem;letter-spacing:.4em;font-weight:650}
 .note-block{font-size:.85rem}
 .note-block b{display:inline-block;min-width:56px;color:#333}
-.note-doc .table-wrap{border:none;border-radius:0}
-.note-table{table-layout:fixed;min-width:0}
-.note-table th,.note-table td{border:1px solid #999;padding:6px 8px;background:none;height:34px}
+.note-doc .table-wrap{border:none;border-radius:0;overflow:visible}
+.note-table{table-layout:fixed;min-width:0;width:100%;border-collapse:collapse}
+.note-table th,.note-table td{border:1px solid #555;padding:6px 8px;background:none;height:34px}
+.note-table th{border-bottom-width:1.5px;font-weight:700}
 .note-table th:nth-child(1),.note-table td:nth-child(1){width:56px}
 .note-table th:nth-child(2),.note-table td:nth-child(2){width:28%}
 .note-table th:nth-child(3),.note-table td:nth-child(3){width:20%}
 .note-table .blank-row td{height:34px;color:transparent}
-.note-total{text-align:right;font-weight:700;padding-top:12px;font-size:1rem}
-.note-hanja{font-size:.9rem}
+/* 합계·비고를 표 안(tfoot)에 넣어 표 하단선이 끊기지 않고 합계가 표에 붙어 정렬되게 한다 */
+.note-table tfoot td{border:1px solid #555;background:none}
+.note-total-row td{height:38px;font-weight:800;font-size:1.02rem}
+.note-total-label{text-align:right;letter-spacing:.02em}
+.note-foot-row td{height:50px;vertical-align:top;font-weight:600;color:#333;font-size:.82rem}
+.note-hanja{font-size:.9rem;margin:12px 0}
 
 /* ── 게이트(로그인/회사 생성/로딩) — 셸 밖 중앙 카드 ── */
 .gate{min-height:100vh;display:flex;justify-content:center;align-items:flex-start;padding:9vh 16px 40px}
@@ -374,5 +379,6 @@ button.danger{color:var(--err-fg);border-color:var(--err-bg)}
   table{min-width:0}
   .note-doc{border:none;padding:0;width:100%;min-height:0}
   .note-table th,.note-table td{height:32px}
+  .note-foot-row td{height:44px}
   .sup-tag{background:none !important;color:inherit !important;padding:0}
 }

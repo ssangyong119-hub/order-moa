@@ -1488,6 +1488,10 @@ export default function HomePage() {
             </button>
             <span className="muted">브라우저 인쇄창이 열립니다. 프린터 출력 또는 PDF 저장을 선택하세요.</span>
           </div>
+          <p className="muted no-print" style={{ marginTop: 0, marginBottom: 10 }}>
+            저장된 주문을 다시 연 것입니다. 금액은 <strong>확정 당시 단가 기준</strong>으로, 지금 단가표를
+            바꿔도 이 명세서는 변하지 않습니다.
+          </p>
 
           <div className="card no-print raw-text-panel" style={{ marginBottom: 12 }}>
             {currentOrder.rawText ? (
@@ -1847,7 +1851,7 @@ function DeliveryNote(props: {
   company: { name: string; businessNumber: string; phone: string; address: string };
 }) {
   const { order, company } = props;
-  const noteRows = padDeliveryNoteLines(order.lines, 10);
+  const noteRows = padDeliveryNoteLines(order.lines);
   return (
     <div className="note-doc print-area">
       <div className="note-head">
@@ -1913,10 +1917,19 @@ function DeliveryNote(props: {
               ),
             )}
           </tbody>
+          <tfoot>
+            <tr className="note-total-row">
+              <td className="note-total-label" colSpan={5}>
+                공급가 합계 (부가세 없음)
+              </td>
+              <td className="num">{order.total.toLocaleString("ko-KR")}</td>
+            </tr>
+            <tr className="note-foot-row">
+              <td colSpan={4}>비고</td>
+              <td colSpan={2}>인수확인 (서명)</td>
+            </tr>
+          </tfoot>
         </table>
-      </div>
-      <div className="note-total">
-        공급가 합계 {formatKRW(order.total)} · 부가세 없음(1차)
       </div>
     </div>
   );
