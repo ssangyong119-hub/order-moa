@@ -55,6 +55,8 @@ import { SupplierManagementView } from "./supplier-management-view";
 import { ProductManagementView } from "./product-management-view";
 import { PriceManagementView } from "./price-management-view";
 import { upsertCustomerPriceInDb } from "@/lib/price-store";
+import { MonthlySummaryView } from "./monthly-summary-view";
+import { downloadCsv } from "@/lib/csv-export";
 import {
   addAliasInDb,
   archiveProduct as archiveProductInDb,
@@ -93,7 +95,9 @@ type View =
   | "customers"
   | "suppliers"
   | "products"
-  | "prices";
+  | "prices"
+  | "monthly"
+  | "data";
 
 /** 앱 데이터 묶음 — 데모 모드(샘플)와 DB 모드(Supabase 로드) 공용 형태 */
 interface AppData {
@@ -123,6 +127,7 @@ const NAV_GROUPS: Array<{
     items: [
       { view: "aggregate", label: "품목별 합산표", icon: "Σ" },
       { view: "orders", label: "주문 목록", icon: "≡" },
+      { view: "monthly", label: "거래처별 월 합계", icon: "₩" },
     ],
   },
   {
@@ -136,7 +141,7 @@ const NAV_GROUPS: Array<{
     ],
   },
   { label: "자금", icon: "₩", items: [{ label: "미수금", icon: "◌", soon: true, phase: "2차" }] },
-  { label: "설정", icon: "⚙", items: [{ label: "데이터 관리", icon: "⚙", soon: true, phase: "1차" }] },
+  { label: "설정", icon: "⚙", items: [{ view: "data", label: "데이터 내보내기", icon: "⚙" }] },
 ];
 
 const VIEW_TITLES: Record<View, string> = {
@@ -150,6 +155,8 @@ const VIEW_TITLES: Record<View, string> = {
   suppliers: "매입처 관리",
   products: "품목·별칭 관리",
   prices: "단가 관리",
+  monthly: "거래처별 월 합계",
+  data: "데이터 내보내기",
 };
 
 function Shell(props: {
@@ -932,18 +939,56 @@ export default function HomePage() {
   }
 
   function exportCsv() {
-    const rows = [
+    downloadCsv("품목별합산표.csv", [
       ["품목", "단위", "총수량", "거래처수"],
-      ...aggregate.map((a) => [a.name, a.unit, String(a.qty), String(a.custCount)]),
-    ];
-    const csv = rows.map((r) => r.map((cell) => `"${cell}"`).join(",")).join("\n");
-    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "품목별합산표.csv";
-    link.click();
-    URL.revokeObjectURL(url);
+      ...aggregate.map((a) => [a.name, a.unit, a.qty, a.custCount]),
+    ]);
+  }
+
+  // 주문 목록 CSV (주문 1건=1행, 금액은 저장 스냅샷 order.total)
+  function exportOrdersCsv() {
+    downloadCsv("주문목록.csv", [
+      ["날짜", "거래처", "품목 요약", "공급가 합계"],
+      ...orders.map((o) => [o.date, o.customerName, summarizeItems(o.lines), o.total]),
+    ]);
+  }
+
+  // ---- 기준정보 백업 CSV (W15) — 현재 로드된 저장 데이터 그대로 내보내기 ----
+  function exportCustomersCsv() {
+    downloadCsv("거래처.csv", [
+      ["거래처명", "연락처", "주소", "메모"],
+      ...customers.map((c) => [c.name, c.phone ?? "", c.address ?? "", c.memo ?? ""]),
+    ]);
+  }
+  function exportSuppliersCsv() {
+    downloadCsv("매입처.csv", [
+      ["매입처명", "연락처", "주소", "메모"],
+      ...suppliers.map((s) => [s.name, s.phone ?? "", s.address ?? "", s.memo ?? ""]),
+    ]);
+  }
+  function exportProductsCsv() {
+    downloadCsv("품목별칭.csv", [
+      ["품목명", "기본 단위", "기본 매입처", "기준 매입단가", "별칭"],
+      ...products.map((p) => [
+        p.name,
+        p.baseUnit,
+        p.purchaseSupplierName ?? "",
+        p.basePurchasePrice ?? "",
+        (p.aliases ?? []).join(";"),
+      ]),
+    ]);
+  }
+  function exportPricesCsv() {
+    const custName = new Map(customers.map((c) => [c.id, c.name]));
+    const prodName = new Map(products.map((p) => [p.id, p.name]));
+    downloadCsv("단가.csv", [
+      ["거래처", "품목", "판매 단가"],
+      ...customerPrices.map((cp) => [
+        custName.get(cp.customerId) ?? cp.customerId,
+        prodName.get(cp.productId) ?? cp.productId,
+        cp.price,
+      ]),
+    ]);
   }
 
   // ===== 렌더 =====
@@ -1126,8 +1171,8 @@ export default function HomePage() {
                 <li><span>기준정보 4종 (거래처·매입처·품목·단가)</span><span className="badge ok">완료</span></li>
                 <li><span>발주 원문 저장·삭제</span><span className="badge ok">완료</span></li>
                 <li><span>저장 주문 합산표 (날짜·거래처별)</span><span className="badge ok">완료</span></li>
-                <li><span>거래명세서 재출력</span><span className="badge info">다음</span></li>
-                <li><span>월 합계·미수금·세금 근거</span><span className="badge err">2차</span></li>
+                <li><span>거래명세서 재출력 · 거래처별 월 합계</span><span className="badge ok">완료</span></li>
+                <li><span>미수금·세금 근거</span><span className="badge err">2차</span></li>
               </ul>
             </div>
           </div>
@@ -1173,6 +1218,66 @@ export default function HomePage() {
           prices={customerPrices}
           onSave={saveCustomerPrice}
         />
+      )}
+
+      {view === "monthly" && (
+        <MonthlySummaryView orders={orders} persisted={session.status === "ready"} />
+      )}
+
+      {view === "data" && (
+        <section className="card">
+          <h2>데이터 내보내기</h2>
+          <p className="muted" style={{ marginTop: 0 }}>
+            저장된 데이터를 CSV 파일로 내려받아 보관합니다. 공유 서버 문제나 기기 변경에 대비한{" "}
+            <strong>백업</strong>이자, 회계사 전달·본인 정리용입니다. (파일 가져오기/복원은 추후)
+          </p>
+          {session.status !== "ready" && (
+            <p className="muted" style={{ marginTop: 0 }}>
+              데모 모드 — 지금 화면의 샘플 데이터를 내보냅니다(실제 저장본 아님).
+            </p>
+          )}
+          <div className="export-grid">
+            <div className="export-item">
+              <div>
+                <strong>거래처</strong>
+                <small className="muted">{customers.length}곳 · 이름·연락처·주소·메모</small>
+              </div>
+              <button onClick={exportCustomersCsv} disabled={customers.length === 0}>CSV</button>
+            </div>
+            <div className="export-item">
+              <div>
+                <strong>매입처</strong>
+                <small className="muted">{suppliers.length}곳 · 이름·연락처·주소·메모</small>
+              </div>
+              <button onClick={exportSuppliersCsv} disabled={suppliers.length === 0}>CSV</button>
+            </div>
+            <div className="export-item">
+              <div>
+                <strong>품목·별칭</strong>
+                <small className="muted">{products.length}개 · 단위·기본매입처·기준단가·별칭</small>
+              </div>
+              <button onClick={exportProductsCsv} disabled={products.length === 0}>CSV</button>
+            </div>
+            <div className="export-item">
+              <div>
+                <strong>거래처별 단가</strong>
+                <small className="muted">{customerPrices.length}건 · 거래처·품목·판매단가</small>
+              </div>
+              <button onClick={exportPricesCsv} disabled={customerPrices.length === 0}>CSV</button>
+            </div>
+            <div className="export-item">
+              <div>
+                <strong>주문 목록</strong>
+                <small className="muted">{orders.length}건 · 날짜·거래처·품목요약·공급가합계(확정 당시 금액)</small>
+              </div>
+              <button onClick={exportOrdersCsv} disabled={orders.length === 0}>CSV</button>
+            </div>
+          </div>
+          <p className="muted" style={{ marginTop: 12 }}>
+            금액은 모두 <strong>확정 당시 단가 그대로</strong>입니다(현재 단가표와 무관). 세금계산서 발행
+            기능이 아니라 보관·확인용 파일입니다.
+          </p>
+        </section>
       )}
 
       {view === "paste" && (
@@ -1439,6 +1544,10 @@ export default function HomePage() {
               <button className="primary" onClick={() => setView("paste")}>발주 붙여넣기</button>
             </div>
           ) : (
+            <>
+              <div className="row-actions no-print" style={{ marginBottom: 8 }}>
+                <button onClick={exportOrdersCsv}>CSV 내보내기</button>
+              </div>
             <div className="table-wrap">
               <table>
                 <thead>
@@ -1475,6 +1584,7 @@ export default function HomePage() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </section>
       )}

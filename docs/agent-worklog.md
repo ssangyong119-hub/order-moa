@@ -1534,3 +1534,68 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
 
 - Codex 검수 대상.
 - [다음] W12(거래처별 월 합계) 또는 잔여 보강. [위험 유지] 공유 Supabase 무료 쿼터. 인쇄 실제 출력 육안 확인은 사용자 권장.
+
+## 2026-07-08 Claude (W12 거래처별 월 합계)
+
+### 구현 (마이그레이션 없음 — order.total 스냅샷만)
+- 신규 `web/src/lib/monthly-summary.ts`: 순수 함수 `buildMonthlySummary(orders, "YYYY-MM")` → 거래처별 { orderCount, totalAmount, lastOrderDate } (금액 내림차순·동률 이름순) + 전체 합계·건수. `availableMonths(orders)`(존재 달 최신순). 입력은 최소 타입 `MonthlyOrderInput`(date/customerId/customerName/total) — ConfirmedOrder가 구조적으로 만족. **customer_prices 입력 자체가 없음 → 스냅샷 불변이 구조로 보장.**
+- 신규 `web/src/app/monthly-summary-view.tsx`: 조회 화면. `<input type="month">`(기본=최신 달), 표(거래처/주문 건수/공급가 합계/마지막 주문일) + tfoot 전체 합계. "세금계산서 발행 기능이 아니며 월말 확인용" 안내. 빈 월 안내. 공용 formatKRW 사용.
+- page.tsx: View "monthly" + 조회 그룹에 '거래처별 월 합계' 메뉴(2차 메뉴 아님, 1차 조회) + 렌더. 대시보드 '진행 상태'에서 월 합계를 완료로 이동(미수금·세금만 2차).
+- CSS: `.month-total-row`만.
+- 테스트 `monthly-summary.test.ts` 4건(월 그룹핑·타월 제외·빈 월·availableMonths, 정렬/합계 검증).
+
+### 자체 리뷰 (제품 원칙)
+- 월 합계 = order.total(=Σ order_items.amount 스냅샷)만 사용, 현재 단가표 재조회 없음. 예상 마진 비저장. raw_text와 무관(monthly-summary는 raw_text를 안 봄). 세금계산서/입금/미수금/회계 확장 없음 — 조회 숫자까지만. 사이드바 2차 메뉴 안 늘림(기존 미수금 2차 그대로).
+- function-spec F12(거래처별 주문표: order_items.amount 합, 읽기 전용, 별도 테이블 없음)와 일치 → spec 수정 불필요. CSV·일/년 기간은 F12의 넓은 범위지만 W12(월 합계 조회) 밖으로 미구현(과확장 금지).
+
+### 검증
+- root 5/5 · web 107/107(monthly +4) · build 성공 · audit 0건 · git diff --check clean.
+- 데모 smoke(콘솔 0): 2026-07 발주 2건 → 가람식당 76,000·한빛카페 49,400·전체 125,400(금액 내림차순), 마지막 주문일 표시, 세금 아님 안내. **단가표 콩나물 99,999원 변경 후 월 합계 불변(스냅샷 검증)**. 빈 월(2026-01) 안내. month 기본값=최신 달.
+- DB smoke는 로그인 필요라 미실행 — orders는 loadOrders(스냅샷)라 동작 동일, 회귀 위험 낮음.
+
+### 개선 아이디어 (승인 없이 구현 안 함)
+- 즉시(작음): 월 합계 CSV 내보내기(합산표에 이미 exportCsv 패턴 있음), 거래처 클릭→해당 월 주문 목록 필터.
+- 나중: 일/분기/년 기간 집계(F12 확장), 전월 대비 증감.
+- 제외(범위 밖): 세금계산서 발행·입금/미수금 자동·회계 장부.
+
+- Codex 검수 대상.
+- [다음] 잔여 보강(인쇄 육안·다중 페이지·명세서 채번·월 합계 CSV) 또는 전용 Supabase 분리. [위험 유지] 공유 쿼터.
+
+### 2차 검수/디버깅 (2026-07-08, Codex 토큰 소진으로 Claude가 재검수)
+- **버그 발견·수정**: 월 선택 `<input type="month">`를 `.checkline` 라벨로 감싸 `.checkline input{width:18px}`가 상속 → 입력칸이 18px로 찌그러짐(기능은 되나 육안 사용 불가). preview_inspect로 renderedWidth=18px 확인. `.checkline` 제거하고 일반 라벨(inline flex)+`width:170`으로 교체 → 155px 정상 렌더 재확인.
+- 재검증: root 5/5 · web 107/107 · build 성공 · audit 0 · diff clean · 데모 재실측(가람식당 76,000·한빛카페 49,400·전체 125,400, 콘솔 0).
+- page.tsx/globals.css diff 재확인: W12 배선(View·nav·title·import·render·대시보드 진행상태·month tfoot CSS)만, 의도 외 변경 없음.
+- 통합 핸드오프 문서 작성: `docs/codex-review-W12.md`(미커밋 W12 배치 한 장 요약 — Codex가 토큰 복구 후 한 번에 검수·커밋용).
+
+## 2026-07-08 Claude (W15 데이터 내보내기 CSV — 절반: export만)
+
+### 배경/판단
+- 공유 Supabase 무료 쿼터 경고("Grace period is over")가 서 있는 리스크 → **데이터를 파일로 꺼내는 안전망**이 전용 프로젝트 분리의 첫 단계이자 즉시 가치(회계사 전달·본인 정리). export만, 마이그레이션 없음. 사용자 승인("지금 이대로 진행") 후 진행. 프롬프트: `docs/task-prompt-W15-export.md`.
+
+### 구현
+- 신규 `web/src/lib/csv-export.ts`: `toCsv(rows)`(콤마·따옴표·개행 escape + `=,+,-,@` 시작 셀 CSV 인젝션 방어) + `downloadCsv(name, rows)`(UTF-8 BOM). `csv-export.test.ts` 4테스트.
+- page.tsx: 기존 허술한 인라인 exportCsv(합산표)를 `downloadCsv`로 교체(중복 제거·escape 개선). 주문 목록 CSV(`exportOrdersCsv`) + 기준정보 4종 백업(거래처/매입처/품목별칭/단가). '데이터 내보내기' view 추가 + 사이드바 기존 soon '데이터 관리'를 실화면(view:"data")으로 승격(2차 미수금 메뉴 미변경).
+- monthly-summary-view: 월 합계 CSV 버튼(선택 월, 전체합계 행 포함).
+- globals.css: `.export-grid`/`.export-item`만.
+
+### 내보내는 파일
+거래처.csv · 매입처.csv · 품목별칭.csv(별칭 `;`) · 단가.csv(이름 lookup) · 주문목록.csv · 거래처별월합계_YYYY-MM.csv. 금액은 전부 저장 스냅샷(order.total/저장 단가), customer_prices 재조회 없음.
+
+### 자체 리뷰/디버깅
+- **버그 발견·수정**: 주문 목록 CSV 버튼 넣을 때 JSX fragment(`<>`) 미종결 → 닫아서 빌드 통과.
+- escape 개선 실증: 데모에서 콤마 든 메모 `"점심 백반, 채소 위주"`·품목요약 `"콩나물, 두부 외 4건"`가 열 안 깨지고 quoting됨.
+- 제품 원칙: 스냅샷 금액만·마진 미포함·raw_text 미포함(개인정보 제외)·ordermoa_ 접두사·마이그레이션 0. 세금/회계 확장 없음.
+- [알려진 범위] 백업은 **활성 데이터만**(archived 거래처/매입처/품목은 state에 없어 제외) — 후순위 개선.
+
+### 검증
+- root 5/5 · web 111/111(csv-export +4) · build 성공 · audit 0 · diff clean.
+- 데모 smoke(콘솔 0): 6종 CSV 다운로드 가로채 내용 확인 — 헤더·행·escape·BOM·스냅샷 금액(월합계 125,400·주문 76000/49400) 정확. 빈 데이터 버튼 disabled. 나브 '데이터 내보내기' 활성·미수금 2차 그대로.
+- DB smoke 미실행(로그인) — 내보내는 state는 loadOrders/loadCompanyData 저장본이라 동작 동일.
+
+### 개선 아이디어
+- 즉시(작음): 없음.
+- 나중: 엑셀 가져오기(import·W15 나머지 절반), 백업에 archived 포함, 전체 zip/JSON 한 번에, 라인 단위 주문 CSV.
+- 제외: 세금계산서·회계·재고.
+
+- Codex 검수 대상. W12와 page.tsx/globals.css 공유 → 함께 커밋 권장(codex-review-W12.md §9~10).
+- [다음] 엑셀 가져오기 또는 전용 Supabase 분리(백업 수단 생겨 적기). [위험 유지] 공유 쿼터.

@@ -5,7 +5,7 @@
     "updated": "2026-07-08",
     "branch": "codex/integrate-mvp-docs-web",
     "charter": "docs/order-moa-system-meta-prompt.md (헌장 — 차수·범위의 기준. 이 진행판과 어긋나면 헌장이 우선)",
-    "currentFocus": "W11 거래명세서 재출력 + 인쇄 양식 하단 마감 보정 완료(border-collapse·합계 tfoot·비고/인수확인·고정 15행, 데모 실측). 기준정보 4종·W09·W10·W11 완료 → 8c 대부분 마무리. 다음: W12(거래처별 월 합계) 또는 잔여 보강.",
+    "currentFocus": "W15 데이터 내보내기(CSV) 절반 완료 — '데이터 내보내기' 화면에서 거래처·매입처·품목별칭·단가·주문 CSV, 월 합계 화면에서 월합계 CSV 백업(공유 Supabase 쿼터 대비 안전망). 마이그레이션 없음, 데모 실측. W12 거래처별 월 합계 완료. 다음: 엑셀 가져오기(후순위) 또는 전용 Supabase 분리 논의.",
     "recentCommits": [
       "7d05b6f feat: clarify saved-order aggregate flow",
       "755188c docs: record raw text db validation",
@@ -171,13 +171,13 @@
     {
       "id": "W12",
       "name": "8c — 거래처별 월 합계",
-      "status": "다음",
+      "status": "완료",
       "phase": "1차",
-      "plain": "거래처별로 이번 달 얼마 팔았는지 합계를 보여줍니다.",
-      "why": "월말 정산·세금계산서 발행 금액의 근거 숫자. 별도 계산 없이 저장된 주문에서 바로 나옵니다.",
-      "prereq": "W08 통과.",
-      "verify": "주문 여러 건 저장→거래처×월 합계가 라인 금액 합과 일치.",
-      "docs": ["docs/task-prompt-unit-8-supabase-persistence-flow.md(§6)", "docs/function-specification.md(F12, §5.2)"]
+      "plain": "조회 메뉴 '거래처별 월 합계'에서 월(YYYY-MM)을 골라 거래처별 주문 건수·공급가 합계·마지막 주문일과 전체 합계를 봅니다. 저장된 확정 주문의 금액(order.total 스냅샷)만 씁니다 — 세금계산서 발행이 아니라 월말 확인용. 순수 함수 monthly-summary.ts + 새 뷰, 마이그레이션 없음.",
+      "why": "월말 '거래처별 이번 달 얼마 팔았나' 확인용 근거 숫자. 별도 계산 없이 저장된 주문에서 바로 나옵니다.",
+      "prereq": "완료 — W08(저장). loadOrders가 전체 확정 주문을 주므로 그 order.total을 월·거래처로 집계.",
+      "verify": "데모 실측(2026-07-08): 2026-07 발주 2건→가람식당 76,000·한빛카페 49,400·전체 125,400 확인. 단가표 콩나물 99,999원 변경 후에도 월 합계 불변(스냅샷). 빈 월 안내. 정렬 금액 내림차순. 콘솔 0.",
+      "docs": ["web/src/lib/monthly-summary.ts", "web/src/app/monthly-summary-view.tsx", "web/src/app/page.tsx", "docs/function-specification.md(F12, §5.2)"]
     },
     {
       "id": "W13",
@@ -215,13 +215,13 @@
     {
       "id": "W15",
       "name": "엑셀/백업/내보내기",
-      "status": "보류",
-      "phase": "1.5차",
-      "plain": "거래처/품목/단가를 엑셀로 한 번에 올리고, 내 데이터를 엑셀/파일로 내려받아 보관합니다. 샘플 초기화 버튼도 포함.",
-      "why": "초기 세팅을 빠르게 하고, 공유 DB에 대한 보험(백업)이 됩니다. 1차 흐름 완성이 먼저라 보류.",
-      "prereq": "기준정보 CRUD(W02~W04) 완성.",
-      "verify": "엑셀 업로드 미리보기→확인→반영, 실패 행 리포트. 내보내기 파일 열림 확인.",
-      "docs": ["docs/order-moa-expanded-roadmap.md(1.5차)"]
+      "status": "진행 중",
+      "phase": "1차",
+      "plain": "내보내기(CSV) 절반 완료(2026-07-08): '데이터 내보내기' 화면에서 거래처·매입처·품목별칭·단가·주문 목록을 CSV로 내려받고, 월 합계 화면에서 선택 월 합계를 CSV로 내려받아 보관. 공유 Supabase 쿼터 위험 대비 백업 + 회계사 전달용. 금액은 확정 당시 스냅샷. 가져오기(엑셀 업로드)·전체 zip·JSON 백업은 후순위.",
+      "why": "공유 DB가 막히기 전에 손에 파일로 데이터를 확보(안전망) + 전용 프로젝트 분리의 첫 단계. 초기 세팅용 엑셀 업로드는 후순위.",
+      "prereq": "완료 — 기준정보 CRUD(W02~W04·W07) + 저장 주문(W08~W12).",
+      "verify": "데모 실측(2026-07-08): 6종 CSV 다운로드 가로채 내용 확인(escape·BOM·스냅샷 금액). 콤마 포함 메모/품목요약 정상 quoting, CSV 인젝션 방어. 가져오기 검증은 미구현(후순위).",
+      "docs": ["web/src/lib/csv-export.ts", "web/src/app/page.tsx", "web/src/app/monthly-summary-view.tsx", "docs/task-prompt-W15-export.md"]
     },
     {
       "id": "W16",
@@ -237,7 +237,7 @@
   ],
   "checklist": [
     { "item": "root npm test", "plain": "정적 데모 회귀 테스트", "result": "통과 5/5" },
-    { "item": "web npm test", "plain": "파서/합산/검색/주문 저장 빌더/거래처·매입처·raw_text 자동 테스트", "result": "통과 102/102" },
+    { "item": "web npm test", "plain": "파서/합산/검색/주문 저장 빌더/거래처·매입처·raw_text·월합계·CSV 자동 테스트", "result": "통과 111/111" },
     { "item": "web npm run build", "plain": "배포용 빌드가 깨지지 않는지", "result": "성공" },
     { "item": "npm audit --audit-level=low", "plain": "알려진 보안 취약점 검사", "result": "0건" },
     { "item": "Supabase SQL 0001/0002/0003", "plain": "장부 테이블/RLS/회사생성 함수 설치", "result": "적용 성공" },
