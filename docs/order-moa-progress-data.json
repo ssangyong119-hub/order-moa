@@ -5,13 +5,13 @@
     "updated": "2026-07-08",
     "branch": "codex/integrate-mvp-docs-web",
     "charter": "docs/order-moa-system-meta-prompt.md (헌장 — 차수·범위의 기준. 이 진행판과 어긋나면 헌장이 우선)",
-    "currentFocus": "W09 발주 원문 저장/삭제 구현·데모 실측 완료 — DB 모드는 0006 마이그레이션 [적용 필요] docs/guide-apply-0006-order-import-link.md. 기준정보 4종 + W09까지 완료. 다음: W10(저장 주문 기반 합산표) → W11(명세서 재출력).",
+    "currentFocus": "W09 발주 원문 저장/삭제 구현·DB 실측 완료 — 0006 마이그레이션 Supabase 적용 완료. 기준정보 4종 + W09까지 완료. 다음: W10(저장 주문 기반 합산표) → W11(명세서 재출력).",
     "recentCommits": [
+      "ed2898c feat: add order raw text retention controls",
       "6ff34f7 docs: record db mode validation",
       "bdc1323 docs: update next session handoff after final review",
       "89315d2 feat: add price management and supplier contact fields",
-      "2acb14f feat: add product alias management",
-      "d36cfae feat: add supplier management screen"
+      "2acb14f feat: add product alias management"
     ],
     "supabase": "신규 Supabase 프로젝트 한도 때문에 기존 yangsan-inventory 프로젝트를 공유. 충돌 방지를 위해 모든 오더모아 DB 객체는 ordermoa_ 접두사 사용.",
     "statusLegend": {
@@ -140,10 +140,10 @@
       "name": "8c — 발주 원문(raw_text) 저장/삭제",
       "status": "완료",
       "phase": "1차",
-      "plain": "붙여넣은 카톡 원문을 주문에 함께 보관하고, 주문 상세(명세서 화면)에서 원문 보기/삭제를 할 수 있게 했습니다. 삭제해도 주문·금액·명세서는 그대로 남습니다. 코드·데모 실측 완료. DB 모드는 0006 마이그레이션 적용 후 동작(guide-apply-0006-order-import-link.md).",
+      "plain": "붙여넣은 카톡 원문을 주문에 함께 보관하고, 주문 상세(명세서 화면)에서 원문 보기/삭제를 할 수 있게 했습니다. 삭제해도 주문·금액·명세서는 그대로 남습니다. 0006 마이그레이션 적용 후 DB 모드 실측까지 완료했습니다.",
       "why": "\"내가 뭐라고 보냈는데?\" 분쟁이나 파싱 실수 확인 때 원문이 근거가 됩니다. 원문은 개인정보일 수 있어 삭제 가능해야 합니다.",
-      "prereq": "W08(저장 실측) 통과. order_imports에 order_id 링크가 없어 0006 마이그레이션 제안(Codex 승인·Supabase 적용 필요).",
-      "verify": "데모: 발주 확정→주문 상세에서 원문 보기→삭제→주문/금액/명세서 유지 확인 완료(2026-07-08). DB: 0006 적용 후 로그인 상태에서 F5 유지 실측 필요.",
+      "prereq": "완료 — W08(저장 실측) 통과, 0006_order_import_link.sql Supabase 적용 완료.",
+      "verify": "2026-07-08 DB 실측: 로그인 상태에서 발주 확정→주문 상세 원문 보기→원문 삭제→F5 후 삭제 상태 유지, 주문/금액/명세서 유지 확인.",
       "docs": ["web/src/lib/order-store.ts", "web/src/app/page.tsx", "web/supabase/migrations/0006_order_import_link.sql", "docs/guide-apply-0006-order-import-link.md"]
     },
     {
@@ -237,10 +237,11 @@
   ],
   "checklist": [
     { "item": "root npm test", "plain": "정적 데모 회귀 테스트", "result": "통과 5/5" },
-    { "item": "web npm test", "plain": "파서/합산/검색/주문 저장 빌더/거래처·매입처 보강 자동 테스트", "result": "통과 83/83" },
+    { "item": "web npm test", "plain": "파서/합산/검색/주문 저장 빌더/거래처·매입처·raw_text 자동 테스트", "result": "통과 102/102" },
     { "item": "web npm run build", "plain": "배포용 빌드가 깨지지 않는지", "result": "성공" },
     { "item": "npm audit --audit-level=low", "plain": "알려진 보안 취약점 검사", "result": "0건" },
     { "item": "Supabase SQL 0001/0002/0003", "plain": "장부 테이블/RLS/회사생성 함수 설치", "result": "적용 성공" },
+    { "item": "Supabase SQL 0004/0005/0006", "plain": "매입처·연락처·발주 원문 주문 연결", "result": "적용 성공" },
     { "item": "8a RLS 검증", "plain": "회사 row, anon 차단, policy, A/B 격리, 위조 insert 차단", "result": "통과" },
     { "item": "민감정보", "plain": "service role key 커밋/번들 포함 여부", "result": "미포함" }
   ],

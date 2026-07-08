@@ -56,7 +56,7 @@
   </div>
 </header>
 <div class="wrap">
-  <div class="focus">📌 <strong>지금 하는 일:</strong> W09 발주 원문 저장/삭제 구현·데모 실측 완료 — DB 모드는 0006 마이그레이션 [적용 필요] docs/guide-apply-0006-order-import-link.md. 기준정보 4종 + W09까지 완료. 다음: W10(저장 주문 기반 합산표) → W11(명세서 재출력).</div>
+  <div class="focus">📌 <strong>지금 하는 일:</strong> W09 발주 원문 저장/삭제 구현·DB 실측 완료 — 0006 마이그레이션 Supabase 적용 완료. 기준정보 4종 + W09까지 완료. 다음: W10(저장 주문 기반 합산표) → W11(명세서 재출력).</div>
 
   <h2>전체 진행률 (작업 보드 17개 기준)</h2>
   <div class="progressbar"><div style="width:59%"></div></div>
@@ -123,11 +123,11 @@
 </div>
 <div class="card s-done">
   <div class="card-head"><span class="wid">W09</span><strong>8c — 발주 원문(raw_text) 저장/삭제</strong><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span></div>
-  <p class="plain">붙여넣은 카톡 원문을 주문에 함께 보관하고, 주문 상세(명세서 화면)에서 원문 보기/삭제를 할 수 있게 했습니다. 삭제해도 주문·금액·명세서는 그대로 남습니다. 코드·데모 실측 완료. DB 모드는 0006 마이그레이션 적용 후 동작(guide-apply-0006-order-import-link.md).</p>
+  <p class="plain">붙여넣은 카톡 원문을 주문에 함께 보관하고, 주문 상세(명세서 화면)에서 원문 보기/삭제를 할 수 있게 했습니다. 삭제해도 주문·금액·명세서는 그대로 남습니다. 0006 마이그레이션 적용 후 DB 모드 실측까지 완료했습니다.</p>
   <dl>
     <dt>왜 필요한가</dt><dd>&quot;내가 뭐라고 보냈는데?&quot; 분쟁이나 파싱 실수 확인 때 원문이 근거가 됩니다. 원문은 개인정보일 수 있어 삭제 가능해야 합니다.</dd>
-    <dt>선행 조건</dt><dd>W08(저장 실측) 통과. order_imports에 order_id 링크가 없어 0006 마이그레이션 제안(Codex 승인·Supabase 적용 필요).</dd>
-    <dt>확인 방법</dt><dd>데모: 발주 확정→주문 상세에서 원문 보기→삭제→주문/금액/명세서 유지 확인 완료(2026-07-08). DB: 0006 적용 후 로그인 상태에서 F5 유지 실측 필요.</dd>
+    <dt>선행 조건</dt><dd>완료 — W08(저장 실측) 통과, 0006_order_import_link.sql Supabase 적용 완료.</dd>
+    <dt>확인 방법</dt><dd>2026-07-08 DB 실측: 로그인 상태에서 발주 확정→주문 상세 원문 보기→원문 삭제→F5 후 삭제 상태 유지, 주문/금액/명세서 유지 확인.</dd>
   </dl>
   <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/order-store.ts</code></li><li><code>web/src/app/page.tsx</code></li><li><code>web/supabase/migrations/0006_order_import_link.sql</code></li><li><code>docs/guide-apply-0006-order-import-link.md</code></li></ul></details>
 </div>
@@ -243,7 +243,7 @@
 </div></div>
 
   <h2>검증 체크리스트 (마지막 확인 기준)</h2>
-  <table><tr><th>항목</th><th>쉬운 설명</th><th>결과</th></tr><tr><td>root npm test</td><td>정적 데모 회귀 테스트</td><td class='ok'>통과 5/5</td></tr><tr><td>web npm test</td><td>파서/합산/검색/주문 저장 빌더/거래처·매입처 보강 자동 테스트</td><td class='ok'>통과 83/83</td></tr><tr><td>web npm run build</td><td>배포용 빌드가 깨지지 않는지</td><td class='ok'>성공</td></tr><tr><td>npm audit --audit-level=low</td><td>알려진 보안 취약점 검사</td><td class='ok'>0건</td></tr><tr><td>Supabase SQL 0001/0002/0003</td><td>장부 테이블/RLS/회사생성 함수 설치</td><td class='ok'>적용 성공</td></tr><tr><td>8a RLS 검증</td><td>회사 row, anon 차단, policy, A/B 격리, 위조 insert 차단</td><td class='ok'>통과</td></tr><tr><td>민감정보</td><td>service role key 커밋/번들 포함 여부</td><td class='ok'>미포함</td></tr></table>
+  <table><tr><th>항목</th><th>쉬운 설명</th><th>결과</th></tr><tr><td>root npm test</td><td>정적 데모 회귀 테스트</td><td class='ok'>통과 5/5</td></tr><tr><td>web npm test</td><td>파서/합산/검색/주문 저장 빌더/거래처·매입처·raw_text 자동 테스트</td><td class='ok'>통과 102/102</td></tr><tr><td>web npm run build</td><td>배포용 빌드가 깨지지 않는지</td><td class='ok'>성공</td></tr><tr><td>npm audit --audit-level=low</td><td>알려진 보안 취약점 검사</td><td class='ok'>0건</td></tr><tr><td>Supabase SQL 0001/0002/0003</td><td>장부 테이블/RLS/회사생성 함수 설치</td><td class='ok'>적용 성공</td></tr><tr><td>Supabase SQL 0004/0005/0006</td><td>매입처·연락처·발주 원문 주문 연결</td><td class='ok'>적용 성공</td></tr><tr><td>8a RLS 검증</td><td>회사 row, anon 차단, policy, A/B 격리, 위조 insert 차단</td><td class='ok'>통과</td></tr><tr><td>민감정보</td><td>service role key 커밋/번들 포함 여부</td><td class='ok'>미포함</td></tr></table>
 
   <h2 style="border-left-color:#ea4335">만들지 않는 것 (착수 금지)</h2>
   <ul class="simple"><li><strong>OCR/사진 발주 인식</strong> — 정확도와 운영 리스크가 커서 착수 금지</li><li><strong>카카오톡 자동 읽기</strong> — 정책/권한 리스크. 지금은 복사→붙여넣기</li><li><strong>이카운트 연동</strong> — 오더모아는 이카운트 앞단 도구 — 전체 대체 아님</li><li><strong>세금계산서 직접 발행</strong> — 법적 책임 영역. 근거 데이터 정리(2차)까지만</li><li><strong>은행 자동 매칭</strong> — 연동 비용 대비 가치 미검증</li><li><strong>전체 재고 ERP(평가·실사)</strong> — 범위 폭발. 3차에 수량 기록만 좁게 검토</li></ul>
