@@ -33,6 +33,8 @@ export interface ConfirmedOrder {
   lines: OrderLine[];
   total: number;
   margin: number | null;
+  /** 발주 원문(카톡/문자). undefined=미조회, null=없음/삭제됨, string=원문. */
+  rawText?: string | null;
 }
 
 export interface DraftLine {
@@ -364,6 +366,21 @@ const ORDER_SELECT =
   "id,order_date,customer_id,customer:ordermoa_customers(name),items:ordermoa_order_items(product_id,raw_name,quantity,unit,unit_price,amount)";
 
 /** 확정 주문 목록(최신순). 거래처별/기간 합계는 이 데이터(order_date·customer_id·amount)로 산출 가능. */
+/** 발주 원문(order_imports)을 주문에 병합 — order_id 기준. 순수 함수(테스트 대상). */
+export function attachRawText(
+  orders: ConfirmedOrder[],
+  imports: Array<{ order_id: string | null; raw_text: string | null }>,
+): ConfirmedOrder[] {
+  const byOrder = new Map<string, string | null>();
+  for (const r of imports) if (r.order_id) byOrder.set(r.order_id, r.raw_text);
+  return orders.map((o) => (byOrder.has(o.id) ? { ...o, rawText: byOrder.get(o.id) ?? null } : o));
+}
+
+/** 특정 주문의 rawText만 null로 비운다 — lines/total 등 주문 내역은 그대로. 순수 함수(테스트 대상). */
+export function withRawTextCleared(orders: ConfirmedOrder[], orderId: string): ConfirmedOrder[] {
+  return orders.map((o) => (o.id === orderId ? { ...o, rawText: null } : o));
+}
+
 export async function loadOrders(
   db: SupabaseClient,
   companyId: string,
@@ -377,7 +394,22 @@ export async function loadOrders(
     .order("order_date", { ascending: false })
     .order("created_at", { ascending: false });
   if (res.error) throw res.error;
-  return (res.data as unknown as DbOrderRow[]).map((row) => mapDbOrder(row, products));
+  const orders = (res.data as unknown as DbOrderRow[]).map((row) => mapDbOrder(row, products));
+
+  // 발주 원문 병합(best-effort): order_id 링크(0006) 미적용이면 조용히 건너뜀 → 주문 목록은 유지.
+  try {
+    const imp = await db
+      .from("ordermoa_order_imports")
+      .select("order_id,raw_text")
+      .eq("company_id", companyId)
+      .not("order_id", "is", null);
+    if (!imp.error && imp.data) {
+      return attachRawText(orders, imp.data as Array<{ order_id: string | null; raw_text: string | null }>);
+    }
+  } catch {
+    // 원문 병합 실패는 주문 목록 로딩을 막지 않는다.
+  }
+  return orders;
 }
 
 /**
@@ -391,6 +423,7 @@ export async function saveOrder(
   orderDate: string,
   lines: DraftLine[],
   products: Product[],
+  rawText: string | null = null,
 ): Promise<ConfirmedOrder> {
   const orderRes = await db
     .from("ordermoa_orders")
@@ -417,5 +450,45 @@ export async function saveOrder(
     customer: (orderRes.data as unknown as DbOrderRow).customer,
     items: itemsRes.data as unknown as DbItemRow[],
   };
-  return mapDbOrder(row, products);
+  const order = mapDbOrder(row, products);
+
+  // 발주 원문 저장(best-effort): order/items가 이미 확정된 뒤라, 여기서 실패해도 주문은 유지한다.
+  // order_id 링크(0006) 미적용이면 조용히 건너뜀 → order.rawText는 undefined로 남고 UI는 "원문 없음".
+  if (rawText && rawText.trim()) {
+    try {
+      const { data: userData } = await db.auth.getUser();
+      const userId = userData.user?.id;
+      if (userId) {
+        const now = new Date().toISOString();
+        const impRes = await db.from("ordermoa_order_imports").insert({
+          company_id: companyId,
+          customer_id: customerId,
+          order_id: orderId,
+          source: "kakao",
+          raw_text: rawText,
+          parsed_at: now,
+          confirmed_at: now,
+          created_by: userId,
+        });
+        if (!impRes.error) order.rawText = rawText;
+      }
+    } catch {
+      // 원문 저장 실패는 주문 확정을 막지 않는다.
+    }
+  }
+  return order;
+}
+
+/** 발주 원문 삭제: 해당 주문의 import raw_text만 null 처리(주문/품목은 건드리지 않음). */
+export async function deleteOrderRawText(
+  db: SupabaseClient,
+  companyId: string,
+  orderId: string,
+): Promise<void> {
+  const res = await db
+    .from("ordermoa_order_imports")
+    .update({ raw_text: null })
+    .eq("company_id", companyId)
+    .eq("order_id", orderId);
+  if (res.error) throw res.error;
 }

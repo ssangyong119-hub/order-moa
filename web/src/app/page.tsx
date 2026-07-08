@@ -30,9 +30,11 @@ import {
   type CustomerFormInput,
 } from "@/lib/customer-store";
 import {
+  deleteOrderRawText,
   loadCompanyData,
   loadOrders,
   saveOrder,
+  withRawTextCleared,
   type ConfirmedOrder,
   type OrderLine,
 } from "@/lib/order-store";
@@ -743,6 +745,7 @@ export default function HomePage() {
             unitPrice: l.unitPrice,
           })),
           products,
+          rawText, // 발주 원문(W09) — best-effort 저장, 실패해도 주문은 유지
         );
         setOrders((prev) => [saved, ...prev]);
         setLines([]);
@@ -782,6 +785,7 @@ export default function HomePage() {
       lines: olines,
       total,
       margin,
+      rawText: rawText.trim() ? rawText : null, // 발주 원문(W09) — 데모는 메모리 저장
     };
     setOrders((prev) => [...prev, order]);
     setLines([]);
@@ -789,6 +793,21 @@ export default function HomePage() {
     setCurrentOrderId(order.id);
     setView("orders");
     flash("주문이 확정되었습니다. 주문 목록에서 명세서를 보거나 합산표로 이동하세요. (데모 모드 — 새로고침 시 초기화)");
+  }
+
+  // 발주 원문 삭제(W09) — raw_text만 지우고 주문/품목/금액/명세서는 유지.
+  async function deleteRawText(order: ConfirmedOrder) {
+    if (!window.confirm("이 주문의 발주 원문을 삭제할까요?\n주문 내역·금액·명세서는 그대로 유지됩니다.")) return;
+    if (db && companyId) {
+      try {
+        await deleteOrderRawText(db, companyId, order.id);
+      } catch {
+        flash("원문 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.");
+        return;
+      }
+    }
+    setOrders((prev) => withRawTextCleared(prev, order.id));
+    flash("발주 원문을 삭제했습니다. 주문 내역은 그대로 유지됩니다.");
   }
 
   // ---- 합산표 (매입처 발주용) ----
@@ -1442,6 +1461,30 @@ export default function HomePage() {
             </button>
             <span className="muted">브라우저 인쇄창이 열립니다. 프린터 출력 또는 PDF 저장을 선택하세요.</span>
           </div>
+
+          <div className="card no-print raw-text-panel" style={{ marginBottom: 12 }}>
+            {currentOrder.rawText ? (
+              <details>
+                <summary>
+                  발주 원문 보기 <span className="muted">(카톡/문자로 받은 원본)</span>
+                </summary>
+                <pre className="raw-text">{currentOrder.rawText}</pre>
+                <div className="row-actions">
+                  <button className="ghost danger" onClick={() => deleteRawText(currentOrder)}>
+                    원문 삭제
+                  </button>
+                  <span className="muted">
+                    삭제해도 주문·금액·명세서는 그대로 유지됩니다. 원문은 개인정보일 수 있어 지울 수 있습니다.
+                  </span>
+                </div>
+              </details>
+            ) : (
+              <p className="muted" style={{ margin: 0 }}>
+                저장된 발주 원문이 없습니다.
+              </p>
+            )}
+          </div>
+
           <DeliveryNote order={currentOrder} company={data.company} />
         </section>
       )}

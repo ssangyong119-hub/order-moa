@@ -269,6 +269,13 @@ td input.qty,td input.price{max-width:96px}
   padding:7px 11px;border:1px dashed var(--line);border-radius:var(--radius);
   background:var(--paper);opacity:.75;margin-top:6px;font-size:.88rem;
 }
+.raw-text-panel summary{cursor:pointer;font-weight:600}
+.raw-text-panel .raw-text{
+  margin:10px 0;white-space:pre-wrap;font-family:inherit;
+  background:#fbfcfd;border:1px solid var(--line);border-radius:8px;
+  padding:10px 12px;color:var(--ink);font-size:.9rem;line-height:1.55;
+  max-height:260px;overflow:auto;
+}
 .alias-box{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
 .alias-box h4{margin:0 0 4px}
 .alias-chips{display:flex;flex-wrap:wrap;gap:6px}

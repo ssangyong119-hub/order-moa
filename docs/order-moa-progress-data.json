@@ -2,16 +2,16 @@
   "meta": {
     "project": "오더모아 (Order-Moa)",
     "purpose": "전체 ERP 대체가 아니라, 도소매/식당납품 사장님용 좁은 웹 ERP MVP. 핵심 가치: 카톡/문자 발주를 붙여넣으면 파싱, 합산표, 매입처별 발주 문장, 거래명세서까지 이어지는 것.",
-    "updated": "2026-07-07",
+    "updated": "2026-07-08",
     "branch": "codex/integrate-mvp-docs-web",
     "charter": "docs/order-moa-system-meta-prompt.md (헌장 — 차수·범위의 기준. 이 진행판과 어긋나면 헌장이 우선)",
-    "currentFocus": "W04 단가 관리 완료 + W07 확장(매입처 연락처/주소, 0005 마이그레이션 — [적용 필요] docs/guide-apply-0005-supplier-contact.md). 기준정보 4종(거래처/매입처/품목·별칭/단가) 완성. 다음: W09~W11(8c).",
+    "currentFocus": "W09 발주 원문 저장/삭제 구현·데모 실측 완료 — DB 모드는 0006 마이그레이션 [적용 필요] docs/guide-apply-0006-order-import-link.md. 기준정보 4종 + W09까지 완료. 다음: W10(저장 주문 기반 합산표) → W11(명세서 재출력).",
     "recentCommits": [
-      "a696a36 feat: add password login fallback",
-      "38f4e6c fix: harden supplier migration guidance",
-      "7d3de93 feat: add customer management and supplier persistence",
-      "34d30df docs: refine ordermoa roadmap progress board",
-      "fc59baa docs: add ordermoa system planning charter"
+      "6ff34f7 docs: record db mode validation",
+      "bdc1323 docs: update next session handoff after final review",
+      "89315d2 feat: add price management and supplier contact fields",
+      "2acb14f feat: add product alias management",
+      "d36cfae feat: add supplier management screen"
     ],
     "supabase": "신규 Supabase 프로젝트 한도 때문에 기존 yangsan-inventory 프로젝트를 공유. 충돌 방지를 위해 모든 오더모아 DB 객체는 ordermoa_ 접두사 사용.",
     "statusLegend": {
@@ -138,13 +138,13 @@
     {
       "id": "W09",
       "name": "8c — 발주 원문(raw_text) 저장/삭제",
-      "status": "다음",
+      "status": "완료",
       "phase": "1차",
-      "plain": "붙여넣은 카톡 원문을 DB에 보관하고, 원하면 삭제할 수 있게 합니다. 삭제해도 확정 주문은 그대로 남습니다.",
-      "why": "\"내가 뭐라고 보냈는데?\" 분쟁이나 파싱 실수 확인 때 원문이 근거가 됩니다. 테이블은 이미 있는데 앱이 안 쓰고 있음.",
-      "prereq": "W08(저장 실측) 통과.",
-      "verify": "발주 확정→order_imports에 원문 row 확인→원문 삭제→주문은 유지되고 원문만 비워짐.",
-      "docs": ["web/supabase/migrations/0001_schema.sql(order_imports)", "docs/function-specification.md(F7, Q1)"]
+      "plain": "붙여넣은 카톡 원문을 주문에 함께 보관하고, 주문 상세(명세서 화면)에서 원문 보기/삭제를 할 수 있게 했습니다. 삭제해도 주문·금액·명세서는 그대로 남습니다. 코드·데모 실측 완료. DB 모드는 0006 마이그레이션 적용 후 동작(guide-apply-0006-order-import-link.md).",
+      "why": "\"내가 뭐라고 보냈는데?\" 분쟁이나 파싱 실수 확인 때 원문이 근거가 됩니다. 원문은 개인정보일 수 있어 삭제 가능해야 합니다.",
+      "prereq": "W08(저장 실측) 통과. order_imports에 order_id 링크가 없어 0006 마이그레이션 제안(Codex 승인·Supabase 적용 필요).",
+      "verify": "데모: 발주 확정→주문 상세에서 원문 보기→삭제→주문/금액/명세서 유지 확인 완료(2026-07-08). DB: 0006 적용 후 로그인 상태에서 F5 유지 실측 필요.",
+      "docs": ["web/src/lib/order-store.ts", "web/src/app/page.tsx", "web/supabase/migrations/0006_order_import_link.sql", "docs/guide-apply-0006-order-import-link.md"]
     },
     {
       "id": "W10",

@@ -1,10 +1,13 @@
 import { expect, test } from "vitest";
 import {
+  attachRawText,
   buildSeedRows,
   diffSeedRows,
   mapDbOrder,
   toItemInserts,
   toOrderInsert,
+  withRawTextCleared,
+  type ConfirmedOrder,
   type DbOrderRow,
 } from "./order-store";
 import {
@@ -60,6 +63,41 @@ test("mapDbOrder: total=Σ라인 amount, 마진은 basePurchasePrice로 표시 �
   expect(order.lines[1].unit).toBe("판"); // unit null → baseUnit 폴백
   expect(order.margin).toBe((8000 - 6500) * 2); // p2는 매입단가 없음 → 제외
   expect(order.customerName).toBe("가람식당");
+});
+
+const orderWithLines = (id: string): ConfirmedOrder => ({
+  id,
+  date: "2026-07-08",
+  customerId: "c1",
+  customerName: "가람식당",
+  lines: [
+    { productId: "p1", productName: "콩나물", quantity: 2, unit: "박스", unitPrice: 8000, amount: 16000, basePurchasePrice: 6500 },
+  ],
+  total: 16000,
+  margin: 3000,
+});
+
+test("attachRawText: order_id로 원문 병합, 매칭 없으면 그대로", () => {
+  const orders = [orderWithLines("o1"), orderWithLines("o2")];
+  const merged = attachRawText(orders, [
+    { order_id: "o1", raw_text: "콩나물 2박스" },
+    { order_id: "o2", raw_text: null }, // 삭제된 원문
+    { order_id: null, raw_text: "버려짐" }, // order_id 없으면 무시
+  ]);
+  expect(merged[0].rawText).toBe("콩나물 2박스");
+  expect(merged[1].rawText).toBe(null);
+  // 원문 병합이 주문 내역(금액/품목)을 건드리지 않는다
+  expect(merged[0].total).toBe(16000);
+  expect(merged[0].lines).toHaveLength(1);
+});
+
+test("withRawTextCleared: 해당 주문 rawText만 null, lines/total 불변", () => {
+  const orders = [{ ...orderWithLines("o1"), rawText: "지울 원문" }, { ...orderWithLines("o2"), rawText: "유지" }];
+  const cleared = withRawTextCleared(orders, "o1");
+  expect(cleared[0].rawText).toBe(null);
+  expect(cleared[0].lines).toEqual(orders[0].lines); // 품목 그대로
+  expect(cleared[0].total).toBe(16000); // 금액 그대로
+  expect(cleared[1].rawText).toBe("유지"); // 다른 주문 영향 없음
 });
 
 test("mapDbOrder: 품목이 로드 목록에 없으면 raw_name 폴백", () => {

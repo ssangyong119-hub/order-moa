@@ -1431,3 +1431,39 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
 - 수정: `web/src/lib/domain/types.ts`(Supplier phone/address), `web/src/lib/supplier-store.ts`(+테스트), `web/src/lib/order-store.ts`(suppliers select), `web/src/app/supplier-management-view.tsx`, `web/src/app/page.tsx`(View prices·핸들러·데모 saveSupplier 픽스), `docs/order-moa-progress-data.json`(W04 완료·W07 확장 반영) + HTML/XLSX 재생성
 - 미커밋 — Codex 검수·커밋. 0005는 Supabase 적용도 필요(가이드 참조).
 - [다음] W09~W11(8c). [위험 유지] 공유 Supabase 무료 쿼터.
+
+## 2026-07-08 Claude (W09 발주 원문 raw_text 저장/삭제 구현 완료)
+
+### 스키마 발견 + 최소 마이그레이션 제안 (사용자 승인 "0006 제안 + 전체 구현")
+- `ordermoa_order_imports`는 raw_text(nullable, "삭제 시 null")·RLS 4정책까지 완비돼 있으나 **order_id 링크 컬럼이 없음** → "이 주문의 원문"을 특정 불가. 근사 매칭(거래처+시각)은 오삭제 위험이라 배제.
+- **마이그레이션 제안(적용/커밋 안 함): `web/supabase/migrations/0006_order_import_link.sql`** — `add column if not exists order_id uuid references ordermoa_orders(id) on delete cascade` + 인덱스 + order_id 회사 일치 검사. 삭제 없음, RLS 테이블 단위라 무영향, idempotent, ordermoa_ 접두사.
+- **[적용 필요]** 비개발자 가이드: `docs/guide-apply-0006-order-import-link.md`.
+
+### 구현
+- `web/src/lib/order-store.ts`:
+  - `ConfirmedOrder`에 `rawText?: string|null`(undefined=미조회/null=없음·삭제/string=원문).
+  - `saveOrder(...rawText)` — order/items 저장 성공 뒤 **best-effort**로 order_imports insert(created_by=`db.auth.getUser()`). 실패/0006 미적용이면 조용히 건너뜀 → **주문 확정은 절대 안 막힘**(회귀 0). 성공 시에만 order.rawText 세팅.
+  - `loadOrders` — 주문 로드 후 order_imports를 best-effort 조회해 병합(0006 없으면 catch로 스킵, 목록 유지).
+  - `deleteOrderRawText` — order_imports.raw_text만 null update(orders/items 절대 안 건드림).
+  - 순수 함수 `attachRawText`/`withRawTextCleared`(+order-store.test.ts 2테스트: 병합·삭제가 lines/total 불변 검증).
+- `web/src/app/page.tsx`: confirmOrder(DB=rawText 전달, 데모=order.rawText 메모리 저장), `deleteRawText`(confirm 후 raw_text만 제거), 명세서 상세에 `no-print` 원문 패널(`<details>` 보기 + 삭제 + "삭제해도 주문 유지" 안내).
+- `web/src/app/globals.css`: `.raw-text-panel`/`.raw-text` 스타일만.
+
+### 자체 리뷰 (불변 규칙 재확인)
+- unit_price 스냅샷 유지: saveOrder/toItemInserts 무변경, mapDbOrder는 저장값(unit_price/amount) 그대로 읽음. ✅
+- 과거 주문 customer_prices 재조회 없음. ✅ 예상 마진 비저장(표시 계산만). ✅
+- raw_text 삭제 가능·주문 유지. ✅ order_imports는 별도 테이블이라 원문 삭제가 items에 영향 0(테스트로 고정). ✅
+- 회귀 방지: saveOrder rawText는 마지막 선택 파라미터(default null), 유일 호출부 confirmOrder만 영향. import/merge 전부 best-effort try/catch → 0006 미적용 상태에서도 앱 정상.
+
+### 검증
+- root 5/5 · web `npm test` **102/102**(order-store +2) · build 성공 · audit 0건 · git diff --check clean.
+- 데모 smoke(콘솔 0): ⑪ 확정→주문 상세 원문 표시→삭제(confirm)→명세서 76,000원·10행 유지·패널 "원문 없음", ⑫ 주문은 자기 원문 그대로(주문별 독립). 원문 패널은 no-print(인쇄본 미노출).
+- 데모 F5 유지는 N/A(메모리). **DB F5 유지 실측은 0006 적용+로그인 후 필요.**
+
+### 개선 아이디어 (승인 없이 구현 안 함)
+- 즉시 후보(작음): 주문 목록 행에 "원문 있음" 작은 표시, saveOrder의 getUser()→getSession()으로 네트워크 1회 절감.
+- 나중: 원문 저장 실패 시 소프트 안내(현재는 조용히 degrade), 원문 검색.
+- 제외/후순위(범위 밖): OCR·카톡 자동읽기·세금계산서·재고·이카운트 연동.
+
+- Codex 검수 대상. **0006 Supabase 적용 필요**(가이드).
+- [다음] W10(저장 주문 기반 합산표 재조회) → W11(명세서 재출력). [위험 유지] 공유 Supabase 무료 쿼터.
