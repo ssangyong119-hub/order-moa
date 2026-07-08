@@ -5,7 +5,7 @@
     "updated": "2026-07-08",
     "branch": "codex/integrate-mvp-docs-web",
     "charter": "docs/order-moa-system-meta-prompt.md (헌장 — 차수·범위의 기준. 이 진행판과 어긋나면 헌장이 우선)",
-    "currentFocus": "W15 데이터 내보내기(CSV) 절반 완료 — '데이터 내보내기' 화면에서 거래처·매입처·품목별칭·단가·주문 CSV, 월 합계 화면에서 월합계 CSV 백업(공유 Supabase 쿼터 대비 안전망). 마이그레이션 없음, 데모 실측. W12 거래처별 월 합계 완료. 다음: 엑셀 가져오기(후순위) 또는 전용 Supabase 분리 논의.",
+    "currentFocus": "W18 Phase 1 UX 개선 완료 — 주문일 표시/수정(KST 기준), 파싱 화면 단가 Enter이동+변경단가 전체저장, 주문 목록 날짜 조회(기본 오늘/전체보기). 마이그레이션 없음, 데모 실측(합산표·월합계 무영향 확인). 다음 Phase 2/3(카테고리·다단위·product_units)는 스키마 필요라 분리. 잔여: 엑셀 가져오기, 전용 Supabase 분리 논의.",
     "recentCommits": [
       "7d05b6f feat: clarify saved-order aggregate flow",
       "755188c docs: record raw text db validation",
@@ -20,6 +20,23 @@
       "다음": "yellow",
       "보류": "gray",
       "제외": "lightred"
+    },
+    "feedbackBacklog": {
+      "note": "사장님 실사용 피드백 백로그. deferred는 기록만 — 해당 Phase 전까지 구현 금지. 상세는 docs/NEXT-SESSION.md 동명 섹션.",
+      "phase1Done": [
+        "주문일 표시/수정 (KST 기준, 어제 발주도 날짜 바꿔 확정) — W18",
+        "파싱 확인 화면 단가 일괄 저장 (Enter→다음 칸, '변경 단가 전체 저장') — W18",
+        "주문 목록 날짜 조회 (기본 오늘/전체 보기, 클라 필터·합산표/월합계 무영향) — W18"
+      ],
+      "deferred": [
+        "품목 카테고리 6종(농산물/공산품/냉식/육류/수산/기타) — Phase 2, 스키마 필요",
+        "품목 다단위 구조(한 품목 여러 단위, 환산 안 함) — Phase 3, product_units 스키마",
+        "기본 판매단가 + 거래처별 예외 단가 구조 — Phase 3, 스키마",
+        "단가 관리 화면 재설계",
+        "품목 검색/별칭 관리 UX 개선",
+        "주문 목록 서버 날짜/기간 조회(지금은 클라 필터)",
+        "엑셀 가져오기/import (W15 나머지 절반)"
+      ]
     }
   },
   "coreFlow": [
@@ -202,6 +219,17 @@
       "docs": ["docs/order-moa-feedback-design-2026-07-07.md", "web/src/lib/aggregate.ts", "web/src/app/page.tsx"]
     },
     {
+      "id": "W18",
+      "name": "Phase 1 UX 개선 — 주문일·단가 일괄저장·주문목록 날짜조회",
+      "status": "완료",
+      "phase": "1차",
+      "plain": "①주문일 표시/수정: 파싱 확인 화면에 주문일 입력칸 추가, 어제 발주도 날짜 바꿔 확정. 날짜는 한국시간(KST) 기준(UTC라 새벽에 전날 저장되던 것 수정). ②파싱 화면 단가 일괄저장: 단가 칸에서 Enter로 다음 칸 이동, 바뀐 단가를 '변경 단가 전체 저장' 한 번으로 저장. ③주문 목록 날짜 조회: 기본 오늘, 날짜 선택·전체 보기. 마이그레이션 없음.",
+      "why": "실사용 불편 3가지 — 어제 발주 날짜 못 바꿈, 단가 한 줄씩 저장 번거로움, 주문 목록이 전부 섞여 보임. 합산표·월합계는 전역 orders 그대로 써서 안 깨지게.",
+      "prereq": "W08~W12(저장 주문 흐름).",
+      "verify": "데모 실측(2026-07-08): KST 주문일·어제로 확정→목록 해당 날짜, 단가 2개 변경→Enter 이동→일괄저장(2)→재파싱 자동적용, 목록 오늘/전체/빈상태, 합산표·월합계 무영향. 순수함수 테스트(todayKst 3·collectPriceChanges 3). root5·web117·build·audit0.",
+      "docs": ["web/src/lib/date-utils.ts", "web/src/lib/price-store.ts", "web/src/app/page.tsx"]
+    },
+    {
       "id": "W14",
       "name": "인쇄/명세서 양식 보정",
       "status": "보류",
@@ -237,7 +265,7 @@
   ],
   "checklist": [
     { "item": "root npm test", "plain": "정적 데모 회귀 테스트", "result": "통과 5/5" },
-    { "item": "web npm test", "plain": "파서/합산/검색/주문 저장 빌더/거래처·매입처·raw_text·월합계·CSV 자동 테스트", "result": "통과 111/111" },
+    { "item": "web npm test", "plain": "파서/합산/검색/주문 저장 빌더/거래처·매입처·raw_text·월합계·CSV·KST 날짜·단가 일괄 저장 자동 테스트", "result": "통과 117/117" },
     { "item": "web npm run build", "plain": "배포용 빌드가 깨지지 않는지", "result": "성공" },
     { "item": "npm audit --audit-level=low", "plain": "알려진 보안 취약점 검사", "result": "0건" },
     { "item": "Supabase SQL 0001/0002/0003", "plain": "장부 테이블/RLS/회사생성 함수 설치", "result": "적용 성공" },

@@ -175,6 +175,10 @@ td input.qty,td input.price{max-width:96px}
 /* ── 거래처별 월 합계 tfoot ── */
 .month-total-row td{border-top:2px solid var(--line);font-weight:700;background:#fbfcfd}
 
+/* ── 파싱 화면 주문일 ── */
+.order-date{display:flex;align-items:center;gap:8px;margin:0 0 10px;font-weight:500;font-size:.9rem}
+.order-date input{width:170px}
+
 /* ── 데이터 내보내기(W15) ── */
 .export-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-top:10px}
 .export-item{

@@ -3,7 +3,7 @@
 // 오더모아 웹 MVP 메인 — 관리자형 셸(사이드바+헤더) + 핵심 흐름(붙여넣기→파싱→합산표→명세서).
 // 인증/회사는 Supabase 게이트(8a)로 동작하며, env 미설정 시 데모 모드로 폴백.
 // 주문/샘플 데이터는 Supabase 설정 시 DB 저장·조회(8b), 미설정 시 데모 메모리 모드. PDF 없음(브라우저 인쇄).
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Customer, CustomerPrice, Product, Supplier } from "@/lib/domain/types";
 import {
   canConfirm,
@@ -54,9 +54,10 @@ import { CustomerManagementView } from "./customer-management-view";
 import { SupplierManagementView } from "./supplier-management-view";
 import { ProductManagementView } from "./product-management-view";
 import { PriceManagementView } from "./price-management-view";
-import { upsertCustomerPriceInDb } from "@/lib/price-store";
 import { MonthlySummaryView } from "./monthly-summary-view";
 import { downloadCsv } from "@/lib/csv-export";
+import { todayKst } from "@/lib/date-utils";
+import { collectPriceChanges, upsertCustomerPriceInDb, upsertCustomerPricesInDb } from "@/lib/price-store";
 import {
   addAliasInDb,
   archiveProduct as archiveProductInDb,
@@ -110,7 +111,7 @@ interface AppData {
 }
 
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayKst();
 }
 
 // ── 사이드바 메뉴 (오더모아 범위만 — 마감/세무 등 2차 기능은 넣지 않음. 예정 화면은 "준비 중") ──
@@ -242,14 +243,17 @@ export default function HomePage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [rawText, setRawText] = useState<string>("");
   const [lines, setLines] = useState<ParsedLine[]>([]);
+  const [confirmDate, setConfirmDate] = useState<string>(todayKst()); // 주문일(KST 오늘 기본)
 
   const [orders, setOrders] = useState<ConfirmedOrder[]>([]);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [aggCustomer, setAggCustomer] = useState<string>("all");
   const [aggDate, setAggDate] = useState<string>(""); // "" = 전체 날짜
   const [purchaseSelectedIds, setPurchaseSelectedIds] = useState<string[]>([]);
+  const [orderListDate, setOrderListDate] = useState<string>(todayKst()); // 주문 목록 날짜 필터("" = 전체)
   const [dbError, setDbError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [priceSaving, setPriceSaving] = useState(false);
 
   // DB 모드: 로그인+회사가 준비되면 Supabase에서 데이터 로드(최초면 샘플 시드)
   const db = session.status === "ready" ? getBrowserSupabase() : null;
@@ -411,6 +415,36 @@ export default function HomePage() {
       })();
     }
     flash(`${line.productName} 단가를 저장했습니다(다음 주문부터 자동 적용).`);
+  }
+  // 파싱 화면 단가 일괄 저장 — 변경/신규 단가를 customer_prices에 한 번에(과거 order_items는 무관).
+  async function saveAllPrices() {
+    if (priceSaving) return;
+    const { changes, conflicts } = collectPriceChanges(lines, customerPrices, selectedCustomerId);
+    if (changes.length === 0) {
+      flash("저장할 변경 단가가 없습니다. (0원·미매칭·기존과 동일 단가는 제외)");
+      return;
+    }
+    const changedIds = new Set(changes.map((c) => c.productId));
+    setPriceSaving(true);
+    if (db && companyId) {
+      try {
+        await upsertCustomerPricesInDb(db, companyId, selectedCustomerId, changes);
+      } catch {
+        flash("단가 저장에 실패했습니다. 네트워크 확인 후 다시 저장해주세요.");
+        setPriceSaving(false);
+        return;
+      }
+    }
+    setCustomerPrices((prev) => [
+      ...prev.filter((cp) => !(cp.customerId === selectedCustomerId && changedIds.has(cp.productId))),
+      ...changes.map((c) => ({ customerId: c.customerId, productId: c.productId, price: c.price })),
+    ]);
+    setLines((prev) =>
+      prev.map((l) => (l.productId && changedIds.has(l.productId) ? { ...l, priceRegistered: true } : l)),
+    );
+    setPriceSaving(false);
+    const conflictNote = conflicts.length > 0 ? ` (같은 품목 여러 줄은 마지막 값으로 저장: ${conflicts.join(", ")})` : "";
+    flash(`${changes.length}개 품목 단가를 저장했습니다. 다음 발주부터 자동 적용됩니다.${db ? "" : " (데모)"}${conflictNote}`);
   }
   function registerAlias(line: ParsedLine) {
     if (!line.productId) return;
@@ -743,7 +777,7 @@ export default function HomePage() {
           db,
           companyId,
           selectedCustomerId,
-          today(),
+          confirmDate,
           lines.map((l) => ({
             productId: l.productId as string,
             rawName: l.rawText || null,
@@ -757,6 +791,8 @@ export default function HomePage() {
         setOrders((prev) => [saved, ...prev]);
         setLines([]);
         setRawText("");
+        setConfirmDate(todayKst());
+        setOrderListDate(saved.date); // 방금 확정한 주문 날짜로 목록을 맞춰 바로 보이게
         setCurrentOrderId(saved.id);
         setView("orders");
         flash("주문이 저장되었습니다. 주문 목록에서 명세서를 보거나 합산표로 이동하세요.");
@@ -786,7 +822,7 @@ export default function HomePage() {
     const margin = estimatedOrderMargin(olines);
     const order: ConfirmedOrder = {
       id: `order_${orders.length + 1}`,
-      date: today(),
+      date: confirmDate,
       customerId: selectedCustomerId,
       customerName: customer ? customer.name : "거래처",
       lines: olines,
@@ -797,6 +833,8 @@ export default function HomePage() {
     setOrders((prev) => [...prev, order]);
     setLines([]);
     setRawText("");
+    setConfirmDate(todayKst());
+    setOrderListDate(order.date); // 방금 확정한 주문 날짜로 목록을 맞춰 바로 보이게
     setCurrentOrderId(order.id);
     setView("orders");
     flash("주문이 확정되었습니다. 주문 목록에서 명세서를 보거나 합산표로 이동하세요. (데모 모드 — 새로고침 시 초기화)");
@@ -1068,6 +1106,8 @@ export default function HomePage() {
   }
 
   const currentOrder = orders.find((o) => o.id === currentOrderId) ?? null;
+  // 주문 목록 전용 날짜 필터(""=전체). 전역 orders는 그대로 → 합산표(W10)·월합계(W12) 무영향.
+  const ordersForList = orderListDate ? orders.filter((o) => o.date === orderListDate) : orders;
 
   return (
     <Shell
@@ -1337,6 +1377,10 @@ export default function HomePage() {
           onCreateProduct={createProductFromLine}
           supplierNames={[...new Set(suppliers.map((s) => s.name))]}
           onUnit={(line, v) => updateLine(line.id, { unit: v })}
+          orderDate={confirmDate}
+          onOrderDate={setConfirmDate}
+          onSaveAllPrices={saveAllPrices}
+          priceSaving={priceSaving}
           onConfirm={confirmOrder}
           onBack={() => setView("paste")}
         />
@@ -1546,44 +1590,66 @@ export default function HomePage() {
           ) : (
             <>
               <div className="row-actions no-print" style={{ marginBottom: 8 }}>
-                <button onClick={exportOrdersCsv}>CSV 내보내기</button>
+                <input
+                  type="date"
+                  value={orderListDate}
+                  onChange={(e) => setOrderListDate(e.target.value)}
+                  style={{ maxWidth: 170 }}
+                  aria-label="주문 목록 날짜 필터"
+                />
+                <button onClick={() => setOrderListDate(today())}>오늘</button>
+                <button onClick={() => setOrderListDate("")} disabled={orderListDate === ""}>
+                  전체 보기
+                </button>
+                <button onClick={exportOrdersCsv} disabled={orders.length === 0}>CSV 내보내기</button>
+                <span className="muted">
+                  {orderListDate ? `${orderListDate} · ${ordersForList.length}건` : `전체 · ${orders.length}건`}
+                </span>
               </div>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>날짜</th>
-                    <th>거래처</th>
-                    <th>품목 요약</th>
-                    <th className="num">금액</th>
-                    <th className="num">예상 마진</th>
-                    <th>명세서</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {orders.map((o) => (
-                    <tr key={o.id}>
-                      <td>{o.date}</td>
-                      <td>{o.customerName}</td>
-                      <td>{summarizeItems(o.lines)}</td>
-                      <td className="num">{formatKRW(o.total)}</td>
-                      <td className="num">{formatMargin(o.margin)}</td>
-                      <td>
-                        <button
-                          className="link"
-                          onClick={() => {
-                            setCurrentOrderId(o.id);
-                            setView("note");
-                          }}
-                        >
-                          보기
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+              {ordersForList.length === 0 ? (
+                <div className="empty-state">
+                  <strong>이 날짜의 주문이 없습니다.</strong>
+                  <p className="muted">다른 날짜를 선택하거나 [전체 보기]를 눌러보세요.</p>
+                  <button onClick={() => setOrderListDate("")}>전체 보기</button>
+                </div>
+              ) : (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>날짜</th>
+                        <th>거래처</th>
+                        <th>품목 요약</th>
+                        <th className="num">금액</th>
+                        <th className="num">예상 마진</th>
+                        <th>명세서</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ordersForList.map((o) => (
+                        <tr key={o.id}>
+                          <td>{o.date}</td>
+                          <td>{o.customerName}</td>
+                          <td>{summarizeItems(o.lines)}</td>
+                          <td className="num">{formatKRW(o.total)}</td>
+                          <td className="num">{formatMargin(o.margin)}</td>
+                          <td>
+                            <button
+                              className="link"
+                              onClick={() => {
+                                setCurrentOrderId(o.id);
+                                setView("note");
+                              }}
+                            >
+                              보기
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </>
           )}
         </section>
@@ -1662,10 +1728,26 @@ function ReviewView(props: {
   onRegisterAlias: (line: ParsedLine) => void;
   onCreateProduct: (line: ParsedLine, input: Omit<NewProductRegistrationInput, "customerId">) => void;
   supplierNames: string[];
+  orderDate: string;
+  onOrderDate: (value: string) => void;
+  onSaveAllPrices: () => void;
+  priceSaving?: boolean;
   onConfirm: () => void;
   onBack: () => void;
 }) {
   const { lines, products, customerName } = props;
+  // 단가 input에서 Enter → 다음 단가 칸으로 포커스 이동(저장은 '변경 단가 전체 저장'으로)
+  function focusNextPrice(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const inputs = Array.from(
+      e.currentTarget.closest("table")?.querySelectorAll<HTMLInputElement>("input.price") ?? [],
+    );
+    const i = inputs.indexOf(e.currentTarget);
+    if (i >= 0 && i < inputs.length - 1) inputs[i + 1].focus();
+    else e.currentTarget.blur();
+  }
+  const pendingPriceChanges = collectPriceChanges(lines, props.prices, props.customerId).changes.length;
   const [productQueries, setProductQueries] = useState<Record<string, string>>({});
   const [newProductDrafts, setNewProductDrafts] = useState<
     Record<string, { name: string; unit: string; unitPrice: string; purchaseSupplierName: string }>
@@ -1736,6 +1818,11 @@ function ReviewView(props: {
         품목/수량/단위/단가를 직접 고칠 수 있습니다. 미매칭(빨강)·수량 확인(노랑)이 남으면 확정할 수
         없습니다. 후보 확인은 비슷한 품목이 여러 개 걸린 경우라, 품목을 한 번 선택해야 합니다.
       </p>
+      <label className="order-date no-print">
+        주문일
+        <input type="date" value={props.orderDate} onChange={(e) => props.onOrderDate(e.target.value)} />
+        <span className="muted">기본 오늘, 어제 발주도 날짜를 바꿔 확정할 수 있습니다.</span>
+      </label>
       <div className="table-wrap">
         <table>
           <thead>
@@ -1909,6 +1996,7 @@ function ReviewView(props: {
                       min={0}
                       value={line.unitPrice}
                       onChange={(e) => props.onPrice(line, e.target.value)}
+                      onKeyDown={focusNextPrice}
                     />
                     {line.productId && line.unitPrice === 0 && (
                       <div>
@@ -1936,6 +2024,15 @@ function ReviewView(props: {
           공급가 합계: <strong>{formatKRW(total)}</strong> <span className="muted">(VAT 없음)</span>
         </div>
         <div className="muted">예상 마진(참고): {formatMargin(orderMargin)}</div>
+      </div>
+
+      <div className="row-actions no-print" style={{ marginTop: 10 }}>
+        <button onClick={props.onSaveAllPrices} disabled={pendingPriceChanges === 0 || props.priceSaving}>
+          {props.priceSaving ? "단가 저장 중…" : `변경 단가 전체 저장${pendingPriceChanges > 0 ? ` (${pendingPriceChanges})` : ""}`}
+        </button>
+        <span className="muted">
+          단가 칸에서 Enter를 누르면 다음 칸으로 넘어갑니다. 바뀐 단가는 이 버튼으로 한 번에 저장하세요.
+        </span>
       </div>
 
       {!confirmable && blockReason && (

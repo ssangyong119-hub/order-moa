@@ -1599,3 +1599,61 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
 
 - Codex 검수 대상. W12와 page.tsx/globals.css 공유 → 함께 커밋 권장(codex-review-W12.md §9~10).
 - [다음] 엑셀 가져오기 또는 전용 Supabase 분리(백업 수단 생겨 적기). [위험 유지] 공유 쿼터.
+
+## 2026-07-08 Claude (W18 Phase 1 UX 개선 — 주문일·단가 일괄저장·주문목록 날짜조회)
+
+참고 설계: `C:\Users\RYZEN\.claude\plans\1-shiny-kahn.md`(테스트 카운트 77은 옛값 — 현재 web 117). Phase 2(카테고리 6종)·Phase 3(product_units 다단위/기본단가 예외)는 스키마 필요라 이번에 하지 않음(분리). 마이그레이션 0.
+
+### 작업1 — 주문일 표시/수정 (KST)
+- 신규 `web/src/lib/date-utils.ts`: `todayKst(now?)` — UTC+9 벽시계 날짜. `page.tsx today()`가 이걸 쓰도록 교체 → 한국 새벽(UTC 15~24시)에 전날로 저장되던 버그 해결. 테스트 3(UTC 낮/새벽/자정경계).
+- page.tsx: `confirmDate` 상태(기본 todayKst). ReviewView에 `<input type=date>` 주문일 + 안내문구. confirmOrder(DB=saveOrder(...confirmDate...), 데모=order.date=confirmDate). 확정 후 confirmDate→todayKst 리셋, orderListDate→방금 주문 날짜로 맞춰 바로 보이게.
+
+### 작업2 — 파싱 화면 단가 일괄 저장
+- price-store.ts: `collectPriceChanges(lines, prices, customerId)` → {changes, conflicts}. productId 있고 unitPrice>0, 기존과 다른 값만. 같은 품목 여러 줄=마지막 값+conflict 보고. `upsertCustomerPricesInDb`(한 번의 배열 upsert). 테스트 3.
+- page.tsx `saveAllPrices()`: 변경분 customerPrices state 갱신 + DB 배치 upsert(실패해도 주문 확정 안 막음). ReviewView: 단가 input Enter→다음 단가 칸 포커스(`focusNextPrice`, 저장 아님), '변경 단가 전체 저장 (N)' 버튼(N=대기 변경 수). 기존 '이 단가 저장'도 유지.
+
+### 작업3 — 주문 목록 날짜 조회
+- page.tsx: `orderListDate` 상태(기본 todayKst, ""=전체). 주문 목록만 `ordersForList = orderListDate ? orders.filter(o=>o.date===orderListDate) : orders`로 필터. 날짜 input·[오늘]·[전체 보기]·건수 표시·빈 상태("이 날짜의 주문이 없습니다"). **전역 orders는 안 건드림 → 합산표(W10)·월합계(W12) 무영향.**
+
+### 자체 리뷰 (제품 원칙)
+- 스냅샷 유지: saveAllPrices는 customer_prices만(과거 order_items 무관), confirmDate는 새 주문 date만(금액 무관). 예상 마진 비저장. raw_text 무관. ordermoa_ 접두사·마이그레이션 0.
+- orders 결합 회귀 확인: 주문 목록 필터는 렌더 파생(ordersForList)만, aggregate/monthly는 전역 orders 그대로 — 데모로 검증(주문 1건이 합산표·월합계에 계속 보임).
+
+### 검증
+- root 5/5 · web 117/117(date-utils +3, price-store +3) · build 성공 · audit 0 · diff-check clean.
+- 데모 smoke(콘솔 0): 주문일 KST 2026-07-08 기본→2026-07-07로 확정→목록 자동 07-07·1건. 단가 2개 변경→'전체 저장 (2)'·Enter 다음칸 이동→저장→재파싱 12345/6789 자동적용. 목록 [오늘]=빈상태·[전체 보기]=1건. 합산표 "주문 1건·6품목"·월합계 106,191 그대로.
+- DB smoke 미실행(로그인) — saveOrder orderDate·upsertCustomerPricesInDb 배치는 기존 패턴, 회귀 위험 낮음.
+
+### 개선 아이디어 (승인 없이 구현 안 함)
+- 즉시(작음): 없음.
+- 나중: 주문 목록 기간(범위) 조회·서버 날짜 조회(orders 커지면 orderListOrders 별도 상태로), 파싱 화면 '전체 단가 저장'에 신규 품목 단가도 포함.
+- Phase 2(카테고리 6종·마이그레이션)·Phase 3(product_units 다단위/기본단가 예외) — 스키마 필요, 별도 Phase. product_units 마이그레이션 시 RLS·교차회사 검사·idempotent backfill 필수.
+- 제외: 세금/회계/재고/OCR/카톡 자동읽기/이카운트.
+
+- 미커밋 — Codex 검수·커밋(마이그레이션 없음).
+- [다음] Phase 2(카테고리) 또는 엑셀 가져오기/전용 Supabase 분리. [위험 유지] 공유 쿼터.
+
+## 2026-07-08 Codex Review (W18 검수·디버깅)
+
+- Claude 산출물 검수 중 `saveAllPrices()`가 DB 저장 전에 화면 `customerPrices`를 먼저 갱신하는 점을 확인. DB upsert 실패 시 화면은 저장된 것처럼 보이지만 F5 후 사라지는 혼선이 생길 수 있어, DB 모드에서는 `upsertCustomerPricesInDb` 성공 후 상태를 갱신하도록 최소 수정. 저장 중 중복 클릭 방지를 위해 `priceSaving` 상태와 버튼 비활성/문구를 추가.
+- `price-store` import 중복을 정리. W18 진행판/NEXT-SESSION의 web test 수치를 현재 117/117로 보정하고 진행판 HTML/XLSX 재생성.
+- 검증 중 `next build`가 `Cannot find module for page: /_not-found`로 1회 실패. 코드 컴파일 이후 page data 단계 오류였고, dev 서버가 3027에서 살아 있는 상태로 `.next`를 공유한 산출물 충돌로 판단. dev 서버 중지 + `web/.next` 삭제 후 build 단독 재실행 → 성공.
+- 제품 원칙 재확인: 단가 일괄 저장은 `ordermoa_customer_prices`만 갱신, 과거 `order_items.unit_price/amount` 불변. 주문일은 신규 주문의 `order_date`만 바꾸며 금액 스냅샷과 무관. 주문 목록 필터는 `ordersForList` 파생값만 사용해 합산표/W10·월합계/W12 전역 `orders` 흐름 유지.
+
+## 사용자 실사용 피드백 백로그 (2026-07-08 정리)
+> 사장님 실사용 피드백 모음. **아래 "추후" 항목은 기록만 — 해당 Phase 전까지 구현하지 않는다.** 상세·우선순위는 `docs/NEXT-SESSION.md`의 동명 섹션이 단일 소스.
+
+### Phase 1에서 구현 완료 (W18)
+- 주문일 표시/수정 (KST 기준, 어제 발주도 날짜 바꿔 확정)
+- 파싱 확인 화면 단가 일괄 저장 (단가 칸 Enter→다음 칸, "변경 단가 전체 저장" 한 번) — 불편했던 곳은 단가 관리 화면이 아니라 파싱 확인 화면이었음
+- 주문 목록 날짜 조회 (기본 오늘/전체 보기, 클라 필터라 합산표·월합계 무영향)
+
+### 추후로 미룸 (구현 금지 — 기록만)
+- 품목 카테고리 6종(농산물/공산품/냉식/육류/수산/기타) — Phase 2, 스키마 필요
+- 품목 다단위 구조(한 품목 여러 단위, 환산은 일단 안 함) — Phase 3, product_units 스키마
+- 기본 판매단가 + 거래처별 예외 단가 구조 — Phase 3, 스키마
+- 단가 관리 화면 재설계 (위 구조 반영)
+- 품목 검색/별칭 관리 UX 개선
+- 주문 목록 서버 날짜/기간 조회 (지금은 클라 필터; 데이터 커지면 별도 상태로 서버 조회)
+- 엑셀 가져오기/import (W15 나머지 절반)
+- 스키마 필요 항목은 별도 마이그레이션 세션에서 RLS·교차회사 검사·idempotent backfill 필수.

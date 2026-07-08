@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { buildPriceRows, validatePriceValue } from "./price-store";
+import { buildPriceRows, collectPriceChanges, validatePriceValue } from "./price-store";
 import type { CustomerPrice, Product } from "./domain/types";
 
 const products: Product[] = [
@@ -31,6 +31,37 @@ test("buildPriceRows: 미등록만 보기", () => {
     "두부",
     "숙주",
   ]);
+});
+
+test("collectPriceChanges: 변경/신규만 추리고 0원·미매칭·동일값 제외", () => {
+  // c1 기존: p1=4500. 라인: p1을 5000으로(변경), p2 3000(신규), p3 0원(제외), 품목없음(제외), p1 다시 4500이면 동일(제외 대상이지만 아래 마지막값 규칙)
+  const lines = [
+    { productId: "p1", productName: "콩나물", unitPrice: 5000 }, // 4500→5000 변경
+    { productId: "p2", productName: "두부", unitPrice: 3000 }, // 신규
+    { productId: "p3", productName: "숙주", unitPrice: 0 }, // 0원 제외
+    { productId: null, productName: "미매칭", unitPrice: 999 }, // productId 없음 제외
+  ];
+  const { changes, conflicts } = collectPriceChanges(lines, prices, "c1");
+  expect(changes).toEqual([
+    { customerId: "c1", productId: "p1", productName: "콩나물", price: 5000 },
+    { customerId: "c1", productId: "p2", productName: "두부", price: 3000 },
+  ]);
+  expect(conflicts).toEqual([]);
+});
+
+test("collectPriceChanges: 기존과 같은 값은 저장 대상 아님", () => {
+  const lines = [{ productId: "p1", productName: "콩나물", unitPrice: 4500 }]; // c1 기존 4500과 동일
+  expect(collectPriceChanges(lines, prices, "c1").changes).toEqual([]);
+});
+
+test("collectPriceChanges: 같은 품목 여러 줄 다른 값 → 마지막 값으로 통일 + conflict 보고", () => {
+  const lines = [
+    { productId: "p2", productName: "두부", unitPrice: 3000 },
+    { productId: "p2", productName: "두부", unitPrice: 3500 }, // 마지막 값
+  ];
+  const { changes, conflicts } = collectPriceChanges(lines, prices, "c1");
+  expect(changes).toEqual([{ customerId: "c1", productId: "p2", productName: "두부", price: 3500 }]);
+  expect(conflicts).toEqual(["두부"]);
 });
 
 test("validatePriceValue: 0 이상 정수만 허용", () => {

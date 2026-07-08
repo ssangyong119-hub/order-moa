@@ -56,11 +56,11 @@
   </div>
 </header>
 <div class="wrap">
-  <div class="focus">📌 <strong>지금 하는 일:</strong> W15 데이터 내보내기(CSV) 절반 완료 — &#x27;데이터 내보내기&#x27; 화면에서 거래처·매입처·품목별칭·단가·주문 CSV, 월 합계 화면에서 월합계 CSV 백업(공유 Supabase 쿼터 대비 안전망). 마이그레이션 없음, 데모 실측. W12 거래처별 월 합계 완료. 다음: 엑셀 가져오기(후순위) 또는 전용 Supabase 분리 논의.</div>
+  <div class="focus">📌 <strong>지금 하는 일:</strong> W18 Phase 1 UX 개선 완료 — 주문일 표시/수정(KST 기준), 파싱 화면 단가 Enter이동+변경단가 전체저장, 주문 목록 날짜 조회(기본 오늘/전체보기). 마이그레이션 없음, 데모 실측(합산표·월합계 무영향 확인). 다음 Phase 2/3(카테고리·다단위·product_units)는 스키마 필요라 분리. 잔여: 엑셀 가져오기, 전용 Supabase 분리 논의.</div>
 
-  <h2>전체 진행률 (작업 보드 17개 기준)</h2>
-  <div class="progressbar"><div style="width:76%"></div></div>
-  <p class="counts">완료 13 · 다음 1 · 보류 2 — 1차 트랙(보류 제외) 13/15 완료</p>
+  <h2>전체 진행률 (작업 보드 18개 기준)</h2>
+  <div class="progressbar"><div style="width:78%"></div></div>
+  <p class="counts">완료 14 · 다음 1 · 보류 2 — 1차 트랙(보류 제외) 14/16 완료</p>
   <div class="legend"><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span><span class="badge" style="background:#fef7e0;color:#946200">다음</span><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span><span class="badge" style="background:#fde8e8;color:#b02a2a">제외</span></div>
 
   <h2>핵심 흐름 (이 순서가 제품의 전부)</h2>
@@ -181,6 +181,16 @@
   </dl>
   <details><summary>관련 문서/파일</summary><ul><li><code>docs/order-moa-feedback-design-2026-07-07.md</code></li><li><code>web/src/lib/aggregate.ts</code></li><li><code>web/src/app/page.tsx</code></li></ul></details>
 </div>
+<div class="card s-done">
+  <div class="card-head"><span class="wid">W18</span><strong>Phase 1 UX 개선 — 주문일·단가 일괄저장·주문목록 날짜조회</strong><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span></div>
+  <p class="plain">①주문일 표시/수정: 파싱 확인 화면에 주문일 입력칸 추가, 어제 발주도 날짜 바꿔 확정. 날짜는 한국시간(KST) 기준(UTC라 새벽에 전날 저장되던 것 수정). ②파싱 화면 단가 일괄저장: 단가 칸에서 Enter로 다음 칸 이동, 바뀐 단가를 &#x27;변경 단가 전체 저장&#x27; 한 번으로 저장. ③주문 목록 날짜 조회: 기본 오늘, 날짜 선택·전체 보기. 마이그레이션 없음.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>실사용 불편 3가지 — 어제 발주 날짜 못 바꿈, 단가 한 줄씩 저장 번거로움, 주문 목록이 전부 섞여 보임. 합산표·월합계는 전역 orders 그대로 써서 안 깨지게.</dd>
+    <dt>선행 조건</dt><dd>W08~W12(저장 주문 흐름).</dd>
+    <dt>확인 방법</dt><dd>데모 실측(2026-07-08): KST 주문일·어제로 확정→목록 해당 날짜, 단가 2개 변경→Enter 이동→일괄저장(2)→재파싱 자동적용, 목록 오늘/전체/빈상태, 합산표·월합계 무영향. 순수함수 테스트(todayKst 3·collectPriceChanges 3). root5·web117·build·audit0.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/date-utils.ts</code></li><li><code>web/src/lib/price-store.ts</code></li><li><code>web/src/app/page.tsx</code></li></ul></details>
+</div>
 <div class="card s-doing">
   <div class="card-head"><span class="wid">W15</span><strong>엑셀/백업/내보내기</strong><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span></div>
   <p class="plain">내보내기(CSV) 절반 완료(2026-07-08): &#x27;데이터 내보내기&#x27; 화면에서 거래처·매입처·품목별칭·단가·주문 목록을 CSV로 내려받고, 월 합계 화면에서 선택 월 합계를 CSV로 내려받아 보관. 공유 Supabase 쿼터 위험 대비 백업 + 회계사 전달용. 금액은 확정 당시 스냅샷. 가져오기(엑셀 업로드)·전체 zip·JSON 백업은 후순위.</p>
@@ -243,7 +253,7 @@
 </div></div>
 
   <h2>검증 체크리스트 (마지막 확인 기준)</h2>
-  <table><tr><th>항목</th><th>쉬운 설명</th><th>결과</th></tr><tr><td>root npm test</td><td>정적 데모 회귀 테스트</td><td class='ok'>통과 5/5</td></tr><tr><td>web npm test</td><td>파서/합산/검색/주문 저장 빌더/거래처·매입처·raw_text·월합계·CSV 자동 테스트</td><td class='ok'>통과 111/111</td></tr><tr><td>web npm run build</td><td>배포용 빌드가 깨지지 않는지</td><td class='ok'>성공</td></tr><tr><td>npm audit --audit-level=low</td><td>알려진 보안 취약점 검사</td><td class='ok'>0건</td></tr><tr><td>Supabase SQL 0001/0002/0003</td><td>장부 테이블/RLS/회사생성 함수 설치</td><td class='ok'>적용 성공</td></tr><tr><td>Supabase SQL 0004/0005/0006</td><td>매입처·연락처·발주 원문 주문 연결</td><td class='ok'>적용 성공</td></tr><tr><td>8a RLS 검증</td><td>회사 row, anon 차단, policy, A/B 격리, 위조 insert 차단</td><td class='ok'>통과</td></tr><tr><td>민감정보</td><td>service role key 커밋/번들 포함 여부</td><td class='ok'>미포함</td></tr></table>
+  <table><tr><th>항목</th><th>쉬운 설명</th><th>결과</th></tr><tr><td>root npm test</td><td>정적 데모 회귀 테스트</td><td class='ok'>통과 5/5</td></tr><tr><td>web npm test</td><td>파서/합산/검색/주문 저장 빌더/거래처·매입처·raw_text·월합계·CSV·KST 날짜·단가 일괄 저장 자동 테스트</td><td class='ok'>통과 117/117</td></tr><tr><td>web npm run build</td><td>배포용 빌드가 깨지지 않는지</td><td class='ok'>성공</td></tr><tr><td>npm audit --audit-level=low</td><td>알려진 보안 취약점 검사</td><td class='ok'>0건</td></tr><tr><td>Supabase SQL 0001/0002/0003</td><td>장부 테이블/RLS/회사생성 함수 설치</td><td class='ok'>적용 성공</td></tr><tr><td>Supabase SQL 0004/0005/0006</td><td>매입처·연락처·발주 원문 주문 연결</td><td class='ok'>적용 성공</td></tr><tr><td>8a RLS 검증</td><td>회사 row, anon 차단, policy, A/B 격리, 위조 insert 차단</td><td class='ok'>통과</td></tr><tr><td>민감정보</td><td>service role key 커밋/번들 포함 여부</td><td class='ok'>미포함</td></tr></table>
 
   <h2 style="border-left-color:#ea4335">만들지 않는 것 (착수 금지)</h2>
   <ul class="simple"><li><strong>OCR/사진 발주 인식</strong> — 정확도와 운영 리스크가 커서 착수 금지</li><li><strong>카카오톡 자동 읽기</strong> — 정책/권한 리스크. 지금은 복사→붙여넣기</li><li><strong>이카운트 연동</strong> — 오더모아는 이카운트 앞단 도구 — 전체 대체 아님</li><li><strong>세금계산서 직접 발행</strong> — 법적 책임 영역. 근거 데이터 정리(2차)까지만</li><li><strong>은행 자동 매칭</strong> — 연동 비용 대비 가치 미검증</li><li><strong>전체 재고 ERP(평가·실사)</strong> — 범위 폭발. 3차에 수량 기록만 좁게 검토</li></ul>
