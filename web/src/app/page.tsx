@@ -811,14 +811,20 @@ export default function HomePage() {
   }
 
   // ---- 합산표 (매입처 발주용) ----
-  const aggregate = useMemo(() => {
-    const filtered = orders.filter(
-      (o) =>
-        (aggCustomer === "all" || o.customerId === aggCustomer) &&
-        (aggDate === "" || o.date === aggDate),
-    );
-    return buildAggregateRows(filtered, products);
-  }, [orders, aggCustomer, aggDate, products]);
+  // 저장된 주문(DB 모드=loadOrders 결과)에서 날짜·거래처로 걸러 합산 — F5/재접속에도 같은 표 재현.
+  const filteredOrders = useMemo(
+    () =>
+      orders.filter(
+        (o) =>
+          (aggCustomer === "all" || o.customerId === aggCustomer) &&
+          (aggDate === "" || o.date === aggDate),
+      ),
+    [orders, aggCustomer, aggDate],
+  );
+  const aggregate = useMemo(
+    () => buildAggregateRows(filteredOrders, products),
+    [filteredOrders, products],
+  );
 
   useEffect(() => {
     setPurchaseSelectedIds((prev) => {
@@ -1055,9 +1061,11 @@ export default function HomePage() {
 
           <div className="ops-grid" style={{ marginBottom: 14 }}>
             <button className="stat-card clickable" onClick={() => setView("orders")}>
-              <span className="stat-label">오늘 확정 주문</span>
+              <span className="stat-label">{session.status === "ready" ? "저장된 주문" : "확정한 주문"}</span>
               <span className="stat">{orders.length}건</span>
-              <span className="stat-note">주문 목록으로 이동</span>
+              <span className="stat-note">
+                {session.status === "ready" ? "새로고침해도 유지 · 목록 열기" : "주문 목록으로 이동"}
+              </span>
             </button>
             <button className="stat-card clickable" onClick={() => setView("aggregate")}>
               <span className="stat-label">합산 품목 종류</span>
@@ -1075,8 +1083,8 @@ export default function HomePage() {
             </div>
             <div className="stat-card">
               <span className="stat-label">다음 단계</span>
-              <span className="status-text">8b 실측</span>
-              <span className="stat-note">로그인 제한 해제 후 DB 저장 확인</span>
+              <span className="status-text">저장 주문 활용</span>
+              <span className="stat-note">날짜별 합산표 재조회 · 명세서 재출력 준비</span>
             </div>
           </div>
 
@@ -1113,12 +1121,13 @@ export default function HomePage() {
               </div>
             </div>
             <div className="panel">
-              <h3>준비 중인 업무</h3>
+              <h3>진행 상태</h3>
               <ul className="ready-list">
-                <li><span>거래처·품목·단가 관리</span><span className="badge info">1차</span></li>
-                <li><span>주문 DB 저장 실측 완료 처리</span><span className="badge amber">진행</span></li>
-                <li><span>월 합계·명세서 재출력</span><span className="badge warn">8c</span></li>
-                <li><span>세금계산서·원가·마감</span><span className="badge err">2차</span></li>
+                <li><span>기준정보 4종 (거래처·매입처·품목·단가)</span><span className="badge ok">완료</span></li>
+                <li><span>발주 원문 저장·삭제</span><span className="badge ok">완료</span></li>
+                <li><span>저장 주문 합산표 (날짜·거래처별)</span><span className="badge ok">완료</span></li>
+                <li><span>거래명세서 재출력</span><span className="badge info">다음</span></li>
+                <li><span>월 합계·미수금·세금 근거</span><span className="badge err">2차</span></li>
               </ul>
             </div>
           </div>
@@ -1236,6 +1245,11 @@ export default function HomePage() {
             <strong>발주 문장</strong>이 만들어집니다.{" "}
             <em>(여기서 체크해도 판매 주문은 바뀌지 않습니다)</em>
           </p>
+          <p className="muted" style={{ marginTop: 0 }}>
+            {session.status === "ready"
+              ? "저장된 주문을 다시 불러와 합산합니다 — 새로고침하거나 나중에 다시 열어도 같은 표가 나옵니다. 금액은 확정 당시 단가 그대로입니다."
+              : "지금 세션에 확정한 주문 기준입니다. (데모 모드 — 새로고침 시 초기화)"}
+          </p>
           <div className="row-actions no-print" style={{ marginBottom: 8 }}>
             <select value={aggCustomer} onChange={(e) => setAggCustomer(e.target.value)} style={{ maxWidth: 200 }}>
               <option value="all">전체 거래처</option>
@@ -1262,13 +1276,26 @@ export default function HomePage() {
           </div>
           <p className="muted" style={{ marginTop: 0 }}>
             {aggDate === "" ? "전체 날짜" : aggDate} ·{" "}
-            {aggCustomer === "all" ? "전체 거래처" : customers.find((c) => c.id === aggCustomer)?.name}
+            {aggCustomer === "all" ? "전체 거래처" : customers.find((c) => c.id === aggCustomer)?.name} ·{" "}
+            주문 {filteredOrders.length}건 · {aggregate.length}품목
           </p>
           {aggregate.length === 0 ? (
             <div className="empty-state">
-              <strong>합산할 주문이 없습니다.</strong>
-              <p className="muted">발주를 먼저 확정하면 거래처별 수량이 자동으로 합쳐집니다.</p>
-              <button className="primary" onClick={() => setView("paste")}>발주 붙여넣기</button>
+              {orders.length > 0 ? (
+                <>
+                  <strong>이 조건에 맞는 주문이 없습니다.</strong>
+                  <p className="muted">
+                    저장된 주문은 {orders.length}건 있습니다. 날짜·거래처 필터를 바꾸거나 [전체 날짜]를 눌러보세요.
+                  </p>
+                  <button onClick={() => { setAggDate(""); setAggCustomer("all"); }}>필터 초기화</button>
+                </>
+              ) : (
+                <>
+                  <strong>합산할 주문이 없습니다.</strong>
+                  <p className="muted">발주를 먼저 확정하면 거래처별 수량이 자동으로 합쳐집니다.</p>
+                  <button className="primary" onClick={() => setView("paste")}>발주 붙여넣기</button>
+                </>
+              )}
             </div>
           ) : (
             <>

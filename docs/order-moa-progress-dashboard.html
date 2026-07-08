@@ -56,11 +56,11 @@
   </div>
 </header>
 <div class="wrap">
-  <div class="focus">📌 <strong>지금 하는 일:</strong> W09 발주 원문 저장/삭제 구현·DB 실측 완료 — 0006 마이그레이션 Supabase 적용 완료. 기준정보 4종 + W09까지 완료. 다음: W10(저장 주문 기반 합산표) → W11(명세서 재출력).</div>
+  <div class="focus">📌 <strong>지금 하는 일:</strong> W10 저장 주문 기반 합산표 완료(기존 aggregate·loadOrders 재사용, 마이그레이션 없음) + 대시보드 문구 정합성 보정. 기준정보 4종·W09·W10 완료. 다음: W11(저장 주문 기반 거래명세서 재출력).</div>
 
   <h2>전체 진행률 (작업 보드 17개 기준)</h2>
-  <div class="progressbar"><div style="width:59%"></div></div>
-  <p class="counts">완료 10 · 다음 4 · 보류 3 — 1차 트랙(보류 제외) 10/14 완료</p>
+  <div class="progressbar"><div style="width:65%"></div></div>
+  <p class="counts">완료 11 · 다음 3 · 보류 3 — 1차 트랙(보류 제외) 11/14 완료</p>
   <div class="legend"><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span><span class="badge" style="background:#fef7e0;color:#946200">다음</span><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span><span class="badge" style="background:#fde8e8;color:#b02a2a">제외</span></div>
 
   <h2>핵심 흐름 (이 순서가 제품의 전부)</h2>
@@ -131,15 +131,15 @@
   </dl>
   <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/order-store.ts</code></li><li><code>web/src/app/page.tsx</code></li><li><code>web/supabase/migrations/0006_order_import_link.sql</code></li><li><code>docs/guide-apply-0006-order-import-link.md</code></li></ul></details>
 </div>
-<div class="card s-next">
-  <div class="card-head"><span class="wid">W10</span><strong>8c — 저장 주문 기반 합산표</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>
-  <p class="plain">오늘 것뿐 아니라 과거 저장된 주문에서도 날짜/거래처를 골라 합산표를 다시 뽑을 수 있게 합니다.</p>
+<div class="card s-done">
+  <div class="card-head"><span class="wid">W10</span><strong>8c — 저장 주문 기반 합산표</strong><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span></div>
+  <p class="plain">DB에 저장된 주문(loadOrders)을 기준으로 날짜·거래처를 골라 합산표를 다시 뽑습니다. 새로고침·재접속해도 같은 표가 나옵니다. 기존 aggregate 계산 함수 재사용 — 새 마이그레이션 없음. 합산표가 저장 주문 기반 재조회임을 알리는 문구/주문 건수/빈 조건 안내·필터 초기화를 보강.</p>
   <dl>
     <dt>왜 필요한가</dt><dd>어제 발주를 다시 봐야 할 때, 앱을 껐다 켜도 합산표가 나와야 진짜 장부입니다.</dd>
-    <dt>선행 조건</dt><dd>W08 통과. (합산 계산 함수는 이미 완성 — DB 조회 결과를 넣기만 하면 됨)</dd>
-    <dt>확인 방법</dt><dd>주문 저장→앱 재시작→날짜 필터로 같은 합산표 재현.</dd>
+    <dt>선행 조건</dt><dd>완료 — W08(저장 실측). 합산 계산 함수 기존 것, orders 상태가 DB 모드에서 loadOrders 결과라 별도 재조회 로직 불필요.</dd>
+    <dt>확인 방법</dt><dd>데모 실측(2026-07-08): 날짜/거래처 필터로 주문 건수·품목 합산 확인, 빈 조건 안내+필터 초기화 동작. DB: orders=loadOrders라 F5 시 로드 이펙트가 동일 주문 재조회→같은 표(W08/W09에서 loadOrders F5 유지 실측 완료). 금액은 저장된 order_items 스냅샷만 사용(현재 단가표 재조회 없음).</dd>
   </dl>
-  <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/aggregate.ts</code></li><li><code>docs/task-prompt-unit-8-supabase-persistence-flow.md(§8)</code></li></ul></details>
+  <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/aggregate.ts</code></li><li><code>web/src/lib/order-store.ts</code></li><li><code>web/src/app/page.tsx</code></li></ul></details>
 </div>
 <div class="card s-next">
   <div class="card-head"><span class="wid">W11</span><strong>8c — 거래명세서 재출력</strong><span class="badge" style="background:#fef7e0;color:#946200">다음</span></div>

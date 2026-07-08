@@ -5,13 +5,13 @@
     "updated": "2026-07-08",
     "branch": "codex/integrate-mvp-docs-web",
     "charter": "docs/order-moa-system-meta-prompt.md (헌장 — 차수·범위의 기준. 이 진행판과 어긋나면 헌장이 우선)",
-    "currentFocus": "W09 발주 원문 저장/삭제 구현·DB 실측 완료 — 0006 마이그레이션 Supabase 적용 완료. 기준정보 4종 + W09까지 완료. 다음: W10(저장 주문 기반 합산표) → W11(명세서 재출력).",
+    "currentFocus": "W10 저장 주문 기반 합산표 완료(기존 aggregate·loadOrders 재사용, 마이그레이션 없음) + 대시보드 문구 정합성 보정. 기준정보 4종·W09·W10 완료. 다음: W11(저장 주문 기반 거래명세서 재출력).",
     "recentCommits": [
+      "755188c docs: record raw text db validation",
       "ed2898c feat: add order raw text retention controls",
       "6ff34f7 docs: record db mode validation",
       "bdc1323 docs: update next session handoff after final review",
-      "89315d2 feat: add price management and supplier contact fields",
-      "2acb14f feat: add product alias management"
+      "89315d2 feat: add price management and supplier contact fields"
     ],
     "supabase": "신규 Supabase 프로젝트 한도 때문에 기존 yangsan-inventory 프로젝트를 공유. 충돌 방지를 위해 모든 오더모아 DB 객체는 ordermoa_ 접두사 사용.",
     "statusLegend": {
@@ -149,13 +149,13 @@
     {
       "id": "W10",
       "name": "8c — 저장 주문 기반 합산표",
-      "status": "다음",
+      "status": "완료",
       "phase": "1차",
-      "plain": "오늘 것뿐 아니라 과거 저장된 주문에서도 날짜/거래처를 골라 합산표를 다시 뽑을 수 있게 합니다.",
+      "plain": "DB에 저장된 주문(loadOrders)을 기준으로 날짜·거래처를 골라 합산표를 다시 뽑습니다. 새로고침·재접속해도 같은 표가 나옵니다. 기존 aggregate 계산 함수 재사용 — 새 마이그레이션 없음. 합산표가 저장 주문 기반 재조회임을 알리는 문구/주문 건수/빈 조건 안내·필터 초기화를 보강.",
       "why": "어제 발주를 다시 봐야 할 때, 앱을 껐다 켜도 합산표가 나와야 진짜 장부입니다.",
-      "prereq": "W08 통과. (합산 계산 함수는 이미 완성 — DB 조회 결과를 넣기만 하면 됨)",
-      "verify": "주문 저장→앱 재시작→날짜 필터로 같은 합산표 재현.",
-      "docs": ["web/src/lib/aggregate.ts", "docs/task-prompt-unit-8-supabase-persistence-flow.md(§8)"]
+      "prereq": "완료 — W08(저장 실측). 합산 계산 함수 기존 것, orders 상태가 DB 모드에서 loadOrders 결과라 별도 재조회 로직 불필요.",
+      "verify": "데모 실측(2026-07-08): 날짜/거래처 필터로 주문 건수·품목 합산 확인, 빈 조건 안내+필터 초기화 동작. DB: orders=loadOrders라 F5 시 로드 이펙트가 동일 주문 재조회→같은 표(W08/W09에서 loadOrders F5 유지 실측 완료). 금액은 저장된 order_items 스냅샷만 사용(현재 단가표 재조회 없음).",
+      "docs": ["web/src/lib/aggregate.ts", "web/src/lib/order-store.ts", "web/src/app/page.tsx"]
     },
     {
       "id": "W11",
