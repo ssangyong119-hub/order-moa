@@ -5,7 +5,7 @@
     "updated": "2026-07-08",
     "branch": "codex/integrate-mvp-docs-web",
     "charter": "docs/order-moa-system-meta-prompt.md (헌장 — 차수·범위의 기준. 이 진행판과 어긋나면 헌장이 우선)",
-    "currentFocus": "W18 Phase 1 UX 개선 완료 — 주문일 표시/수정(KST 기준), 파싱 화면 단가 Enter이동+변경단가 전체저장, 주문 목록 날짜 조회(기본 오늘/전체보기). 마이그레이션 없음, 데모 실측(합산표·월합계 무영향 확인). 다음 Phase 2/3(카테고리·다단위·product_units)는 스키마 필요라 분리. 잔여: 엑셀 가져오기, 전용 Supabase 분리 논의.",
+    "currentFocus": "W13 실제 발주 테스트 1차 라운드 완료 — 현장식 문장(공백 다품목·붙여쓰기·종결어미·조사·규격숫자)으로 파서 검증. order-parser.ts 최소 보강 2건: (1) 한 줄에 수량단위 클러스터 2개↑면 라인 분리(뒤 품목 조용히 유실되던 치명 문제 해결, 규격+수량은 분리 안 함), (2) 종결어미 이요·조사 는/은 제거. real-order-fixture.test.ts에 W13 섹션 11건 추가 → web 117→128. 마이그레이션·스키마 0, 스냅샷 원칙 유지. 다음: Phase 2(카테고리)·엑셀 가져오기·전용 Supabase 분리.",
     "recentCommits": [
       "7d05b6f feat: clarify saved-order aggregate flow",
       "755188c docs: record raw text db validation",
@@ -199,12 +199,12 @@
     {
       "id": "W13",
       "name": "실제 발주 테스트 라운드",
-      "status": "다음",
+      "status": "진행 중",
       "phase": "1차",
-      "plain": "실제 받았던 발주(가명 처리)를 길게 여러 번 넣어보며 파싱·검색·매입처 분리가 현장에서 통하는지 반복 확인합니다.",
+      "plain": "실제 받았던 발주(가명 처리)를 길게 여러 번 넣어보며 파싱·검색·매입처 분리가 현장에서 통하는지 반복 확인합니다. 1차 라운드(2026-07-08) 완료: 현장식 문장으로 파서 보강 2건.",
       "why": "샘플로는 못 잡는 현장 표현(오타·줄임말·규격)이 반드시 나옵니다. 손님 받기 전 마지막 관문.",
       "prereq": "W02~W04(내 품목·별칭·단가 등록 가능해야 진짜 테스트가 됨).",
-      "verify": "장문 발주 10건 이상 투입→미매칭/오인식을 fixture 테스트로 남기고 파서 보강.",
+      "verify": "1차(2026-07-08): 현장식 문장 검증→파서 보강 2건(한 줄 공백/붙여쓰기 다품목 분리·뒤 품목 유실 방지, 종결어미 이요·조사 는/은 제거) + fixture 11건(web 128). 브라우저 데모 smoke 2건(확정→명세서→합산표). 실제 수령 발주 확보 시 라운드 반복.",
       "docs": ["docs/order-moa-real-order-test-plan.md", "web/src/lib/order-parser.ts"]
     },
     {

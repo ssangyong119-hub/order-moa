@@ -168,3 +168,102 @@ test("[개선 2차] 장 단위는 baseUnit 우연 폴백이 아니라 원문 단
   expect(lines[0].quantity).toBe(3);
   expect(lines[0].unit).toBe("장");
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+// W13 현장 발주 라운드 (2026-07-08) — 실제 카톡/문자식 문장 검증.
+// 관찰(스크래치)에서 나온 파싱 문제를 테스트로 고정한 뒤 order-parser를 최소 수정한다.
+// 개선 대상: (A) 한 줄 공백 다품목 분리, (B) 종결어미 '이요'/조사 '는·은' 제거.
+// ══════════════════════════════════════════════════════════════════════════
+
+// ── (A) 한 줄 공백/붙여쓰기 다품목: 수량단위가 2개 이상이면 라인 분리 ──
+// 가장 위험했던 케이스: 뒤 품목을 조용히 버리고 경고 없이 확정되던 문제.
+
+test("[W13-A] '세척숙주 3박스 청경채 2박스' — 공백 다품목을 2라인으로 분리", () => {
+  const lines = parseOrderText("세척숙주 3박스 청경채 2박스", "tc_a", products, prices);
+  expect(lines.map((l) => [l.productId, l.quantity, l.unit, l.status])).toEqual([
+    ["rp01", 3, "박스", "matched"],
+    ["rp04", 2, "박스", "matched"],
+  ]);
+  expect(canConfirm(lines)).toBe(true);
+});
+
+test("[W13-A] '두부3판 콩나물2박스' — 붙여쓰기 다품목 분리(뒤 품목 미등록은 미매칭 노출)", () => {
+  const lines = parseOrderText("두부3판 콩나물2박스", "tc_a", products, prices);
+  expect(lines).toHaveLength(2);
+  expect(lines[0].productId).toBe("rp21"); // 팩두부(별칭 두부)
+  expect(lines[0].quantity).toBe(3);
+  expect(lines[1].productId).toBe(null); // 콩나물은 fixture에 없음 → 미매칭(조용히 버리지 않음)
+  expect(canConfirm(lines)).toBe(false);
+});
+
+test("[W13-A] '취나물2봉 단무지3개' — 별칭 다품목 분리(둘 다 매칭)", () => {
+  const lines = parseOrderText("취나물2봉 단무지3개", "tc_c", products, prices);
+  expect(lines.map((l) => [l.productId, l.quantity])).toEqual([
+    ["rp03", 2],
+    ["rp06", 3],
+  ]);
+  expect(canConfirm(lines)).toBe(true);
+});
+
+test("[W13-A] '계란 10판 배추 2망' — 품목·수량이 교차 오염되지 않는다", () => {
+  const lines = parseOrderText("계란 10판 배추 2망", "tc_d", products, prices);
+  expect(lines.map((l) => [l.productId, l.quantity, l.unit])).toEqual([
+    ["rp15", 10, "판"],
+    ["rp09", 2, "망"],
+  ]);
+});
+
+test("[W13-A] '락스2개비닐3장' — 완전 붙여쓰기 공산품 다품목 분리", () => {
+  const lines = parseOrderText("락스2개비닐3장", "tc_d", products, prices);
+  expect(lines.map((l) => [l.productId, l.quantity, l.unit])).toEqual([
+    ["rp27", 2, "개"],
+    ["rp28", 3, "장"],
+  ]);
+});
+
+test("[W13-A 회귀] 규격 숫자+수량은 분리하지 않는다 — '청양고추 1kg 2봉'은 1라인 유지", () => {
+  const lines = parseOrderText("청양고추 1kg 2봉", "tc_b", products, prices);
+  expect(lines).toHaveLength(1);
+  expect(lines[0].productId).toBe("rp23");
+  expect(lines[0].quantity).toBe(2);
+  expect(lines[0].unit).toBe("봉");
+});
+
+test("[W13-A 회귀] 규격 숫자만(측정단위)인 단품은 분리하지 않는다 — '소불고기 2키로 반'", () => {
+  const lines = parseOrderText("소불고기 2키로 반", "tc_d", products, prices);
+  expect(lines).toHaveLength(1);
+  expect(lines[0].productId).toBe("rp26");
+});
+
+// ── (B) 종결어미/조사 제거 ──
+
+test("[W13-B] 종결어미 '이요' 제거 후 매칭 — '대파 2단이요'", () => {
+  const lines = parseOrderText("대파 2단이요", "tc_a", products, prices);
+  expect(lines[0].productId).toBe("rp14");
+  expect(lines[0].quantity).toBe(2);
+  expect(lines[0].status).toBe("matched");
+});
+
+test("[W13-B] 조사 '는' 제거 → '숙주는 3박스'는 미매칭이 아니라 후보 확인으로", () => {
+  const lines = parseOrderText("숙주는 3박스", "tc_b", products, prices);
+  expect(lines[0].productId).toBe("rp01");
+  expect(lines[0].candidateProductIds).toEqual(["rp01", "rp02"]);
+  expect(lines[0].needsProductConfirmation).toBe(true);
+  expect(confirmBlockReason(lines)).toContain("품목 후보 확인");
+});
+
+// ── 애매 수량은 그대로 안전 차단(현재 동작 고정 — 개선 아님) ──
+
+test("[W13 고정] '감자 반박스' — '반'은 수량 불확실로 확정 차단", () => {
+  const lines = parseOrderText("감자 반박스", "tc_a", products, prices);
+  expect(lines[0].productId).toBe("rp07");
+  expect(lines[0].quantity).toBe(null);
+  expect(lines[0].status).toBe("qty_uncertain");
+});
+
+test("[W13 고정] '팽이버섯다섯봉' — 붙여쓴 한글 수사는 수량 불확실", () => {
+  const lines = parseOrderText("팽이버섯다섯봉", "tc_a", products, prices);
+  expect(lines[0].productId).toBe("rp05");
+  expect(lines[0].quantity).toBe(null);
+  expect(lines[0].status).toBe("qty_uncertain");
+});

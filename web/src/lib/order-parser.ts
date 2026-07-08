@@ -46,9 +46,10 @@ const KOR_NUM = ["한", "두", "세", "네", "다섯", "여섯", "일곱", "여�
 const VAGUE = ["조금", "조큼", "약간", "많이", "적당", "대충", "큰거", "작은거", "큰 거", "작은 거", "큰걸", "큰거로"];
 // 연결어 — 한 줄 다품목 분리 보조
 const CONNECTORS = /(이랑|랑|하고|그리고|및)/g;
-// 후행 군말/조사/존댓말
-const POLITE = ["부탁해요", "부탁드려요", "부탁", "주세요", "해주세요", "주라", "요"];
-const TRAILING_PARTICLES = ["으로", "로", "도"];
+// 후행 군말/조사/존댓말 — '이요'는 '요'보다 먼저 지워야 '이'가 남지 않는다(현장 종결어미).
+const POLITE = ["이요", "부탁해요", "부탁드려요", "부탁", "주세요", "해주세요", "주라", "요"];
+// 후행 조사(단독 토큰 끝). '이/가/을/를'은 오이 등 어미 충돌 위험이라 제외.
+const TRAILING_PARTICLES = ["으로", "로", "는", "은", "도"];
 
 // 측정(규격성) 단위 — "1kg", "100L"처럼 숫자와 붙으면 수량이 아니라 규격일 가능성이 높다.
 // 수량 선택 시 우선순위를 낮춘다(개선 1차: t11 규격 숫자 오인).
@@ -153,10 +154,9 @@ function pickQuantityCluster(segment: string): QuantityCluster | null {
     raw: m[1],
     unit: m[2] ? normalizeUnit(m[2]) : null,
   }));
-  const isMeasure = (u: string | null) => u !== null && MEASURE_UNITS.includes(u.toLowerCase());
-  const countUnit = clusters.find((c) => c.unit !== null && !isMeasure(c.unit));
+  const countUnit = clusters.find((c) => c.unit !== null && !isMeasureUnit(c.unit));
   const bare = clusters.find((c) => c.unit === null);
-  const measure = clusters.find((c) => isMeasure(c.unit));
+  const measure = clusters.find((c) => isMeasureUnit(c.unit));
   return countUnit ?? bare ?? measure ?? null;
 }
 
@@ -168,10 +168,37 @@ function extractUnit(segment: string, fallback: string, clusterUnit: string | nu
   return fallback;
 }
 
+const isMeasureUnit = (u: string | null) =>
+  u !== null && MEASURE_UNITS.includes(u.toLowerCase());
+
+/**
+ * 한 줄에 쉼표/연결어 없이 공백으로 나열한 다품목을 분리한다(현장 카톡 패턴).
+ * "세척숙주 3박스 청경채 2박스" → ["세척숙주 3박스", "청경채 2박스"].
+ * 기준: 수량단위(측정단위 kg/g/L/ml 제외) 결합 클러스터가 2개 이상이면, 마지막을 제외한
+ * 각 수량단위 클러스터 끝에서 자른다. "청양고추 1kg 2봉"은 수량단위가 2봉 하나뿐이라 분리 안 함(규격+수량 유지).
+ */
+function splitByCountClusters(segment: string): string[] {
+  const ends: number[] = [];
+  for (const m of segment.matchAll(numUnitReGlobal)) {
+    const unit = m[2] ? normalizeUnit(m[2]) : null;
+    if (unit && !isMeasureUnit(unit)) ends.push((m.index ?? 0) + m[0].length);
+  }
+  if (ends.length < 2) return [segment];
+  const parts: string[] = [];
+  let start = 0;
+  for (let i = 0; i < ends.length - 1; i++) {
+    parts.push(segment.slice(start, ends[i]));
+    start = ends[i];
+  }
+  parts.push(segment.slice(start));
+  return parts.map((p) => p.trim()).filter((p) => p.length > 0);
+}
+
 function splitSegments(rawText: string): string[] {
   return rawText
     .split(/\r?\n/)
     .flatMap((line) => line.replace(CONNECTORS, ",").split(/[,，]/))
+    .flatMap((segment) => splitByCountClusters(segment.trim()))
     .map((segment) => segment.trim())
     .filter((segment) => segment.length > 0);
 }
