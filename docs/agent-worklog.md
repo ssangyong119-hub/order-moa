@@ -1926,3 +1926,10 @@ W20 초안(`docs/order-moa-catalog-real-draft.json`, 1590품목)을 앱에서 �
 
 - 0009 Supabase 적용(사용자, Codex 승인 후) → **기존 W21 import분은 출고단가 비어 있으므로 같은 카탈로그 재import 필요**(guide-apply-0009). 로그인 모드 소량 smoke는 W21-C 절차와 함께.
 - Codex 검수: (a) base_sale_price를 products에 둔 설계 동의, (b) 0009 CHECK/폴백 승인, (c) 3단 컬럼 폴백(현재 0009 미적용 창구간) 수용 여부.
+
+### 2026-07-09 후속 — Codex 검수 리뷰 + 디버깅검사(Claude, 미커밋)
+- **Codex 검수 리뷰**: 커밋 `222920a`에 Codex가 `docs/db-schema-definition.md`를 보정(products에 `base_sale_price`·`source_code`·`category` 행/DDL 추가, Phase 2(0007~0009) 문구, 단가 우선순위 명시)한 것 확인 — 스키마 문서와 실제 마이그레이션 정합, 정확. NEXT-SESSION/worklog 문구 정리도 사실과 일치.
+- **디버깅검사에서 버그 1건 발견·수정(미커밋)**: 파싱 화면 **"변경 단가 전체 저장"**이 품목 기본 출고단가(priceSource "base")로만 뜬(사용자 미수정) 라인까지 `customer_prices`에 저장하던 문제. W22 전엔 그 라인이 0원이라 `unitPrice>0` 필터에서 빠졌는데, base_sale_price fallback으로 값이 채워지자 "변경 단가"가 아님에도 일괄 저장에 휩쓸림 → base_sale_price 취지(customer_prices 남발 방지)·버튼 라벨과 충돌.
+  - 수정: `price-store.ts` `collectPriceChanges`에서 `priceSource === "base"` 라인 제외(+`PriceChangeLine.priceSource` 필드). 사용자가 그 값을 **직접 고치면** priceSource가 지워져 저장 대상이 되고, **개별 '이 단가 저장'**(savePrice)은 별도 경로라 그대로 동작. 테스트 1건 추가.
+- 검증(수정 후): root `npm test` 5/5 · web `npm test` **150/150** · `npm run build` 성공 · `npm audit --audit-level=low` 0 · `git diff --check` clean. 진행판 3종 재생성(W22 verify에 디버깅검사 메모).
+- 변경 파일(미커밋): `web/src/lib/price-store.ts`, `web/src/lib/price-store.test.ts`, `docs/agent-worklog.md`, 진행판 3종(json/html/xlsx). **Claude 커밋/푸시 안 함 — Codex 검수 후 반영.**

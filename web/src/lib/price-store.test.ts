@@ -49,6 +49,21 @@ test("collectPriceChanges: 변경/신규만 추리고 0원·미매칭·동일값
   expect(conflicts).toEqual([]);
 });
 
+test("collectPriceChanges(W22): 품목 기본 출고단가 fallback 라인(priceSource=base)은 일괄 저장 제외", () => {
+  // p2가 거래처 단가 없이 기본가 3000으로 떴을 뿐(사용자 미수정) → customer_prices에 안 넣는다.
+  const lines = [
+    { productId: "p1", productName: "콩나물", unitPrice: 5000, priceSource: "customer" as const }, // 변경 → 저장
+    { productId: "p2", productName: "두부", unitPrice: 3000, priceSource: "base" as const }, // 기본가 fallback → 제외
+  ];
+  const { changes } = collectPriceChanges(lines, prices, "c1");
+  expect(changes).toEqual([{ customerId: "c1", productId: "p1", productName: "콩나물", price: 5000 }]);
+  // 사용자가 그 기본가를 직접 고치면(priceSource 지워짐) 다시 저장 대상이 된다.
+  const edited = [{ productId: "p2", productName: "두부", unitPrice: 3200 }];
+  expect(collectPriceChanges(edited, prices, "c1").changes).toEqual([
+    { customerId: "c1", productId: "p2", productName: "두부", price: 3200 },
+  ]);
+});
+
 test("collectPriceChanges: 기존과 같은 값은 저장 대상 아님", () => {
   const lines = [{ productId: "p1", productName: "콩나물", unitPrice: 4500 }]; // c1 기존 4500과 동일
   expect(collectPriceChanges(lines, prices, "c1").changes).toEqual([]);

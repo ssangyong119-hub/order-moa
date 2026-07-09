@@ -57,13 +57,34 @@
   "foundation": {
     "title": "완료된 기반 (여기까지 왔습니다)",
     "items": [
-      { "item": "앱 뼈대 + 문서 설계 (단위 1~5)", "plain": "Next.js 앱 틀, DB 장부 양식/잠금 규칙 설계, 화면 설계, 정적 데모, 이카운트 벤치마크 반영" },
-      { "item": "핵심 흐름 데모 (단위 6~7)", "plain": "붙여넣기→파싱→확정→합산표→명세서가 화면에서 돌아감. 복사용 발주 문장 포함" },
-      { "item": "로그인·회사·데이터 잠금 (8a)", "plain": "로그인, 회사 만들기, 회사별 데이터 격리를 실제로 검증 완료 (다른 회사 데이터는 0건 조회, 위조 저장은 DB가 거부)" },
-      { "item": "주문 DB 저장 실측 (8b/W08)", "plain": "확정한 주문이 DB에 저장되고, 새로고침 후 주문 목록에 남는 것을 실제 로그인 상태에서 확인 완료" },
-      { "item": "파서 현장 보강", "plain": "키로/장/모 단위, 규격 숫자 구분(청양고추 1kg 2봉), 숙주처럼 여러 후보가 잡히면 사용자 확인, 실제 발주 예시 테스트" },
-      { "item": "업무 화면 정리", "plain": "좌측 사이드바 메뉴, 품목 검색, 미매칭 품목 즉석 등록, 매입처별 발주 문장(체크한 품목만), 명세서 빈행/인쇄 보정" },
-      { "item": "헌장/로드맵 고정 (W01)", "plain": "앞으로의 발전 방향을 담은 헌장 4종 문서를 확정하고 커밋(fc59baa)" }
+      {
+        "item": "앱 뼈대 + 문서 설계 (단위 1~5)",
+        "plain": "Next.js 앱 틀, DB 장부 양식/잠금 규칙 설계, 화면 설계, 정적 데모, 이카운트 벤치마크 반영"
+      },
+      {
+        "item": "핵심 흐름 데모 (단위 6~7)",
+        "plain": "붙여넣기→파싱→확정→합산표→명세서가 화면에서 돌아감. 복사용 발주 문장 포함"
+      },
+      {
+        "item": "로그인·회사·데이터 잠금 (8a)",
+        "plain": "로그인, 회사 만들기, 회사별 데이터 격리를 실제로 검증 완료 (다른 회사 데이터는 0건 조회, 위조 저장은 DB가 거부)"
+      },
+      {
+        "item": "주문 DB 저장 실측 (8b/W08)",
+        "plain": "확정한 주문이 DB에 저장되고, 새로고침 후 주문 목록에 남는 것을 실제 로그인 상태에서 확인 완료"
+      },
+      {
+        "item": "파서 현장 보강",
+        "plain": "키로/장/모 단위, 규격 숫자 구분(청양고추 1kg 2봉), 숙주처럼 여러 후보가 잡히면 사용자 확인, 실제 발주 예시 테스트"
+      },
+      {
+        "item": "업무 화면 정리",
+        "plain": "좌측 사이드바 메뉴, 품목 검색, 미매칭 품목 즉석 등록, 매입처별 발주 문장(체크한 품목만), 명세서 빈행/인쇄 보정"
+      },
+      {
+        "item": "헌장/로드맵 고정 (W01)",
+        "plain": "앞으로의 발전 방향을 담은 헌장 4종 문서를 확정하고 커밋(fc59baa)"
+      }
     ]
   },
   "workItems": [
@@ -76,7 +97,12 @@
       "why": "세션이 바뀌어도 방향이 흔들리지 않게 하는 기준점. 모든 작업의 차수(1차/2차) 판단 기준.",
       "prereq": "없음",
       "verify": "fc59baa 커밋 확인. 기능정의서/DB스키마/화면설계/단위8 문서가 헌장과 모순 없는지 확인(2026-07-07 정렬 완료).",
-      "docs": ["docs/order-moa-system-meta-prompt.md", "docs/order-moa-expanded-roadmap.md", "docs/order-moa-module-map.md", "docs/order-moa-ai-working-rules.md"]
+      "docs": [
+        "docs/order-moa-system-meta-prompt.md",
+        "docs/order-moa-expanded-roadmap.md",
+        "docs/order-moa-module-map.md",
+        "docs/order-moa-ai-working-rules.md"
+      ]
     },
     {
       "id": "W02",
@@ -87,7 +113,11 @@
       "why": "샘플 데모에서 실제 운영 도구로 넘어가는 첫 단추. 내 거래처를 넣어야 발주 붙여넣기가 진짜 일이 됩니다.",
       "prereq": "없음 (DB 테이블·잠금 규칙은 이미 준비됨). page.tsx 화면 분리와 함께 진행 권장.",
       "verify": "거래처 추가/수정/보관 화면 구현. web npm test 83/83 + build 통과. Supabase 실사용 새로고침 확인은 다음 현장 실측에서 진행.",
-      "docs": ["web/src/app/page.tsx", "web/src/lib/order-store.ts", "docs/screen-specification.md(S5)"]
+      "docs": [
+        "web/src/app/page.tsx",
+        "web/src/lib/order-store.ts",
+        "docs/screen-specification.md(S5)"
+      ]
     },
     {
       "id": "W03",
@@ -98,7 +128,11 @@
       "why": "파싱 정확도의 핵심이 별칭 사전입니다. 사용자가 자기 현장 용어를 등록할 수 있어야 미매칭이 줄어듭니다.",
       "prereq": "W02와 같은 화면 틀 재사용(거래처 먼저 만들면 빠름).",
       "verify": "품목/별칭 추가 후 발주 붙여넣기에서 바로 매칭되는지. 중복 별칭 경고. 테스트+빌드 통과.",
-      "docs": ["web/src/app/page.tsx", "web/src/lib/order-store.ts", "docs/screen-specification.md(S6)"]
+      "docs": [
+        "web/src/app/page.tsx",
+        "web/src/lib/order-store.ts",
+        "docs/screen-specification.md(S6)"
+      ]
     },
     {
       "id": "W04",
@@ -109,7 +143,11 @@
       "why": "단가가 등록돼 있어야 붙여넣기만으로 금액까지 자동 완성됩니다. 0원 경고를 줄이는 길.",
       "prereq": "W02(거래처)·W03(품목)이 있어야 단가 조합을 만들 수 있음.",
       "verify": "거래처 선택→품목별 단가 입력/수정→다음 발주에 자동 적용. 음수 차단. 테스트+빌드 통과.",
-      "docs": ["web/src/app/page.tsx", "web/src/lib/order-store.ts", "docs/screen-specification.md(S7)"]
+      "docs": [
+        "web/src/app/page.tsx",
+        "web/src/lib/order-store.ts",
+        "docs/screen-specification.md(S7)"
+      ]
     },
     {
       "id": "W05",
@@ -120,7 +158,11 @@
       "why": "매입처별 발주 문장이 오더모아의 강점인데, 그 근거가 DB에 없으면 반쪽 기능입니다. 8c 전에 하는 것을 권장.",
       "prereq": "완료 — 0004_suppliers.sql Supabase 적용됨.",
       "verify": "2026-07-07 사용자가 SQL Editor에서 적용, Table Editor에서 ordermoa_suppliers 테이블 확인. RLS 4정책+교차회사 트리거 포함.",
-      "docs": ["docs/order-moa-system-meta-prompt.md(§6.4)", "docs/db-schema-definition.md", "web/supabase/migrations/"]
+      "docs": [
+        "docs/order-moa-system-meta-prompt.md(§6.4)",
+        "docs/db-schema-definition.md",
+        "web/supabase/migrations/"
+      ]
     },
     {
       "id": "W06",
@@ -131,7 +173,11 @@
       "why": "이게 저장돼야 합산표의 매입처별 발주 문장이 새로고침 후에도 똑같이 나옵니다.",
       "prereq": "완료 — W05 적용과 함께 동작.",
       "verify": "2026-07-07 실측: 로그인 후 샘플 시드에 매입처 포함 설치, 주문·화면 F5 후 유지 확인. web npm test 83/83 + build 통과.",
-      "docs": ["web/src/lib/order-store.ts", "web/src/lib/product-registration.ts", "web/src/lib/aggregate.ts"]
+      "docs": [
+        "web/src/lib/order-store.ts",
+        "web/src/lib/product-registration.ts",
+        "web/src/lib/aggregate.ts"
+      ]
     },
     {
       "id": "W07",
@@ -142,7 +188,10 @@
       "why": "매입처가 바뀌거나 늘어날 때 개발자 없이 사장님이 직접 고칠 수 있어야 합니다.",
       "prereq": "W05·W06 + 기준정보 화면 틀(W02~W04).",
       "verify": "매입처 추가/이름 수정→발주 문장 섹션 이름 즉시 반영. 테스트+빌드 통과.",
-      "docs": ["web/src/app/page.tsx", "docs/screen-specification.md(S15)"]
+      "docs": [
+        "web/src/app/page.tsx",
+        "docs/screen-specification.md(S15)"
+      ]
     },
     {
       "id": "W08",
@@ -153,7 +202,10 @@
       "why": "'저장된다'를 코드가 아니라 실사용으로 증명하는 마지막 단계. 이게 통과해야 8c(저장 데이터 활용)에 의미가 생깁니다.",
       "prereq": "완료 — 매직링크 rate limit은 비밀번호 로그인(a696a36)으로 해결.",
       "verify": "2026-07-07 실측 성공: 비밀번호 로그인 → 발주 여러 건 확정 → F5 후 주문 목록 유지.",
-      "docs": ["docs/task-prompt-unit-8-supabase-persistence-flow.md", "web/src/lib/order-store.ts"]
+      "docs": [
+        "docs/task-prompt-unit-8-supabase-persistence-flow.md",
+        "web/src/lib/order-store.ts"
+      ]
     },
     {
       "id": "W09",
@@ -164,7 +216,12 @@
       "why": "\"내가 뭐라고 보냈는데?\" 분쟁이나 파싱 실수 확인 때 원문이 근거가 됩니다. 원문은 개인정보일 수 있어 삭제 가능해야 합니다.",
       "prereq": "완료 — W08(저장 실측) 통과, 0006_order_import_link.sql Supabase 적용 완료.",
       "verify": "2026-07-08 DB 실측: 로그인 상태에서 발주 확정→주문 상세 원문 보기→원문 삭제→F5 후 삭제 상태 유지, 주문/금액/명세서 유지 확인.",
-      "docs": ["web/src/lib/order-store.ts", "web/src/app/page.tsx", "web/supabase/migrations/0006_order_import_link.sql", "docs/guide-apply-0006-order-import-link.md"]
+      "docs": [
+        "web/src/lib/order-store.ts",
+        "web/src/app/page.tsx",
+        "web/supabase/migrations/0006_order_import_link.sql",
+        "docs/guide-apply-0006-order-import-link.md"
+      ]
     },
     {
       "id": "W10",
@@ -175,7 +232,11 @@
       "why": "어제 발주를 다시 봐야 할 때, 앱을 껐다 켜도 합산표가 나와야 진짜 장부입니다.",
       "prereq": "완료 — W08(저장 실측). 합산 계산 함수 기존 것, orders 상태가 DB 모드에서 loadOrders 결과라 별도 재조회 로직 불필요.",
       "verify": "데모 실측(2026-07-08): 날짜/거래처 필터로 주문 건수·품목 합산 확인, 빈 조건 안내+필터 초기화 동작. DB: orders=loadOrders라 F5 시 로드 이펙트가 동일 주문 재조회→같은 표(W08/W09에서 loadOrders F5 유지 실측 완료). 금액은 저장된 order_items 스냅샷만 사용(현재 단가표 재조회 없음).",
-      "docs": ["web/src/lib/aggregate.ts", "web/src/lib/order-store.ts", "web/src/app/page.tsx"]
+      "docs": [
+        "web/src/lib/aggregate.ts",
+        "web/src/lib/order-store.ts",
+        "web/src/app/page.tsx"
+      ]
     },
     {
       "id": "W11",
@@ -186,7 +247,12 @@
       "why": "거래처가 \"지난주 명세서 다시 주세요\" 할 때 필요합니다. 확정 시점 금액 보존은 헌장의 불변 규칙. 실제 출력물처럼 하단이 깔끔해야 씀.",
       "prereq": "완료 — W08(저장). 거래명세서 화면은 이미 존재(주문 목록→보기).",
       "verify": "데모 실측(2026-07-08): 6품목 명세서에서 표 선 연결·합계 tfoot 정렬(76,000)·비고/인수확인 마감·15행 채움 확인, 콘솔 0. 금액은 order.total(저장 스냅샷). DB 재출력 F5는 loadOrders 경로(W08/W09 검증분).",
-      "docs": ["web/src/lib/delivery-note.ts", "web/src/app/page.tsx", "web/src/app/globals.css", "docs/delivery-note-print-spec.md"]
+      "docs": [
+        "web/src/lib/delivery-note.ts",
+        "web/src/app/page.tsx",
+        "web/src/app/globals.css",
+        "docs/delivery-note-print-spec.md"
+      ]
     },
     {
       "id": "W12",
@@ -197,7 +263,12 @@
       "why": "월말 '거래처별 이번 달 얼마 팔았나' 확인용 근거 숫자. 별도 계산 없이 저장된 주문에서 바로 나옵니다.",
       "prereq": "완료 — W08(저장). loadOrders가 전체 확정 주문을 주므로 그 order.total을 월·거래처로 집계.",
       "verify": "데모 실측(2026-07-08): 2026-07 발주 2건→가람식당 76,000·한빛카페 49,400·전체 125,400 확인. 단가표 콩나물 99,999원 변경 후에도 월 합계 불변(스냅샷). 빈 월 안내. 정렬 금액 내림차순. 콘솔 0.",
-      "docs": ["web/src/lib/monthly-summary.ts", "web/src/app/monthly-summary-view.tsx", "web/src/app/page.tsx", "docs/function-specification.md(F12, §5.2)"]
+      "docs": [
+        "web/src/lib/monthly-summary.ts",
+        "web/src/app/monthly-summary-view.tsx",
+        "web/src/app/page.tsx",
+        "docs/function-specification.md(F12, §5.2)"
+      ]
     },
     {
       "id": "W13",
@@ -208,7 +279,10 @@
       "why": "샘플로는 못 잡는 현장 표현(오타·줄임말·규격)이 반드시 나옵니다. 손님 받기 전 마지막 관문.",
       "prereq": "W02~W04(내 품목·별칭·단가 등록 가능해야 진짜 테스트가 됨).",
       "verify": "1차(2026-07-08): 현장식 문장 검증→파서 보강 2건(한 줄 공백/붙여쓰기 다품목 분리·뒤 품목 유실 방지, 종결어미 이요·조사 는/은 제거) + fixture 11건(web 128). 브라우저 데모 smoke 2건(확정→명세서→합산표). 실제 수령 발주 확보 시 라운드 반복.",
-      "docs": ["docs/order-moa-real-order-test-plan.md", "web/src/lib/order-parser.ts"]
+      "docs": [
+        "docs/order-moa-real-order-test-plan.md",
+        "web/src/lib/order-parser.ts"
+      ]
     },
     {
       "id": "W17",
@@ -219,7 +293,11 @@
       "why": "사장님이 실발주 테스트에서 바로 느낀 불편 3가지(문장 형식, 누락 걱정, 매입처 구분)를 한 번에 해결. 전부 화면 작업이라 DB 변경 없음.",
       "prereq": "없음. 설계 확정: docs/order-moa-feedback-design-2026-07-07.md (§2 F1~F4, §6 Codex 프롬프트).",
       "verify": "개별/전체 복사 문장 형식 테스트, 카운터·경고·뱃지 동작, 인쇄 시 배경색 제거, 모바일 390px. 테스트+빌드 통과.",
-      "docs": ["docs/order-moa-feedback-design-2026-07-07.md", "web/src/lib/aggregate.ts", "web/src/app/page.tsx"]
+      "docs": [
+        "docs/order-moa-feedback-design-2026-07-07.md",
+        "web/src/lib/aggregate.ts",
+        "web/src/app/page.tsx"
+      ]
     },
     {
       "id": "W18",
@@ -230,7 +308,11 @@
       "why": "실사용 불편 3가지 — 어제 발주 날짜 못 바꿈, 단가 한 줄씩 저장 번거로움, 주문 목록이 전부 섞여 보임. 합산표·월합계는 전역 orders 그대로 써서 안 깨지게.",
       "prereq": "W08~W12(저장 주문 흐름).",
       "verify": "데모 실측(2026-07-08): KST 주문일·어제로 확정→목록 해당 날짜, 단가 2개 변경→Enter 이동→일괄저장(2)→재파싱 자동적용, 목록 오늘/전체/빈상태, 합산표·월합계 무영향. 순수함수 테스트(todayKst 3·collectPriceChanges 3). root5·web117·build·audit0.",
-      "docs": ["web/src/lib/date-utils.ts", "web/src/lib/price-store.ts", "web/src/app/page.tsx"]
+      "docs": [
+        "web/src/lib/date-utils.ts",
+        "web/src/lib/price-store.ts",
+        "web/src/app/page.tsx"
+      ]
     },
     {
       "id": "W19",
@@ -241,7 +323,12 @@
       "why": "품목이 늘면 종류별로 묶어 봐야 관리·발주가 편합니다. 사장님 실사용 피드백. 스키마가 필요해 별도 세션으로 분리했고, 컬럼 1개라 위험 낮음.",
       "prereq": "W03(품목 관리). 0007 적용은 Codex 승인 게이트.",
       "verify": "코드 완료(2026-07-09): 데모 smoke — 목록 카테고리 표시·필터(냉식 5종)·신규 육류 품목 추가·회귀(발주→확정→합산표) 정상, 콘솔 앱오류 0. TDD web 128→133. 0007 미적용 DB 폴백(안 깨짐). 적용 후 DB 실측은 guide-apply-0007 가이드 체크리스트. 스냅샷·집계 무변경.",
-      "docs": ["web/src/lib/product-category.ts", "web/src/lib/product-store.ts", "web/supabase/migrations/0007_product_category.sql", "docs/guide-apply-0007-product-category.md"]
+      "docs": [
+        "web/src/lib/product-category.ts",
+        "web/src/lib/product-store.ts",
+        "web/supabase/migrations/0007_product_category.sql",
+        "docs/guide-apply-0007-product-category.md"
+      ]
     },
     {
       "id": "W20",
@@ -252,7 +339,11 @@
       "why": "실 베타는 품목 수가 많아 샘플 33종으론 부족. 사용자 결정: 상호는 제외하되 품목·단위·단가는 실제 엑셀 패턴 우선. import 전에 검수 가능한 산출물이 있어야 안전.",
       "prereq": "원본 엑셀은 저장소 밖. 추출 스크립트만 커밋. import/DB 반영은 W21(Codex 승인).",
       "verify": "scripts/extract-real-catalog.py(self-check 6종) → 초안 JSON 1590품목. 식별정보 자체 스캔 0건(괄호 화이트리스트로 공급사/브랜드 제거). 카테고리 자동 60.8%(나머지 needsReview). 관찰: 다규격/다단위 210그룹=Phase3 근거, 조미료/가공은 6종 밖(기타). 앱 코드 무변경 → web 133 그대로.",
-      "docs": ["scripts/extract-real-catalog.py", "docs/order-moa-catalog-real-draft.json", "docs/agent-worklog.md"]
+      "docs": [
+        "scripts/extract-real-catalog.py",
+        "docs/order-moa-catalog-real-draft.json",
+        "docs/agent-worklog.md"
+      ]
     },
     {
       "id": "W21",
@@ -263,7 +354,12 @@
       "why": "샘플 33종으론 부족한 현장 품목을, 검수를 거쳐 안전하게 기준정보로 올리기 위함. 잘못된 대량 반영·중복 품목을 막는 게 핵심.",
       "prereq": "W20 초안. 0007(카테고리)+0008(source_code) SQL Editor 적용 완료(사용자 확인). Usage 확인 결과 용량 여유 있음 — 전체 반영 리스크는 쿼터보다 중복명/검토필요 데이터 품질.",
       "verify": "2026-07-09: catalog-import.ts/test + catalog-import-view.tsx. 데모 smoke — 업로드 8건→기존일치/중복명/검토 뱃지, 중복명 동시선택 경고+차단, 신규 4건 반영→품목관리·파서 매칭, 앱오류 0. W21-B: applyCatalogImportToDb 추가(source_code 멱등 재분류, 200건 배치, 별칭 upsert, 반영 후 reload). 사용자 DB 소량 실측: 품목 반영/F5 유지/재반영 중복 없음/파싱 매칭 확인.",
-      "docs": ["web/src/lib/catalog-import.ts", "web/src/app/catalog-import-view.tsx", "web/supabase/migrations/0008_product_source_code.sql", "docs/guide-apply-0008-product-source-code.md"]
+      "docs": [
+        "web/src/lib/catalog-import.ts",
+        "web/src/app/catalog-import-view.tsx",
+        "web/supabase/migrations/0008_product_source_code.sql",
+        "docs/guide-apply-0008-product-source-code.md"
+      ]
     },
     {
       "id": "W22",
@@ -273,8 +369,13 @@
       "plain": "엑셀 출고단가를 품목 기본 출고단가(base_sale_price)로 저장하고, 거래처별 단가가 없을 때 발주 파싱 금액 fallback으로 씁니다. 거래처별 단가(customer_prices)가 있으면 항상 우선하고, customer_prices를 자동 생성하지는 않습니다.",
       "why": "베타 검증에서 품목은 매칭되지만 판매금액이 전부 0원이면 주문/명세서/합산표 검증이 어렵습니다. 다단위(product_units) 전 단계의 최소 구조로 기본 출고단가 자리를 마련합니다.",
       "prereq": "W21 카탈로그 import. 0009_product_base_sale_price.sql Supabase 적용 후 같은 카탈로그를 재import하면 source_code 멱등으로 기존 품목의 base_sale_price가 채워짐.",
-      "verify": "코드 검증: resolveSalePrice 단가 우선순위(customer > base > none), 파서 fallback, catalog import repSalePrice→base_sale_price, product-store 매핑 테스트. 적용 후 실측: 거래처 단가 없는 품목이 기본 단가 적용으로 금액 표시, 거래처별 단가가 있으면 우선, customer_prices 새 row 없음, 과거 주문 스냅샷 불변.",
-      "docs": ["web/src/lib/domain/index.ts", "web/src/lib/order-parser.ts", "web/supabase/migrations/0009_product_base_sale_price.sql", "docs/guide-apply-0009-product-base-sale-price.md"]
+      "verify": "코드 검증: resolveSalePrice 단가 우선순위(customer > base > none), 파서 fallback, catalog import repSalePrice→base_sale_price, product-store 매핑 테스트. 적용 후 실측: 거래처 단가 없는 품목이 기본 단가 적용으로 금액 표시, 거래처별 단가가 있으면 우선, customer_prices 새 row 없음, 과거 주문 스냅샷 불변. [디버깅검사] 파싱 화면 \"변경 단가 전체 저장\"이 품목 기본 출고단가로만 뜬(사용자 미수정) 라인까지 customer_prices에 쓸어담던 문제 수정 — priceSource=\"base\"는 일괄 저장 제외(개별 저장·직접 수정은 그대로). price-store 테스트 추가, web 150/150.",
+      "docs": [
+        "web/src/lib/domain/index.ts",
+        "web/src/lib/order-parser.ts",
+        "web/supabase/migrations/0009_product_base_sale_price.sql",
+        "docs/guide-apply-0009-product-base-sale-price.md"
+      ]
     },
     {
       "id": "W14",
@@ -285,7 +386,9 @@
       "why": "지금 양식도 쓸 수는 있어서 1차 완성 뒤로 미룹니다. PDF 파일 생성은 2차.",
       "prereq": "1차 완료(W02~W13). 기준: delivery-note-print-spec.md.",
       "verify": "인쇄 미리보기에서 A4 한 장 정돈 확인, 품목 적을 때 빈행 유지.",
-      "docs": ["docs/delivery-note-print-spec.md"]
+      "docs": [
+        "docs/delivery-note-print-spec.md"
+      ]
     },
     {
       "id": "W15",
@@ -296,7 +399,12 @@
       "why": "공유 DB가 막히기 전에 손에 파일로 데이터를 확보(안전망) + 전용 프로젝트 분리의 첫 단계. 초기 세팅용 엑셀 업로드는 후순위.",
       "prereq": "완료 — 기준정보 CRUD(W02~W04·W07) + 저장 주문(W08~W12).",
       "verify": "데모 실측(2026-07-08): 6종 CSV 다운로드 가로채 내용 확인(escape·BOM·스냅샷 금액). 콤마 포함 메모/품목요약 정상 quoting, CSV 인젝션 방어. 가져오기 검증은 미구현(후순위).",
-      "docs": ["web/src/lib/csv-export.ts", "web/src/app/page.tsx", "web/src/app/monthly-summary-view.tsx", "docs/task-prompt-W15-export.md"]
+      "docs": [
+        "web/src/lib/csv-export.ts",
+        "web/src/app/page.tsx",
+        "web/src/app/monthly-summary-view.tsx",
+        "docs/task-prompt-W15-export.md"
+      ]
     },
     {
       "id": "W16",
@@ -307,25 +415,77 @@
       "why": "1차 주문 데이터가 4주 이상 실사용으로 쌓인 뒤에 만들어야 추측이 아닌 설계가 됩니다. 근거 데이터(주문 금액)는 1차부터 이미 보존 중.",
       "prereq": "1차+1.5차 완료 + 실사용 4주. OCR/카톡 자동 읽기/이카운트 연동/직접 발행은 별도로 '제외'(착수 금지).",
       "verify": "착수 시점에 로드맵 2차 선행 조건 재확인.",
-      "docs": ["docs/order-moa-expanded-roadmap.md(2차·제외)"]
+      "docs": [
+        "docs/order-moa-expanded-roadmap.md(2차·제외)"
+      ]
     }
   ],
   "checklist": [
-    { "item": "root npm test", "plain": "정적 데모 회귀 테스트", "result": "통과 5/5" },
-    { "item": "web npm test", "plain": "파서/합산/검색/주문 저장 빌더/거래처·매입처·raw_text·월합계·CSV·KST 날짜·단가 일괄 저장 자동 테스트", "result": "통과 117/117" },
-    { "item": "web npm run build", "plain": "배포용 빌드가 깨지지 않는지", "result": "성공" },
-    { "item": "npm audit --audit-level=low", "plain": "알려진 보안 취약점 검사", "result": "0건" },
-    { "item": "Supabase SQL 0001/0002/0003", "plain": "장부 테이블/RLS/회사생성 함수 설치", "result": "적용 성공" },
-    { "item": "Supabase SQL 0004/0005/0006", "plain": "매입처·연락처·발주 원문 주문 연결", "result": "적용 성공" },
-    { "item": "8a RLS 검증", "plain": "회사 row, anon 차단, policy, A/B 격리, 위조 insert 차단", "result": "통과" },
-    { "item": "민감정보", "plain": "service role key 커밋/번들 포함 여부", "result": "미포함" }
+    {
+      "item": "root npm test",
+      "plain": "정적 데모 회귀 테스트",
+      "result": "통과 5/5"
+    },
+    {
+      "item": "web npm test",
+      "plain": "파서/합산/검색/주문 저장 빌더/거래처·매입처·raw_text·월합계·CSV·KST 날짜·단가 일괄 저장 자동 테스트",
+      "result": "통과 117/117"
+    },
+    {
+      "item": "web npm run build",
+      "plain": "배포용 빌드가 깨지지 않는지",
+      "result": "성공"
+    },
+    {
+      "item": "npm audit --audit-level=low",
+      "plain": "알려진 보안 취약점 검사",
+      "result": "0건"
+    },
+    {
+      "item": "Supabase SQL 0001/0002/0003",
+      "plain": "장부 테이블/RLS/회사생성 함수 설치",
+      "result": "적용 성공"
+    },
+    {
+      "item": "Supabase SQL 0004/0005/0006",
+      "plain": "매입처·연락처·발주 원문 주문 연결",
+      "result": "적용 성공"
+    },
+    {
+      "item": "8a RLS 검증",
+      "plain": "회사 row, anon 차단, policy, A/B 격리, 위조 insert 차단",
+      "result": "통과"
+    },
+    {
+      "item": "민감정보",
+      "plain": "service role key 커밋/번들 포함 여부",
+      "result": "미포함"
+    }
   ],
   "excluded": [
-    { "item": "OCR/사진 발주 인식", "plain": "정확도와 운영 리스크가 커서 착수 금지" },
-    { "item": "카카오톡 자동 읽기", "plain": "정책/권한 리스크. 지금은 복사→붙여넣기" },
-    { "item": "이카운트 연동", "plain": "오더모아는 이카운트 앞단 도구 — 전체 대체 아님" },
-    { "item": "세금계산서 직접 발행", "plain": "법적 책임 영역. 근거 데이터 정리(2차)까지만" },
-    { "item": "은행 자동 매칭", "plain": "연동 비용 대비 가치 미검증" },
-    { "item": "전체 재고 ERP(평가·실사)", "plain": "범위 폭발. 3차에 수량 기록만 좁게 검토" }
+    {
+      "item": "OCR/사진 발주 인식",
+      "plain": "정확도와 운영 리스크가 커서 착수 금지"
+    },
+    {
+      "item": "카카오톡 자동 읽기",
+      "plain": "정책/권한 리스크. 지금은 복사→붙여넣기"
+    },
+    {
+      "item": "이카운트 연동",
+      "plain": "오더모아는 이카운트 앞단 도구 — 전체 대체 아님"
+    },
+    {
+      "item": "세금계산서 직접 발행",
+      "plain": "법적 책임 영역. 근거 데이터 정리(2차)까지만"
+    },
+    {
+      "item": "은행 자동 매칭",
+      "plain": "연동 비용 대비 가치 미검증"
+    },
+    {
+      "item": "전체 재고 ERP(평가·실사)",
+      "plain": "범위 폭발. 3차에 수량 기록만 좁게 검토"
+    }
   ]
 }

@@ -60,11 +60,16 @@ export interface PriceChangeLine {
   productId?: string | null;
   productName: string;
   unitPrice: number;
+  /** 단가 출처(W22). "base"=품목 기본 출고단가 fallback(사용자가 안 고침) → 일괄 저장에서 제외. */
+  priceSource?: "customer" | "base";
 }
 
 /**
  * 파싱 라인 중 customer_prices에 저장할 변경분만 추린다.
  * - productId 있고 unitPrice>0 인 라인만
+ * - **품목 기본 출고단가(priceSource "base")로만 채워진 라인은 제외** — 이건 "변경 단가"가 아니라
+ *   거래처 단가가 없어서 뜬 대체값이다. 그대로 일괄 저장하면 customer_prices가 불필요하게 늘어난다.
+ *   (사용자가 그 값을 직접 고치면 priceSource가 지워져 저장 대상이 되고, 개별 '이 단가 저장'은 별도 경로.)
  * - 같은 productId 여러 줄이면 마지막 값으로 통일(conflicts에 품목명 보고)
  * - 기존 단가와 같으면 제외(변경/신규만)
  */
@@ -79,7 +84,7 @@ export function collectPriceChanges(
   // 마지막 값으로 통일 + 여러 줄 다른 값이면 conflict
   const byProduct = new Map<string, { name: string; price: number; multi: boolean; firstPrice: number }>();
   for (const l of lines) {
-    if (!l.productId || !(l.unitPrice > 0)) continue;
+    if (!l.productId || !(l.unitPrice > 0) || l.priceSource === "base") continue;
     const prev = byProduct.get(l.productId);
     if (prev) {
       byProduct.set(l.productId, {

@@ -277,7 +277,7 @@
   <dl>
     <dt>왜 필요한가</dt><dd>베타 검증에서 품목은 매칭되지만 판매금액이 전부 0원이면 주문/명세서/합산표 검증이 어렵습니다. 다단위(product_units) 전 단계의 최소 구조로 기본 출고단가 자리를 마련합니다.</dd>
     <dt>선행 조건</dt><dd>W21 카탈로그 import. 0009_product_base_sale_price.sql Supabase 적용 후 같은 카탈로그를 재import하면 source_code 멱등으로 기존 품목의 base_sale_price가 채워짐.</dd>
-    <dt>확인 방법</dt><dd>코드 검증: resolveSalePrice 단가 우선순위(customer &gt; base &gt; none), 파서 fallback, catalog import repSalePrice→base_sale_price, product-store 매핑 테스트. 적용 후 실측: 거래처 단가 없는 품목이 기본 단가 적용으로 금액 표시, 거래처별 단가가 있으면 우선, customer_prices 새 row 없음, 과거 주문 스냅샷 불변.</dd>
+    <dt>확인 방법</dt><dd>코드 검증: resolveSalePrice 단가 우선순위(customer &gt; base &gt; none), 파서 fallback, catalog import repSalePrice→base_sale_price, product-store 매핑 테스트. 적용 후 실측: 거래처 단가 없는 품목이 기본 단가 적용으로 금액 표시, 거래처별 단가가 있으면 우선, customer_prices 새 row 없음, 과거 주문 스냅샷 불변. [디버깅검사] 파싱 화면 &quot;변경 단가 전체 저장&quot;이 품목 기본 출고단가로만 뜬(사용자 미수정) 라인까지 customer_prices에 쓸어담던 문제 수정 — priceSource=&quot;base&quot;는 일괄 저장 제외(개별 저장·직접 수정은 그대로). price-store 테스트 추가, web 150/150.</dd>
   </dl>
   <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/domain/index.ts</code></li><li><code>web/src/lib/order-parser.ts</code></li><li><code>web/supabase/migrations/0009_product_base_sale_price.sql</code></li><li><code>docs/guide-apply-0009-product-base-sale-price.md</code></li></ul></details>
 </div></div><h2 class="phase">2차</h2><div class="grid">
