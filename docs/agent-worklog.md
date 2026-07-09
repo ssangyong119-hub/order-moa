@@ -1841,3 +1841,44 @@ W20 초안(`docs/order-moa-catalog-real-draft.json`, 1590품목)을 앱에서 �
 ### 남은 실측
 - 코드/테스트/빌드는 통과 대상. 다만 공유 Supabase 대량 insert는 쿼터 부담이 있어, 로그인 모드에서 **10~20건 소량 DB smoke** 후 전체 반영 여부를 결정한다.
 - 확인 포인트: 신규 N건 저장/F5 유지, 같은 JSON 재반영 시 신규 중복 없이 update 처리, 별칭 반영, `customer_prices` 무변화.
+
+## 2026-07-09 Claude (W21-C — 카탈로그 DB 소량 smoke 준비 + 반영 전략 점검)
+
+상태:
+
+- **보류(사용자 실행 대기)** — 실 DB smoke는 로그인(인증)이 필요하나 Claude는 헤드리스라 Supabase 로그인이 불가. RLS가 anon 키만으로는 insert를 막으므로 스크립트 우회도 부적절(비인증 = 실제 경로 검증도 아님). `.env.local`·타 세션 :3000 서버 불가침. → **자동 검증·코드 정적 검증·smoke 준비/절차·전략 판단까지 Claude가 수행하고, 실제 10~20건 반영은 사용자가 로그인 세션에서 실행**한다.
+
+작업 목표:
+
+- W21 import가 로그인 DB 모드에서 안전 동작하는지 소량 검증 준비 + 전체 반영 전략(공유 vs 전용 Supabase) 판단.
+
+수행(Claude):
+
+- `git pull --ff-only`(Already up to date) · 워킹트리 clean · W21-A/B는 커밋 `66d1af2 feat: add catalog import workflow`로 반영됨(`applyCatalogImportToDb`/`planCatalogDbWrite`/`dedupeAliasRows` HEAD에 존재 확인).
+- **자동 검증 전부 통과**: root `npm test` 5/5 · web `npm test` **145/145** · web `npm run build` 성공 · `npm audit --audit-level=low` **0건** · `git diff --check` clean · `git status` clean(origin 동기).
+- **코드 정적 검증(중요 확인 항목 = 코드 레벨 보장)**: import 쓰기 경로(`product-store.ts`/`catalog-import.ts`)에 `customer_prices`·`sale_price`·`repSalePrice` 쓰기 **0건**(등장은 화면표시용 타입/주석뿐). `basePurchasePrice`는 `purchasePrice ?? repPurchasePrice`(입고단가)만 매핑. import는 `ordermoa_products`+`ordermoa_product_aliases`만 건드림 → `order_items.unit_price` 스냅샷 무관. 멱등(`planCatalogDbWrite`)·별칭충돌무시(`dedupeAliasRows`+`upsert ignoreDuplicates`)는 유닛테스트로 보장.
+- **smoke 입력 준비**: `docs/order-moa-catalog-real-draft.json`(1590) 분석 → 시드 44개 이름과 충돌 없고 초안 내 동명 없는 **깨끗한 신규 15건** 선정(비검토 13 + needsReview 2). 코드: `10006,10013,10014,10017,10020,10021,10024,10026,10028,10036,10037,10038,10057,10063,10068`. needsReview 2건=`홍땡초(10063)`,`깨순(10068)`(카테고리/단위 편집 테스트용). 소량 파일은 스크래치패드에 생성(`order-moa-catalog-smoke-15.json`, 미커밋·저장소 밖).
+
+사용자 실행 절차(로그인 세션):
+
+1. `cd web; npm run dev`(포트 3000 타 세션 사용 중이면 `npx next dev -p 3200`; `.env.local` 유지=DB 모드). 비밀번호 로그인.
+2. 데이터 내보내기/가져오기 → 카탈로그 가져오기 → `order-moa-catalog-real-draft.json`(또는 준비된 15건 파일) 업로드.
+3. 위 15코드만 선택(소량 파일이면 "필터 결과 신규 전체 선택"). needsReview 2건은 카테고리/단위 편집해보고 선택.
+4. "선택 N건 DB에 반영" → 요약(신규/수정/별칭/실패 배치) 기록.
+5. 품목·별칭 관리에서 15건 표시 확인 → **F5 후 유지** 확인.
+6. **같은 파일 재업로드→같은 코드 재반영 → 신규 0·수정 15(멱등)** 확인.
+7. 발주 붙여넣기에서 반영 품목명 매칭 확인. 파싱→확정→합산표→명세서 회귀 확인. 콘솔 앱에러 0 확인.
+8. Supabase에서 `base_purchase_price`=입고단가 저장·`source_code`/`category` 저장·`customer_prices` **새 row 없음** 확인.
+
+전략 판단(공유 vs 전용):
+
+- **권장: 15건 smoke로 경로만 검증 → 전체 1590건은 전용 Supabase 분리 후 반영.** 근거: 공유 `yangsan-inventory`에 "Grace period is over"(무료 쿼터) 경고 활성. 1590 insert 자체는 소량(~8배치)이나, 쿼터 소진 시 오더모아+양산재고 양쪽 로그인/저장이 막힐 리스크가 이득보다 큼. CSV 백업 존재로 전용 이전 리스크 낮음(NEXT-SESSION 참고). 로드맵 항목 3과 일치.
+
+진행판:
+
+- `order-moa-progress-data.json` **미변경**(실측 미실행 = 기록할 실측 결과 없음). smoke 실행·결과 확정 후 갱신 판단. → 진행판 재생성 불필요.
+
+남은 이슈:
+
+- 실제 DB smoke 수치(반영 건수/F5/멱등/customer_prices 무변화/회귀/콘솔)는 사용자 실행 후 이 로그에 보완 기록 필요.
+- Codex 검수: (a) 정적 검증 결론 동의 여부, (b) 전용 Supabase 분리 시점 승인, (c) 사용자 smoke 결과 수치 반영 후 진행판 갱신.
