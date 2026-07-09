@@ -1,6 +1,7 @@
 // 오더모아 도메인 타입
 // 기존 정적 MVP(src/domain.js, src/sample-data.js)의 데이터 형태를 TypeScript로 정리한 것.
 // 금액은 KRW 원 단위 정수(integer)로 다룬다 (Codex 승인).
+import type { ProductCategory } from "../product-category";
 
 export interface Customer {
   id: string;
@@ -20,6 +21,8 @@ export interface Product {
   purchaseSupplierName?: string | null;
   /** 기준 매입단가(원, 정수). 예상 마진 표시용 참고값. 미등록(없음)이면 마진 미표시. */
   basePurchasePrice?: number | null;
+  /** 품목 카테고리 6종(Phase 2). 미지정/구 데이터는 '기타'로 폴백. */
+  category?: ProductCategory;
 }
 
 export interface Supplier {

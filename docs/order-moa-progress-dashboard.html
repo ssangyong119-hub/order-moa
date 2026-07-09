@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>오더모아 진행현황 — 2026-07-08</title>
+<title>오더모아 진행현황 — 2026-07-09</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; margin: 0; background: #f6f7f9; color: #202124; line-height: 1.55; }
@@ -52,15 +52,15 @@
   <div class="wrap">
     <h1>오더모아 진행현황</h1>
     <p class="sub">전체 ERP 대체가 아니라, 도소매/식당납품 사장님용 좁은 웹 ERP MVP. 핵심 가치: 카톡/문자 발주를 붙여넣으면 파싱, 합산표, 매입처별 발주 문장, 거래명세서까지 이어지는 것.</p>
-    <p class="sub">기준일 2026-07-08 · 브랜치 <code style="background:#33405f;color:#dfe6f5">codex/integrate-mvp-docs-web</code></p>
+    <p class="sub">기준일 2026-07-09 · 브랜치 <code style="background:#33405f;color:#dfe6f5">codex/integrate-mvp-docs-web</code></p>
   </div>
 </header>
 <div class="wrap">
-  <div class="focus">📌 <strong>지금 하는 일:</strong> W13 실제 발주 테스트 1차 라운드 완료 — 현장식 문장(공백 다품목·붙여쓰기·종결어미·조사·규격숫자)으로 파서 검증. order-parser.ts 최소 보강 2건: (1) 한 줄에 수량단위 클러스터 2개↑면 라인 분리(뒤 품목 조용히 유실되던 치명 문제 해결, 규격+수량은 분리 안 함), (2) 종결어미 이요·조사 는/은 제거. real-order-fixture.test.ts에 W13 섹션 11건 추가 → web 117→128. 마이그레이션·스키마 0, 스냅샷 원칙 유지. 다음: Phase 2(카테고리)·엑셀 가져오기·전용 Supabase 분리.</div>
+  <div class="focus">📌 <strong>지금 하는 일:</strong> Phase 2 W19 — 품목 카테고리 6종(농산물/공산품/냉식/육류/수산/기타). 6종 고정이라 별도 테이블 없이 ordermoa_products.category 컬럼 1개(text NOT NULL DEFAULT &#x27;기타&#x27; CHECK 6종). 마이그레이션 0007 작성 완료, 적용은 Codex 승인 후 SQL Editor(guide-apply-0007-product-category.md). 0007 미적용 DB도 안 깨지게 읽기/쓰기 폴백(isMissingCategoryColumn). 품목·별칭 관리에 카테고리 select·목록·필터. order_items·합산표·명세서·월합계·파서 전부 무변경(스냅샷 무관). 카테고리 상수 단일 소스 product-category.ts. web 128→133, root5·build·audit0. 다음: Phase 3(product_units) 또는 엑셀 가져오기·전용 Supabase 분리.</div>
 
-  <h2>전체 진행률 (작업 보드 18개 기준)</h2>
-  <div class="progressbar"><div style="width:78%"></div></div>
-  <p class="counts">완료 14 · 다음 0 · 보류 2 — 1차 트랙(보류 제외) 14/16 완료</p>
+  <h2>전체 진행률 (작업 보드 19개 기준)</h2>
+  <div class="progressbar"><div style="width:74%"></div></div>
+  <p class="counts">완료 14 · 다음 0 · 보류 2 — 1차 트랙(보류 제외) 14/17 완료</p>
   <div class="legend"><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span><span class="badge" style="background:#fef7e0;color:#946200">다음</span><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span><span class="badge" style="background:#fde8e8;color:#b02a2a">제외</span></div>
 
   <h2>핵심 흐름 (이 순서가 제품의 전부)</h2>

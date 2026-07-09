@@ -9,8 +9,15 @@ import {
   validateProductInput,
   type ProductFormInput,
 } from "@/lib/product-store";
+import { DEFAULT_PRODUCT_CATEGORY, PRODUCT_CATEGORIES } from "@/lib/product-category";
 
-const EMPTY_FORM: ProductFormInput = { name: "", baseUnit: "", basePurchasePrice: "", purchaseSupplierId: "" };
+const EMPTY_FORM: ProductFormInput = {
+  name: "",
+  baseUnit: "",
+  basePurchasePrice: "",
+  purchaseSupplierId: "",
+  category: DEFAULT_PRODUCT_CATEGORY,
+};
 
 interface ProductManagementViewProps {
   products: Product[];
@@ -34,6 +41,7 @@ export function ProductManagementView({
   onRemoveAlias,
 }: ProductManagementViewProps) {
   const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ProductFormInput>(EMPTY_FORM);
   const [aliasInput, setAliasInput] = useState("");
@@ -44,13 +52,14 @@ export function ProductManagementView({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter((p) =>
-      [p.name, p.baseUnit, p.purchaseSupplierName ?? "", ...(p.aliases ?? [])].some((v) =>
+    return products.filter((p) => {
+      if (categoryFilter !== "all" && (p.category ?? DEFAULT_PRODUCT_CATEGORY) !== categoryFilter) return false;
+      if (!q) return true;
+      return [p.name, p.baseUnit, p.category ?? "", p.purchaseSupplierName ?? "", ...(p.aliases ?? [])].some((v) =>
         v.toLowerCase().includes(q),
-      ),
-    );
-  }, [products, query]);
+      );
+    });
+  }, [products, query, categoryFilter]);
 
   function startCreate() {
     setEditingId(null);
@@ -66,6 +75,7 @@ export function ProductManagementView({
       baseUnit: product.baseUnit,
       basePurchasePrice: product.basePurchasePrice ?? "",
       purchaseSupplierId: product.purchaseSupplierId ?? "",
+      category: product.category ?? DEFAULT_PRODUCT_CATEGORY,
     });
     setAliasInput("");
     setError(null);
@@ -168,8 +178,19 @@ export function ProductManagementView({
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="품목명, 별칭, 단위, 매입처 검색"
+              placeholder="품목명, 별칭, 단위, 매입처, 카테고리 검색"
             />
+          </label>
+          <label>
+            카테고리
+            <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+              <option value="all">전체 카테고리</option>
+              {PRODUCT_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </label>
           <div className="customer-list">
             {filtered.map((p) => (
@@ -182,7 +203,7 @@ export function ProductManagementView({
                 <span>
                   <strong>{p.name}</strong>
                   <small>
-                    {p.baseUnit} · {p.purchaseSupplierName || "매입처 미지정"}
+                    {p.category ?? DEFAULT_PRODUCT_CATEGORY} · {p.baseUnit} · {p.purchaseSupplierName || "매입처 미지정"}
                     {(p.aliases ?? []).length > 0 ? ` · 별칭 ${(p.aliases ?? []).length}개` : ""}
                   </small>
                 </span>
@@ -227,6 +248,19 @@ export function ProductManagementView({
                 onChange={(e) => setForm((p) => ({ ...p, baseUnit: e.target.value }))}
                 placeholder="예: 박스, 판, 망"
               />
+            </label>
+            <label>
+              카테고리
+              <select
+                value={form.category ?? DEFAULT_PRODUCT_CATEGORY}
+                onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
+              >
+                {PRODUCT_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
             </label>
             <label>
               기준 매입단가 (선택)

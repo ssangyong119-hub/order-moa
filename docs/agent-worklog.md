@@ -1700,3 +1700,48 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
 - `splitByCountClusters` 분리 기준(수량단위 2개↑)이 실데이터에서 단일 품목을 잘못 쪼갤 여지 — 한 품목에 두 단위 동시표기(`두부 2모 3판`류)는 분리되어 앞부분만 매칭+뒤는 미매칭으로 노출(조용한 유실보단 안전). 필요시 규칙 조정.
 - `TRAILING_PARTICLES` 는/은 추가가 사장님 실제 품목명과 충돌하는지(등록 품목이 는/은으로 끝나면) 검토.
 - [다음] Phase 2(카테고리)·엑셀 가져오기·전용 Supabase 분리. [위험 유지] 공유 쿼터.
+
+## 2026-07-09 Claude (Phase 2 W19 — 품목 카테고리 6종 + 0007 마이그레이션)
+
+품목 카테고리 6종(농산물/공산품/냉식/육류/수산/기타) 도입. **컬럼 1개(별도 테이블 없음)** — 6종 고정·사용자 정의 없어 `ordermoa_products.category text NOT NULL DEFAULT '기타' CHECK(6종)`. 마이그레이션 **0007 작성만**(적용은 Codex 승인 후 사용자가 SQL Editor). Phase 3(다단위·기본/예외 단가)는 백로그 유지·미구현.
+
+### 설계 결정 (컬럼 vs 테이블)
+- **컬럼 채택**: db-schema-definition에 카테고리 테이블 명시 없음 + 6종 고정 → 별도 테이블/FK는 과설계. `products.tax_type text default CHECK(...)` 선례 그대로 재사용. 컬럼이면 RLS(0002 테이블 단위)·교차회사 트리거 **상속**이라 정책 추가 0, backfill은 DEFAULT로 끝. FK 없어 교차회사 트리거도 불필요.
+- **스냅샷 불변**: 카테고리는 품목 마스터 속성 → `order_items`에 저장 안 함. 과거 주문/명세서/월합계/합산표/파서 **전부 무변경**(코드도 안 건드림).
+
+### 마이그레이션 0007 (idempotent)
+`add column if not exists category text` → `set default '기타'` → `update ... where category is null`(backfill) → `set not null` → CHECK 제약은 `do $$ ... pg_constraint 가드 ... $$`(PostgreSQL은 ADD CONSTRAINT IF NOT EXISTS 미지원). 제약명 `ordermoa_products_category_check`. 두 번 실행해도 안전.
+
+### 0007 미적용 DB 방어 (코드+마이그레이션 세트, 0005 패턴)
+- **읽기**(fetchCompanyData/listArchivedProducts): category 포함 select 실패 시 `isMissingCategoryColumn`(42703/PGRST204 + 메시지에 category) 감지 → category 없는 select로 재시도 → 앱 모델은 `기타` 폴백. **적용 전에도 DB 모드가 안 깨짐.**
+- **쓰기**(createProduct/updateProduct): category 포함 insert/update 실패 시 category 키만 빼고 재시도(품목 자체는 저장, 카테고리는 기타). 시드(ensureSeed)도 동일.
+- **즉석 등록**: DB insert에 category를 **아예 안 넣음** → 미적용 DB는 컬럼 없어 통과, 적용 후엔 DB DEFAULT '기타'가 채움(폴백 로직 불필요). 인메모리 product만 '기타'.
+- 단, 가이드(`docs/guide-apply-0007-product-category.md`)에 "0007 적용 후 DB 실측 필수" 명시 — 방어가 적용 필요성을 숨기지 않게.
+
+### 파일
+- 신규: `web/src/lib/product-category.ts`(PRODUCT_CATEGORIES·DEFAULT·isProductCategory·normalizeProductCategory — 단일 소스), `+.test.ts`, `web/supabase/migrations/0007_product_category.sql`, `docs/guide-apply-0007-product-category.md`.
+- 코드: domain/types(Product.category), product-store(normalize/insert/update + isMissingCategoryColumn + PRODUCT_COLS 두 벌 + 폴백), order-store(select/map/seed 폴백), product-registration(즉석 기본 기타), sample-data(33종 카테고리 배정), product-management-view(폼 카테고리 select + 목록 표시 + 카테고리 필터), page.tsx(saveProduct 데모 category·품목 CSV 카테고리 열·내보내기 설명).
+- 문서: db-schema-definition(4.4 category 행), 본 worklog, NEXT-SESSION, progress-data(W19).
+
+### 테스트 (TDD)
+- product-category.test(3): 6종 고정·isProductCategory·normalize 폴백.
+- product-store.test: normalize/insert/update에 category(기존 toEqual 갱신) + isMissingCategoryColumn(42703/PGRST204/메시지/CHECK위반 제외/무관오류).
+- sample-data.test(+1): **모든 sampleProducts.category가 6종 중 하나**(개수 하드코딩 금지) + 농산물·공산품 존재.
+- product-registration.test: 즉석 product category '기타'.
+- RED→GREEN 확인. web **128→133**, root 5/5 불변.
+
+### 브라우저 데모 smoke (localhost:3200, 셸 env 데모모드 — 공유 .env.local 무변경·원복)
+- 품목·별칭 관리: 목록에 카테고리 접두(콩나물 농산물·두부 냉식) · 필터 '냉식'→5종(두부/계란/떡국떡/배추김치/총각김치) · 신규 '삼겹살/kg/육류' 추가→'육류' 필터에 표시·폼 리셋.
+- 회귀: `콩나물 2박스 두부 3판\n미나리 5단`→3행(W13 공백분리 유지)→확정 41,000원→주문목록 오늘(W18)·"콩나물,두부 외 1건". 콘솔 앱오류 0(확장 노이즈만).
+
+### 자체 리뷰 (제품 원칙)
+- ERP 확장 아님(카테고리 6종만·2차 메뉴 추가 없음). 세금/회계마진/재고/OCR/카톡/이카운트 미구현. unit_price 스냅샷·과거 재조회 금지·마진 비저장·raw_text 삭제 원칙 전부 유지. ordermoa_ 접두사. 0007 외 마이그레이션 없음. Phase 3 미구현(백로그).
+
+### 검증
+- root 5/5 · web **133/133** · `npm run build` 성공 · `npm audit --audit-level=low` 0 · `git diff --check` clean. 민감정보 없음.
+
+### Codex 검수 포인트
+- **0007 적용 승인 요청** — 승인 시 사용자가 `docs/guide-apply-0007-product-category.md` 순서로 SQL Editor 적용 후 DB 실측 체크리스트 수행. 적용 전엔 코드가 폴백으로 안 깨지지만 카테고리 저장은 안 됨.
+- `isMissingCategoryColumn` 오검출 방지 확인(CHECK 위반 23514는 false — normalize로 실제 발생 안 함).
+- 샘플에 육류/기타 미사용(현장 데이터가 채움) — 의도된 것.
+- [다음] Phase 3(product_units) 또는 엑셀 가져오기·전용 Supabase 분리. [위험 유지] 공유 쿼터.

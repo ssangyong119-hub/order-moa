@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import {
   friendlyAliasError,
+  isMissingCategoryColumn,
   normalizeProductInput,
   toProductInsert,
   toProductUpdate,
@@ -9,17 +10,20 @@ import {
 } from "./product-store";
 import type { Product } from "./domain/types";
 
-test("normalizeProductInput: 공백 정리 + 단가/매입처 정규화", () => {
+test("normalizeProductInput: 공백 정리 + 단가/매입처/카테고리 정규화", () => {
   expect(
-    normalizeProductInput({ name: " 콩나물 ", baseUnit: " 박스 ", basePurchasePrice: "3500", purchaseSupplierId: "s1" }),
-  ).toEqual({ name: "콩나물", baseUnit: "박스", basePurchasePrice: 3500, purchaseSupplierId: "s1" });
-  // 빈 단가·미지정 매입처는 null
+    normalizeProductInput({ name: " 콩나물 ", baseUnit: " 박스 ", basePurchasePrice: "3500", purchaseSupplierId: "s1", category: "농산물" }),
+  ).toEqual({ name: "콩나물", baseUnit: "박스", basePurchasePrice: 3500, purchaseSupplierId: "s1", category: "농산물" });
+  // 빈 단가·미지정 매입처는 null, 카테고리 미지정은 기타
   expect(normalizeProductInput({ name: "두부", baseUnit: "판", basePurchasePrice: "", purchaseSupplierId: "" })).toEqual({
     name: "두부",
     baseUnit: "판",
     basePurchasePrice: null,
     purchaseSupplierId: null,
+    category: "기타",
   });
+  // 이상 카테고리 값은 기타로 폴백
+  expect(normalizeProductInput({ name: "락스", baseUnit: "개", category: "없는분류" }).category).toBe("기타");
 });
 
 test("validateProductInput: 이름/단위 필수, 단가는 0 이상 정수", () => {
@@ -35,20 +39,38 @@ test("validateProductInput: 이름/단위 필수, 단가는 0 이상 정수", ()
   expect(validateProductInput({ name: "콩나물", baseUnit: "박스" })).toBeNull();
 });
 
-test("toProductInsert / toProductUpdate: DB 컬럼 형태", () => {
-  expect(toProductInsert("co1", { name: "콩나물", baseUnit: "박스", basePurchasePrice: "3500", purchaseSupplierId: "s1" })).toEqual({
+test("toProductInsert / toProductUpdate: DB 컬럼 형태(category 포함)", () => {
+  expect(toProductInsert("co1", { name: "콩나물", baseUnit: "박스", basePurchasePrice: "3500", purchaseSupplierId: "s1", category: "농산물" })).toEqual({
     company_id: "co1",
     name: "콩나물",
     base_unit: "박스",
     base_purchase_price: 3500,
     purchase_supplier_id: "s1",
+    category: "농산물",
   });
   expect(toProductUpdate({ name: "두부", baseUnit: "판" })).toEqual({
     name: "두부",
     base_unit: "판",
     base_purchase_price: null,
     purchase_supplier_id: null,
+    category: "기타",
   });
+});
+
+test("isMissingCategoryColumn: 0007 미적용 시 category 누락 오류만 감지", () => {
+  // PostgREST select 미존재 컬럼(42703)
+  expect(isMissingCategoryColumn({ code: "42703", message: 'column ordermoa_products.category does not exist' })).toBe(true);
+  // insert/update body 미존재 컬럼(PGRST204 schema cache)
+  expect(isMissingCategoryColumn({ code: "PGRST204", message: "Could not find the 'category' column of 'ordermoa_products' in the schema cache" })).toBe(true);
+  // 코드 없이도 명시적 미존재 메시지는 감지
+  expect(isMissingCategoryColumn({ message: 'column "category" does not exist' })).toBe(true);
+  // 무관한 오류는 거짓(다른 컬럼/네트워크/중복키)
+  expect(isMissingCategoryColumn({ code: "23505", message: "duplicate key" })).toBe(false);
+  expect(isMissingCategoryColumn({ code: "42703", message: "column ordermoa_products.base_unit does not exist" })).toBe(false);
+  // category 값 CHECK 위반은 컬럼 누락이 아니므로 거짓(정규화로 실제로 발생하지도 않음)
+  expect(isMissingCategoryColumn({ code: "23514", message: 'new row violates check constraint "ordermoa_products_category_check"' })).toBe(false);
+  expect(isMissingCategoryColumn(null)).toBe(false);
+  expect(isMissingCategoryColumn(new Error("network"))).toBe(false);
 });
 
 const productsForAlias: Product[] = [

@@ -3,6 +3,11 @@
 // 별칭은 unique(company_id, alias) — 회사 전체에서 중복 불가.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Product } from "./domain/types";
+import {
+  DEFAULT_PRODUCT_CATEGORY,
+  normalizeProductCategory,
+  type ProductCategory,
+} from "./product-category";
 
 export interface ProductFormInput {
   name: string;
@@ -11,6 +16,8 @@ export interface ProductFormInput {
   basePurchasePrice?: string | number | null;
   /** "" 또는 undefined = 매입처 미지정(null) */
   purchaseSupplierId?: string | null;
+  /** 카테고리 6종. 미지정이면 기타(Phase 2). */
+  category?: string | null;
 }
 
 export interface NormalizedProductInput {
@@ -18,6 +25,7 @@ export interface NormalizedProductInput {
   baseUnit: string;
   basePurchasePrice: number | null;
   purchaseSupplierId: string | null;
+  category: ProductCategory;
 }
 
 function parsePrice(raw: string | number | null | undefined): number | null | "invalid" {
@@ -36,6 +44,7 @@ export function normalizeProductInput(input: ProductFormInput): NormalizedProduc
     baseUnit: input.baseUnit.trim(),
     basePurchasePrice: price === "invalid" ? null : price,
     purchaseSupplierId: input.purchaseSupplierId ? input.purchaseSupplierId : null,
+    category: normalizeProductCategory(input.category),
   };
 }
 
@@ -56,6 +65,7 @@ export function toProductInsert(companyId: string, input: ProductFormInput) {
     base_unit: clean.baseUnit,
     base_purchase_price: clean.basePurchasePrice,
     purchase_supplier_id: clean.purchaseSupplierId,
+    category: clean.category,
   };
 }
 
@@ -66,7 +76,22 @@ export function toProductUpdate(input: ProductFormInput) {
     base_unit: clean.baseUnit,
     base_purchase_price: clean.basePurchasePrice,
     purchase_supplier_id: clean.purchaseSupplierId,
+    category: clean.category,
   };
+}
+
+/**
+ * 0007(category 컬럼) 미적용 DB에서 나오는 "category 컬럼 없음" 오류만 감지.
+ * select는 42703(undefined_column), insert/update body는 PGRST204(schema cache).
+ * category 값 CHECK 위반(23514)이나 다른 컬럼 오류는 제외 — 컬럼 없이 재시도하면 안 됨.
+ */
+export function isMissingCategoryColumn(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const { code, message } = error as { code?: string; message?: string };
+  const msg = typeof message === "string" ? message.toLowerCase() : "";
+  if (!msg.includes("category")) return false;
+  if (code === "42703" || code === "PGRST204") return true;
+  return /does not exist|schema cache|could not find/.test(msg);
 }
 
 /** 새 별칭 검증 — DB unique(company_id, alias)와 같은 규칙을 화면에서 먼저 확인 */
@@ -104,6 +129,8 @@ interface ProductRow {
   base_unit: string;
   base_purchase_price: number | null;
   purchase_supplier_id: string | null;
+  /** 0007 미적용 DB에서는 select 폴백으로 빠질 수 있음 → 없으면 기타. */
+  category?: string | null;
 }
 
 function mapProduct(row: ProductRow, aliases: string[], supplierName: string | null): Product {
@@ -115,10 +142,20 @@ function mapProduct(row: ProductRow, aliases: string[], supplierName: string | n
     purchaseSupplierId: row.purchase_supplier_id,
     purchaseSupplierName: supplierName,
     basePurchasePrice: row.base_purchase_price,
+    category: normalizeProductCategory(row.category),
   };
 }
 
-const PRODUCT_COLS = "id,name,base_unit,base_purchase_price,purchase_supplier_id";
+/** 0007 미적용 DB 대비 두 벌 — category 포함/미포함. 미포함으로 읽으면 mapProduct가 기타로 폴백.
+ *  as const로 리터럴 타입 유지 → Supabase가 행 타입을 추론(동적 string이면 GenericStringError). */
+export const PRODUCT_COLS_BASE = "id,name,base_unit,base_purchase_price,purchase_supplier_id" as const;
+export const PRODUCT_COLS = "id,name,base_unit,base_purchase_price,purchase_supplier_id,category" as const;
+
+/** insert/update body에서 category 키만 제거(0007 미적용 폴백용). */
+function stripCategory<T extends { category?: unknown }>(row: T): Omit<T, "category"> {
+  const { category: _omit, ...rest } = row;
+  return rest;
+}
 
 export async function createProduct(
   db: SupabaseClient,
@@ -128,11 +165,12 @@ export async function createProduct(
 ): Promise<Product> {
   const error = validateProductInput(input);
   if (error) throw new Error(error);
-  const res = await db
-    .from("ordermoa_products")
-    .insert(toProductInsert(companyId, input))
-    .select(PRODUCT_COLS)
-    .single();
+  const row = toProductInsert(companyId, input);
+  let res = await db.from("ordermoa_products").insert(row).select(PRODUCT_COLS).single();
+  if (res.error && isMissingCategoryColumn(res.error)) {
+    // 0007 미적용 DB — category 제외하고 재시도(품목 자체는 저장, 카테고리는 기타로 표시).
+    res = await db.from("ordermoa_products").insert(stripCategory(row)).select(PRODUCT_COLS_BASE).single();
+  }
   if (res.error) throw res.error;
   return mapProduct(res.data, [], supplierName);
 }
@@ -147,13 +185,24 @@ export async function updateProduct(
 ): Promise<Product> {
   const error = validateProductInput(input);
   if (error) throw new Error(error);
-  const res = await db
+  const patch = toProductUpdate(input);
+  let res = await db
     .from("ordermoa_products")
-    .update(toProductUpdate(input))
+    .update(patch)
     .eq("company_id", companyId)
     .eq("id", productId)
     .select(PRODUCT_COLS)
     .single();
+  if (res.error && isMissingCategoryColumn(res.error)) {
+    // 0007 미적용 DB — category 제외하고 재시도.
+    res = await db
+      .from("ordermoa_products")
+      .update(stripCategory(patch))
+      .eq("company_id", companyId)
+      .eq("id", productId)
+      .select(PRODUCT_COLS_BASE)
+      .single();
+  }
   if (res.error) throw res.error;
   return mapProduct(res.data, aliases, supplierName);
 }
@@ -189,22 +238,28 @@ export async function listArchivedProducts(
   db: SupabaseClient,
   companyId: string,
 ): Promise<Product[]> {
-  const [prod, alias] = await Promise.all([
+  const archived = (cols: string) =>
     db
       .from("ordermoa_products")
-      .select(PRODUCT_COLS)
+      .select(cols)
       .eq("company_id", companyId)
       .not("archived_at", "is", null)
-      .order("created_at", { ascending: true }),
-    db.from("ordermoa_product_aliases").select("product_id,alias").eq("company_id", companyId),
-  ]);
+      .order("created_at", { ascending: true });
+  let prod = await archived(PRODUCT_COLS);
+  if (prod.error && isMissingCategoryColumn(prod.error)) prod = await archived(PRODUCT_COLS_BASE);
+  const alias = await db
+    .from("ordermoa_product_aliases")
+    .select("product_id,alias")
+    .eq("company_id", companyId);
   if (prod.error) throw prod.error;
   if (alias.error) throw alias.error;
   const aliasByProduct = new Map<string, string[]>();
   for (const a of alias.data ?? []) {
     aliasByProduct.set(a.product_id, [...(aliasByProduct.get(a.product_id) ?? []), a.alias]);
   }
-  return (prod.data ?? []).map((row) => mapProduct(row, aliasByProduct.get(row.id) ?? [], null));
+  // select 폴백으로 행 타입이 유동적(cols가 string) → 알려진 형태로 캐스팅.
+  const rows = (prod.data ?? []) as unknown as ProductRow[];
+  return rows.map((row) => mapProduct(row, aliasByProduct.get(row.id) ?? [], null));
 }
 
 export async function addAliasInDb(

@@ -8,6 +8,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Customer, CustomerPrice, Product, Supplier } from "./domain/types";
 import { estimatedOrderMargin, sumAmounts } from "./calculations";
+import { normalizeProductCategory } from "./product-category";
+import { PRODUCT_COLS, PRODUCT_COLS_BASE, isMissingCategoryColumn } from "./product-store";
 import {
   sampleCustomers,
   sampleCustomerPrices,
@@ -176,6 +178,7 @@ export function diffSeedRows(
         base_unit: p.baseUnit,
         base_purchase_price: p.basePurchasePrice ?? null,
         purchase_supplier_id: p.purchaseSupplierId ? supplierId.get(p.purchaseSupplierId) ?? null : null,
+        category: normalizeProductCategory(p.category),
       })),
     productSupplierUpdates: sampleProducts.flatMap((p) => {
       const existing = existingProducts.find((row) => row.name === p.name);
@@ -216,6 +219,20 @@ export interface CompanyData {
   seeded: boolean;
 }
 
+/** 활성 품목 select — 0007(category) 미적용 DB면 category 없이 재시도(앱은 기타 폴백). */
+async function selectActiveProducts(db: SupabaseClient, companyId: string) {
+  const query = (cols: string) =>
+    db
+      .from("ordermoa_products")
+      .select(cols)
+      .eq("company_id", companyId)
+      .is("archived_at", null)
+      .order("created_at", { ascending: true });
+  const res = await query(PRODUCT_COLS);
+  if (res.error && isMissingCategoryColumn(res.error)) return query(PRODUCT_COLS_BASE);
+  return res;
+}
+
 async function fetchCompanyData(db: SupabaseClient, companyId: string) {
   const [cust, supplier, prod, alias, price] = await Promise.all([
     db
@@ -230,12 +247,7 @@ async function fetchCompanyData(db: SupabaseClient, companyId: string) {
       .eq("company_id", companyId)
       .is("archived_at", null)
       .order("created_at", { ascending: true }),
-    db
-      .from("ordermoa_products")
-      .select("id,name,base_unit,base_purchase_price,purchase_supplier_id")
-      .eq("company_id", companyId)
-      .is("archived_at", null)
-      .order("created_at", { ascending: true }),
+    selectActiveProducts(db, companyId),
     db.from("ordermoa_product_aliases").select("product_id,alias").eq("company_id", companyId),
     db
       .from("ordermoa_customer_prices")
@@ -266,7 +278,16 @@ async function fetchCompanyData(db: SupabaseClient, companyId: string) {
     memo: s.memo ?? undefined,
   }));
   const supplierById = new Map(suppliers.map((s) => [s.id, s.name]));
-  const products: Product[] = (prod.data ?? []).map((p) => ({
+  // select 폴백(category 유무)으로 행 타입이 유동적 → 알려진 형태로 캐스팅.
+  const productRows = (prod.data ?? []) as unknown as ReadonlyArray<{
+    id: string;
+    name: string;
+    base_unit: string;
+    base_purchase_price: number | null;
+    purchase_supplier_id: string | null;
+    category?: string | null;
+  }>;
+  const products: Product[] = productRows.map((p) => ({
     id: p.id,
     name: p.name,
     baseUnit: p.base_unit,
@@ -274,6 +295,7 @@ async function fetchCompanyData(db: SupabaseClient, companyId: string) {
     purchaseSupplierId: p.purchase_supplier_id ?? null,
     purchaseSupplierName: p.purchase_supplier_id ? supplierById.get(p.purchase_supplier_id) ?? null : null,
     basePurchasePrice: p.base_purchase_price,
+    category: normalizeProductCategory(p.category),
   }));
   const customerPrices: CustomerPrice[] = (price.data ?? []).map((cp) => ({
     customerId: cp.customer_id,
@@ -319,7 +341,11 @@ export async function ensureSeed(db: SupabaseClient, companyId: string): Promise
     if (r.error) throw r.error;
   }
   if (rows.products.length > 0) {
-    const r = await db.from("ordermoa_products").insert(rows.products);
+    let r = await db.from("ordermoa_products").insert(rows.products);
+    if (r.error && isMissingCategoryColumn(r.error)) {
+      // 0007 미적용 DB — category 없이 시드(카테고리는 기타로 표시됨). 적용 후 재시드 불필요.
+      r = await db.from("ordermoa_products").insert(rows.products.map(({ category: _c, ...rest }) => rest));
+    }
     if (r.error) throw r.error;
   }
   for (const patch of rows.productSupplierUpdates) {

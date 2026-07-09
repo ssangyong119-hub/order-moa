@@ -126,10 +126,12 @@
 | base_unit | text | ✅ | | 기본단위(참고/기본값) |
 | tax_type | text | ✅ | 'taxable' | CHECK in ('taxable','exempt'). **계산 반영 2차** |
 | base_purchase_price | integer | | null | **기준 매입단가(선택, 질문4 확정)** — CHECK (>=0). 예상 마진 표시용 참고값. **정확한 매입이력/원가이력/재고평가는 2차**(별도 테이블) |
+| category | text | ✅ | '기타' | **품목 카테고리 6종(Phase 2, W19)** — CHECK in ('농산물','공산품','냉식','육류','수산','기타'). 0007 마이그레이션. 6종 고정(사용자 정의 없음)이라 별도 테이블 없이 컬럼 1개. 품목 마스터 속성 → order_items엔 저장 안 함(과거 주문 무영향) |
 | memo | text | | null | |
 | created_at | timestamptz | ✅ | now() | |
 | archived_at | timestamptz | | null | soft delete |
 - 인덱스: `(company_id)`
+- **Phase 2(0007)**: `category` 추가. RLS는 기존 products 테이블 정책(0002) 상속(정책 변경 없음). CHECK 제약명 `ordermoa_products_category_check`. 다단위(`product_units`)·기본/예외 단가는 **Phase 3 별도**(구현 안 함, 백로그).
 
 ### 4.5 product_aliases
 | 필드 | 타입 | 필수 | 기본값 | 제약/비고 |

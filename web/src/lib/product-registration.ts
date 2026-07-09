@@ -1,5 +1,6 @@
 import type { CustomerPrice, Product } from "./domain/types";
 import type { ParsedLine } from "./order-parser";
+import { DEFAULT_PRODUCT_CATEGORY } from "./product-category";
 
 export interface NewProductRegistrationInput {
   customerId: string;
@@ -36,6 +37,9 @@ export function buildNewProductRegistration(
       purchaseSupplierId: null,
       purchaseSupplierName: supplierName,
       basePurchasePrice: null,
+      // 즉석 등록은 기본 '기타'(picker 없음). DB insert에는 category를 넣지 않아
+      // 0007 미적용 DB도 통과하고, 적용 후엔 컬럼 DEFAULT '기타'가 채운다.
+      category: DEFAULT_PRODUCT_CATEGORY,
     },
     customerPrice,
     line: {

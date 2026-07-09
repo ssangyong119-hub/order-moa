@@ -38,6 +38,7 @@ describe("buildNewProductRegistration", () => {
       purchaseSupplierId: null,
       purchaseSupplierName: "야채매입처",
       basePurchasePrice: null,
+      category: "기타", // 즉석 등록 기본 카테고리
     });
     expect(result.customerPrice).toEqual({ customerId: "c01", productId: "p_new", price: 800 });
     expect(result.line).toMatchObject({

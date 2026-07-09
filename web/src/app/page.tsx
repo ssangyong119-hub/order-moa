@@ -57,6 +57,7 @@ import { PriceManagementView } from "./price-management-view";
 import { MonthlySummaryView } from "./monthly-summary-view";
 import { downloadCsv } from "@/lib/csv-export";
 import { todayKst } from "@/lib/date-utils";
+import { DEFAULT_PRODUCT_CATEGORY } from "@/lib/product-category";
 import { collectPriceChanges, upsertCustomerPriceInDb, upsertCustomerPricesInDb } from "@/lib/price-store";
 import {
   addAliasInDb,
@@ -693,6 +694,7 @@ export default function HomePage() {
       purchaseSupplierId: clean.purchaseSupplierId,
       purchaseSupplierName: supplierName,
       basePurchasePrice: clean.basePurchasePrice,
+      category: clean.category,
     };
     setProducts((prev) => (id ? prev.map((p) => (p.id === id ? saved : p)) : [...prev, saved]));
     flash(id ? "품목을 수정했습니다. (데모 모드)" : "품목을 추가했습니다. (데모 모드)");
@@ -1006,9 +1008,10 @@ export default function HomePage() {
   }
   function exportProductsCsv() {
     downloadCsv("품목별칭.csv", [
-      ["품목명", "기본 단위", "기본 매입처", "기준 매입단가", "별칭"],
+      ["품목명", "카테고리", "기본 단위", "기본 매입처", "기준 매입단가", "별칭"],
       ...products.map((p) => [
         p.name,
+        p.category ?? DEFAULT_PRODUCT_CATEGORY,
         p.baseUnit,
         p.purchaseSupplierName ?? "",
         p.basePurchasePrice ?? "",
@@ -1294,7 +1297,7 @@ export default function HomePage() {
             <div className="export-item">
               <div>
                 <strong>품목·별칭</strong>
-                <small className="muted">{products.length}개 · 단위·기본매입처·기준단가·별칭</small>
+                <small className="muted">{products.length}개 · 카테고리·단위·기본매입처·기준단가·별칭</small>
               </div>
               <button onClick={exportProductsCsv} disabled={products.length === 0}>CSV</button>
             </div>
