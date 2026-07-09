@@ -53,6 +53,8 @@ import { searchProductsForOrder } from "@/lib/product-search";
 import { CustomerManagementView } from "./customer-management-view";
 import { SupplierManagementView } from "./supplier-management-view";
 import { ProductManagementView } from "./product-management-view";
+import { CatalogImportView } from "./catalog-import-view";
+import type { CatalogApplyResult } from "@/lib/catalog-import";
 import { PriceManagementView } from "./price-management-view";
 import { MonthlySummaryView } from "./monthly-summary-view";
 import { downloadCsv } from "@/lib/csv-export";
@@ -61,6 +63,7 @@ import { DEFAULT_PRODUCT_CATEGORY } from "@/lib/product-category";
 import { collectPriceChanges, upsertCustomerPriceInDb, upsertCustomerPricesInDb } from "@/lib/price-store";
 import {
   addAliasInDb,
+  applyCatalogImportToDb,
   archiveProduct as archiveProductInDb,
   createProduct as createProductInDb,
   friendlyAliasError,
@@ -143,7 +146,7 @@ const NAV_GROUPS: Array<{
     ],
   },
   { label: "자금", icon: "₩", items: [{ label: "미수금", icon: "◌", soon: true, phase: "2차" }] },
-  { label: "설정", icon: "⚙", items: [{ view: "data", label: "데이터 내보내기", icon: "⚙" }] },
+  { label: "설정", icon: "⚙", items: [{ view: "data", label: "데이터 내보내기/가져오기", icon: "⚙" }] },
 ];
 
 const VIEW_TITLES: Record<View, string> = {
@@ -158,7 +161,7 @@ const VIEW_TITLES: Record<View, string> = {
   products: "품목·별칭 관리",
   prices: "단가 관리",
   monthly: "거래처별 월 합계",
-  data: "데이터 내보내기",
+  data: "데이터 내보내기/가져오기",
 };
 
 function Shell(props: {
@@ -698,6 +701,53 @@ export default function HomePage() {
     };
     setProducts((prev) => (id ? prev.map((p) => (p.id === id ? saved : p)) : [...prev, saved]));
     flash(id ? "품목을 수정했습니다. (데모 모드)" : "품목을 추가했습니다. (데모 모드)");
+  }
+
+  // W21-B 카탈로그 import 반영(선택분만). DB 모드면 영구 저장 후 reload, 데모면 메모리만.
+  async function applyCatalogImport(result: CatalogApplyResult) {
+    if (db && companyId) {
+      try {
+        const s = await applyCatalogImportToDb(db, companyId, result);
+        // 반영 후 재조회 → 품목·별칭 관리와 파싱에 즉시 반영(reload가 sourceCode는 안 싣지만 저장은 됨).
+        const loaded = await loadCompanyData(db, companyId);
+        setProducts(loaded.products);
+        setData((prev) => (prev ? { ...prev, products: loaded.products } : prev));
+        const fail = s.failedBatches > 0 || s.errors.length > 0;
+        flash(
+          `카탈로그 반영: 신규 ${s.inserted} · 수정 ${s.updated} · 별칭 ${s.aliasAttempted}건 시도.` +
+            (fail ? ` 실패 배치 ${s.failedBatches} — ${s.errors.slice(0, 2).join(" / ")}` : " 모두 성공."),
+        );
+      } catch (e) {
+        flash(`카탈로그 DB 반영 중 오류: ${e instanceof Error ? e.message : "알 수 없는 오류"}`);
+      }
+      return;
+    }
+
+    // 데모 모드 — 메모리에만 반영(새로고침 시 초기화).
+    setProducts((prev) => {
+      const updateById = new Map(result.updates.map((u) => [u.productId, u]));
+      const next = prev.map((p) => {
+        const u = updateById.get(p.id);
+        return u ? { ...p, category: u.category, basePurchasePrice: u.basePurchasePrice, sourceCode: u.sourceCode } : p;
+      });
+      for (const ins of result.inserts) {
+        next.push({
+          id: crypto.randomUUID(),
+          name: ins.name,
+          baseUnit: ins.baseUnit,
+          aliases: ins.aliases,
+          purchaseSupplierId: null,
+          purchaseSupplierName: null,
+          basePurchasePrice: ins.basePurchasePrice,
+          category: ins.category,
+          sourceCode: ins.sourceCode,
+        });
+      }
+      return next;
+    });
+    flash(
+      `카탈로그 ${result.inserts.length + result.updates.length}건 반영: 신규 ${result.inserts.length} · 수정 ${result.updates.length}. (데모 — 새로고침 시 초기화)`,
+    );
   }
 
   async function archiveProduct(product: Product) {
@@ -1269,10 +1319,10 @@ export default function HomePage() {
 
       {view === "data" && (
         <section className="card">
-          <h2>데이터 내보내기</h2>
+          <h2>데이터 내보내기/가져오기</h2>
           <p className="muted" style={{ marginTop: 0 }}>
             저장된 데이터를 CSV 파일로 내려받아 보관합니다. 공유 서버 문제나 기기 변경에 대비한{" "}
-            <strong>백업</strong>이자, 회계사 전달·본인 정리용입니다. (파일 가져오기/복원은 추후)
+            <strong>백업</strong>이자, 회계사 전달·본인 정리용입니다. 아래에서 실 카탈로그 초안 JSON을 검수해 화면에 반영할 수 있습니다.
           </p>
           {session.status !== "ready" && (
             <p className="muted" style={{ marginTop: 0 }}>
@@ -1321,6 +1371,14 @@ export default function HomePage() {
             기능이 아니라 보관·확인용 파일입니다.
           </p>
         </section>
+      )}
+
+      {view === "data" && (
+        <CatalogImportView
+          existingProducts={products}
+          persisted={session.status === "ready"}
+          onApply={applyCatalogImport}
+        />
       )}
 
       {view === "paste" && (

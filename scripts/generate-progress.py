@@ -27,7 +27,7 @@ XLSX_FILLS = {
 }
 # CSS 클래스용 슬러그 — "진행 중"처럼 공백 있는 상태가 클래스를 가르지 않게
 STATUS_SLUGS = {"완료": "done", "진행 중": "doing", "다음": "next", "보류": "hold", "제외": "cut"}
-PHASE_ORDER = ["1차", "1차 보강", "1.5차", "2차"]
+PHASE_ORDER = ["1차", "1차 보강", "1.5차", "2차 보강", "2차"]
 
 
 def esc(s):
@@ -47,11 +47,7 @@ def build_html(d):
         bg, fg = STATUS_COLORS.get(status, ("#eee", "#333"))
         return f'<span class="badge" style="background:{bg};color:{fg}">{esc(status)}</span>'
 
-    cards = []
-    for phase in PHASE_ORDER:
-        phase_items = [it for it in items if it["phase"] == phase]
-        if not phase_items:
-            continue
+    def render_phase(phase, phase_items):
         cards.append(f'<h2 class="phase">{esc(phase)}</h2><div class="grid">')
         for it in phase_items:
             docs = "".join(f"<li><code>{esc(x)}</code></li>" for x in it["docs"])
@@ -67,6 +63,15 @@ def build_html(d):
   <details><summary>관련 문서/파일</summary><ul>{docs}</ul></details>
 </div>""")
         cards.append("</div>")
+
+    cards = []
+    for phase in PHASE_ORDER:
+        phase_items = [it for it in items if it["phase"] == phase]
+        if phase_items:
+            render_phase(phase, phase_items)
+    # PHASE_ORDER에 없는 차수도 카드에서 빠뜨리지 않는다(미정의 차수 이름이 생겨도 유실 방지).
+    for phase in dict.fromkeys(it["phase"] for it in items if it["phase"] not in PHASE_ORDER):
+        render_phase(phase, [it for it in items if it["phase"] == phase])
 
     flow = " → ".join(f"<span>{esc(s)}</span>" for s in d["coreFlow"])
     foundation = "".join(

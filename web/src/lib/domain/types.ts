@@ -23,6 +23,8 @@ export interface Product {
   basePurchasePrice?: number | null;
   /** 품목 카테고리 6종(Phase 2). 미지정/구 데이터는 '기타'로 폴백. */
   category?: ProductCategory;
+  /** 외부(이카운트) 품목코드. import 멱등 매칭 전용(W21, 0008). 앱 내 신규 품목은 null. */
+  sourceCode?: string | null;
 }
 
 export interface Supplier {

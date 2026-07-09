@@ -1785,3 +1785,59 @@ UX 개선 제안(분류) — Codex 승인 대기, 이번엔 미반영:
 - **산출물 커밋 가부**: `docs/order-moa-catalog-real-draft.json`(588KB, 식별정보 0건). 크기가 커 커밋 대신 로컬 유지도 선택지 — Codex 판단. import(DB 반영) 아님, W21 미리보기/검수 UI의 입력.
 - 단가는 100원 반올림이나 원본이 이미 라운드값이라 실질 변화 적음 — 더 거친 반올림/단가 제외 원하면 지시.
 - **W21 제안 범위**: 초안 JSON을 입력으로 (a) 미리보기·검수 UI(카테고리/단위/needsReview 편집) → (b) 승인분만 DB 반영(품목·단위·단가). 기존 sampleProducts는 데모/테스트 백업으로 유지(실데이터 우선). DB 반영은 Codex 승인 게이트. 6종→조미료/가공 포함 확장은 별도 논의.
+
+## 2026-07-09 Claude (W21-A — 카탈로그 import 미리보기/검수 UI + 데모 반영)
+
+W20 초안(`docs/order-moa-catalog-real-draft.json`, 1590품목)을 앱에서 업로드·검수하고 선택분만 기준정보로 반영하는 흐름 구현. **범위가 커 A/B 분리**. 이번(A)은 **UI+데모(메모리) 반영까지 완료·검증**, **DB 영구 반영(배치+폴백)은 W21-B**(0007·0008 적용 후 로그인 모드 검증). 0007 미적용 가정(사용자 지시).
+
+### W21-A/B 분리 근거 (프롬프트의 "위험하면 분리 보고" 지시 적용)
+- DB 대량 반영(배치 insert/update + category·source_code 이중컬럼 폴백 + 별칭 링크 + 결과요약)은 이번 세션 **검증 불가**: 0007 미적용 + 데모 smoke는 로그인 없음 + 공유 쿼터 위험. 미검증 복잡 DB 코드를 밀어붙이지 않고 분리.
+- A = 데모로 end-to-end 검증되는 전부. B = 마이그레이션 적용돼야 검증 가능한 DB 영구 반영.
+
+### 스크린샷(사용자 override)
+- `docs/references/ecount-screenshots/`는 사용자가 민감정보 가림 확인 → **삭제 안 함·유지**. 품목코드는 민감정보 아님. `ecount-benchmark-notes.md`에 "구현 참고는 품목등록/품목별단가 화면 중심" 보강만.
+- (검수 관찰 기록: 이미지1에 모바일번호·사업자번호형 거래처코드, 이미지3에 거래처명 1건 — 사용자가 참고용 유지로 판단.)
+
+### 0008 마이그레이션 (작성만, 적용 대기)
+- `web/supabase/migrations/0008_product_source_code.sql`: `ordermoa_products.source_code text null` + 부분 유니크 `(company_id, source_code) where source_code is not null`. idempotent, RLS 상속, order_items 무관. 재import 멱등 매칭용(품목명 중복 흔해 코드가 안정 키). PK는 계속 uuid. 가이드 `docs/guide-apply-0008-product-source-code.md`.
+
+### 구현 (앱 코드)
+- 신규 순수 로직 `web/src/lib/catalog-import.ts`(+test 8): `validateCatalogDraft`(형식·meta.categories 6종) · `buildImportRows`(중복명·기존일치·카테고리 정규화) · `summarizeImport` · `toCatalogInsert`(입고단가→basePurchasePrice, **출고단가 미저장**, source_code=code) · `toCatalogUpdatePatch`(이름 불변) · `chunk`.
+- 신규 UI `web/src/app/catalog-import-view.tsx`: JSON 업로드(브라우저 파싱, 번들 미포함) → 요약(전체/선택/검토필요/신규/기존일치) · 필터(카테고리·상태·검토필요만·검색) · 50/페이지 · 행별 편집(이름/단위/카테고리/매입단가) · **중복명 동시선택 경고+반영 차단** · 신규 전체 선택 · "선택 N건 반영".
+- product-store: `isMissingCategoryColumn`을 `isMissingColumnError(err,col)`로 일반화(source_code 커버, 동작 불변). domain/types: `Product.sourceCode`.
+- page.tsx: 데이터 뷰에 CatalogImportView 렌더, 메뉴/제목 "데이터 내보내기/가져오기"로 확장(새 메뉴 추가 안 함). `applyCatalogImport` — 선택분을 products 상태에 반영(신규 push + 기존 category/매입단가/source_code update). **order_items·customer_prices·orders·aggregate·parser 무변경.**
+
+### 매핑 규칙 (스냅샷 원칙)
+- 입고단가 → `products.base_purchase_price`(참고값). **출고단가는 참고 표시만 — 어디에도 저장 안 함**(기본 판매단가는 Phase 3, customer_prices에도 안 넣음). category → products.category(0007 전제). code → source_code(0008). aliasCandidates → 데모는 product.aliases.
+
+### 브라우저 데모 smoke (:3200, 앱오류 0)
+- 대표 draft 8건 업로드(File 주입) → 기존일치(콩나물·두부) · 중복명(세척숙주×2) · 검토(미역줄기·도라지) 뱃지 정확. 요약 전체8·신규6·기존일치2·검토2.
+- 중복명 동시선택 → 경고+반영 비활성. 해제 후 신규 전체선택(4: 삼겹살·미역줄기·락스·도라지) → 반영 → flash "신규 4·수정 0". 품목 관리에 4품목 등장. 발주 "삼겹살 2kg/미역줄기 3봉" → 파서 매칭(정상, 출고단가 미저장이라 0원). 콘솔 앱오류 0. 임시 서버·복사본 정리, .env.local 원복.
+
+### 검증
+- root 5/5 · web **141/141**(133+8) · build 성공 · audit 0 · diff-check clean.
+
+### Codex 검수 포인트
+- **0008 적용 승인 요청**(+0007 함께). 적용 후 W21-B에서 DB 반영 구현·실측.
+- 출고단가 미저장 경계 준수(catalog-import.ts·applyCatalogImport에 sale price 저장 없음).
+- 588KB 초안은 번들 미포함(런타임 파일 업로드) — 커밋 여부는 Codex.
+- [W21-B] DB 배치 반영(insert/update 200단위 + category/source_code 폴백 루프 + 별칭 링크 + 성공/실패 요약), product-store 단일 create/update의 source_code 읽기, DB smoke. [다음] 전용 Supabase 분리 vs Phase 3.
+
+## 2026-07-09 Claude/Codex (W21-B — 카탈로그 import DB 영구 반영)
+
+사용자가 Supabase SQL Editor에서 0007(category)와 0008(source_code)을 적용 완료(`Success. No rows returned`)한 뒤, W21 import의 DB 영구 반영 경로를 추가했다. Claude 구현 후 Codex가 문서 정합성을 보정했다.
+
+### 구현
+- `web/src/lib/catalog-import.ts`: `CatalogApplyResult` 타입을 순수 로직으로 이동하고, `planCatalogDbWrite`(source_code가 이미 있으면 insert가 아니라 update로 재분류)와 `dedupeAliasRows`(별칭 in-batch 중복 제거)를 추가.
+- `web/src/lib/product-store.ts`: `applyCatalogImportToDb` 추가. 선택분만 200건 단위로 insert/update하고, `ordermoa_products.source_code`로 재import 멱등 매칭, `ordermoa_product_aliases`는 `onConflict: company_id,alias`로 충돌 무시 upsert.
+- `web/src/app/page.tsx`: DB 모드에서는 DB 반영 후 `loadCompanyData`로 products 재조회 → 품목·별칭 관리와 파싱에 즉시 반영. 데모 모드는 기존처럼 메모리 반영.
+- `catalog-import-view.tsx`: 로그인 상태에서는 버튼/안내가 DB 반영임을 명시. 공유 DB 쿼터 부담 때문에 소량 반영 안내.
+
+### 원칙 확인
+- 출고단가(`repSalePrice`)는 화면 참고만 — `customer_prices`나 products에 저장하지 않음. 입고단가(`repPurchasePrice`)만 `base_purchase_price`로 저장.
+- `order_items`·합산표·명세서·월합계·파서 로직 무변경. 과거 주문 스냅샷 원칙 영향 없음.
+- 0008은 컬럼+부분 유니크 인덱스만 추가(additive/idempotent), RLS는 기존 `ordermoa_products` 정책 상속.
+
+### 남은 실측
+- 코드/테스트/빌드는 통과 대상. 다만 공유 Supabase 대량 insert는 쿼터 부담이 있어, 로그인 모드에서 **10~20건 소량 DB smoke** 후 전체 반영 여부를 결정한다.
+- 확인 포인트: 신규 N건 저장/F5 유지, 같은 JSON 재반영 시 신규 중복 없이 update 처리, 별칭 반영, `customer_prices` 무변화.

@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import {
   friendlyAliasError,
   isMissingCategoryColumn,
+  isMissingColumnError,
   normalizeProductInput,
   toProductInsert,
   toProductUpdate,
@@ -71,6 +72,18 @@ test("isMissingCategoryColumn: 0007 미적용 시 category 누락 오류만 감�
   expect(isMissingCategoryColumn({ code: "23514", message: 'new row violates check constraint "ordermoa_products_category_check"' })).toBe(false);
   expect(isMissingCategoryColumn(null)).toBe(false);
   expect(isMissingCategoryColumn(new Error("network"))).toBe(false);
+});
+
+test("isMissingColumnError: 0008 미적용 시 source_code 누락 오류도 컬럼 지정으로만 감지", () => {
+  expect(isMissingColumnError({ code: "42703", message: "column ordermoa_products.source_code does not exist" }, "source_code")).toBe(true);
+  expect(
+    isMissingColumnError(
+      { code: "PGRST204", message: "Could not find the 'source_code' column of 'ordermoa_products' in the schema cache" },
+      "source_code",
+    ),
+  ).toBe(true);
+  expect(isMissingColumnError({ code: "42703", message: "column ordermoa_products.category does not exist" }, "source_code")).toBe(false);
+  expect(isMissingColumnError({ code: "23505", message: "duplicate key" }, "source_code")).toBe(false);
 });
 
 const productsForAlias: Product[] = [

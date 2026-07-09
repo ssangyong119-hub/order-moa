@@ -8,6 +8,12 @@ import {
   normalizeProductCategory,
   type ProductCategory,
 } from "./product-category";
+import {
+  chunk,
+  dedupeAliasRows,
+  planCatalogDbWrite,
+  type CatalogApplyResult,
+} from "./catalog-import";
 
 export interface ProductFormInput {
   name: string;
@@ -85,13 +91,18 @@ export function toProductUpdate(input: ProductFormInput) {
  * select는 42703(undefined_column), insert/update body는 PGRST204(schema cache).
  * category 값 CHECK 위반(23514)이나 다른 컬럼 오류는 제외 — 컬럼 없이 재시도하면 안 됨.
  */
-export function isMissingCategoryColumn(error: unknown): boolean {
+export function isMissingColumnError(error: unknown, column: string): boolean {
   if (!error || typeof error !== "object") return false;
   const { code, message } = error as { code?: string; message?: string };
   const msg = typeof message === "string" ? message.toLowerCase() : "";
-  if (!msg.includes("category")) return false;
+  if (!msg.includes(column.toLowerCase())) return false;
   if (code === "42703" || code === "PGRST204") return true;
   return /does not exist|schema cache|could not find/.test(msg);
+}
+
+/** 0007 미적용 DB의 category 컬럼 누락만 감지(값 CHECK 위반·다른 컬럼 오류는 제외). */
+export function isMissingCategoryColumn(error: unknown): boolean {
+  return isMissingColumnError(error, "category");
 }
 
 /** 새 별칭 검증 — DB unique(company_id, alias)와 같은 규칙을 화면에서 먼저 확인 */
@@ -286,4 +297,111 @@ export async function removeAliasInDb(
     .eq("company_id", companyId)
     .eq("alias", alias);
   if (res.error) throw res.error;
+}
+
+// ── W21-B 카탈로그 import DB 영구 반영 ──
+// 원칙 재확인: 출고단가 미저장, customer_prices 무관, source_code 멱등, category·매입단가만 저장.
+// 0007/0008 적용 전제(사용자 확인). 컬럼 누락 시 배치 전체가 실패 요약에 잡힌다(조용히 넘어가지 않음).
+
+const CATALOG_BATCH = 200;
+
+export interface CatalogImportDbSummary {
+  inserted: number;
+  updated: number;
+  aliasAttempted: number; // unique 충돌 무시 upsert라 실제 신규수는 근사(시도 건수)
+  failedBatches: number;
+  errors: string[];
+}
+
+/** 선택분(inserts/updates)만 DB에 반영. source_code로 재import 멱등, 별칭은 충돌 무시 insert. */
+export async function applyCatalogImportToDb(
+  db: SupabaseClient,
+  companyId: string,
+  result: CatalogApplyResult,
+): Promise<CatalogImportDbSummary> {
+  const summary: CatalogImportDbSummary = { inserted: 0, updated: 0, aliasAttempted: 0, failedBatches: 0, errors: [] };
+
+  // 1) 이미 같은 source_code로 저장된 품목 조회 → 멱등 재분류용 맵.
+  const codes = result.inserts.map((i) => i.sourceCode).filter((c): c is string => Boolean(c));
+  const codeToId = new Map<string, string>();
+  for (const part of chunk(codes, CATALOG_BATCH)) {
+    const res = await db
+      .from("ordermoa_products")
+      .select("id,source_code")
+      .eq("company_id", companyId)
+      .in("source_code", part);
+    if (res.error) {
+      summary.errors.push(`기존 코드 조회 실패: ${res.error.message}`);
+      continue;
+    }
+    for (const r of (res.data ?? []) as Array<{ id: string; source_code: string | null }>) {
+      if (r.source_code) codeToId.set(r.source_code, r.id);
+    }
+  }
+
+  const plan = planCatalogDbWrite(result, codeToId);
+  const aliasRows: Array<{ company_id: string; product_id: string; alias: string }> = [];
+
+  // 2) 신규 insert(200 배치) — 반환 id로 별칭 연결. source_code 우선, 없으면 이름으로 매핑.
+  for (const part of chunk(plan.inserts, CATALOG_BATCH)) {
+    const rows = part.map((i) => ({
+      company_id: companyId,
+      name: i.name,
+      base_unit: i.baseUnit,
+      base_purchase_price: i.basePurchasePrice,
+      category: i.category,
+      source_code: i.sourceCode,
+      purchase_supplier_id: null as string | null,
+    }));
+    const res = await db.from("ordermoa_products").insert(rows).select("id,name,source_code");
+    if (res.error) {
+      summary.failedBatches += 1;
+      summary.errors.push(`품목 추가 배치 실패(${part.length}건): ${res.error.message}`);
+      continue;
+    }
+    const saved = (res.data ?? []) as Array<{ id: string; name: string; source_code: string | null }>;
+    summary.inserted += saved.length;
+    const bySource = new Map<string, string>();
+    const byName = new Map<string, string>();
+    for (const r of saved) {
+      if (r.source_code) bySource.set(r.source_code, r.id);
+      else if (!byName.has(r.name)) byName.set(r.name, r.id);
+    }
+    for (const i of part) {
+      // ponytail: code 없는 신규가 한 배치에 동명이면 첫 행에만 별칭이 붙는다(초안 별칭은 실무상 비어 있음).
+      const pid = i.sourceCode ? bySource.get(i.sourceCode) : byName.get(i.name);
+      if (pid) for (const a of i.aliases) aliasRows.push({ company_id: companyId, product_id: pid, alias: a });
+    }
+  }
+
+  // 3) update(id별) — 이름매칭 기존일치 + source_code 재import. 재import 별칭도 여기서 수집.
+  for (const u of plan.updates) {
+    const res = await db
+      .from("ordermoa_products")
+      .update({ base_purchase_price: u.basePurchasePrice, category: u.category, source_code: u.sourceCode })
+      .eq("company_id", companyId)
+      .eq("id", u.productId);
+    if (res.error) {
+      summary.failedBatches += 1;
+      summary.errors.push(`품목 갱신 실패(id ${u.productId.slice(0, 8)}): ${res.error.message}`);
+      continue;
+    }
+    summary.updated += 1;
+    for (const a of u.aliases) aliasRows.push({ company_id: companyId, product_id: u.productId, alias: a });
+  }
+
+  // 4) 별칭 insert(200 배치) — unique(company_id, alias) 충돌은 무시(ON CONFLICT DO NOTHING).
+  const uniqAliases = dedupeAliasRows(aliasRows);
+  for (const part of chunk(uniqAliases, CATALOG_BATCH)) {
+    const res = await db
+      .from("ordermoa_product_aliases")
+      .upsert(part, { onConflict: "company_id,alias", ignoreDuplicates: true });
+    if (res.error) {
+      summary.errors.push(`별칭 저장 배치 실패(${part.length}건): ${res.error.message}`);
+      continue;
+    }
+    summary.aliasAttempted += part.length;
+  }
+
+  return summary;
 }

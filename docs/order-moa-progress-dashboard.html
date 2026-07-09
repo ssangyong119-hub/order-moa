@@ -56,11 +56,11 @@
   </div>
 </header>
 <div class="wrap">
-  <div class="focus">📌 <strong>지금 하는 일:</strong> W20 — 실제 엑셀 기반 품목 기준정보 초안. 친구 실운영 이카운트 엑셀(품목마스터+단가마스터, 저장소 밖·미커밋)을 품목코드로 조인→정제해 docs/order-moa-catalog-real-draft.json(1590품목, 588KB) 산출. scripts/extract-real-catalog.py(경로 인자·self-check). 괄호 화이트리스트로 공급사/브랜드 제거→식별정보 자체 스캔 0건, 단가 100원 반올림, 카테고리 6종 키워드 초안(자동 60.8%·나머지 needsReview). import(DB 반영)는 W21로 분리 — 이번은 검수 초안까지만. .gitignore에 원시데이터 유출 안전망 추가. 앱 코드 무변경(web 133 그대로). 사용자 결정: 상호 제외·품목/단위/단가는 실 엑셀 우선. 관찰: 다규격/다단위 210그룹(Phase3 근거), 6종이 조미료/가공 못 담음. 다음: W21 import 미리보기/검수+DB반영(Codex 승인), 0007 적용, 전용 Supabase 분리.</div>
+  <div class="focus">📌 <strong>지금 하는 일:</strong> W21 — 카탈로그 import 미리보기/검수 + 선택 DB 반영. W20 초안(1590품목) JSON을 데이터 화면에서 업로드→요약/필터/50페이지/행편집/중복명 경고/기존일치 검수→선택분만 반영. DB 모드는 0007(category)+0008(source_code) 적용 후 200건 배치 insert/update, source_code 멱등 재분류, 별칭 충돌 무시 upsert, 반영 후 products 재조회. 데모 모드는 메모리 반영. 매핑: 입고단가→base_purchase_price, 출고단가는 저장 안 함(기본 판매단가는 Phase 3), category→products.category, code→source_code. order_items·집계·파서 무변경(스냅샷 유지). 다음: 로그인 모드 10~20건 소량 DB smoke, 전용 Supabase 분리 vs Phase 3.</div>
 
-  <h2>전체 진행률 (작업 보드 20개 기준)</h2>
-  <div class="progressbar"><div style="width:70%"></div></div>
-  <p class="counts">완료 14 · 다음 0 · 보류 2 — 1차 트랙(보류 제외) 14/18 완료</p>
+  <h2>전체 진행률 (작업 보드 21개 기준)</h2>
+  <div class="progressbar"><div style="width:76%"></div></div>
+  <p class="counts">완료 16 · 다음 0 · 보류 2 — 1차 트랙(보류 제외) 16/19 완료</p>
   <div class="legend"><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span><span class="badge" style="background:#fef7e0;color:#946200">다음</span><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span><span class="badge" style="background:#fde8e8;color:#b02a2a">제외</span></div>
 
   <h2>핵심 흐름 (이 순서가 제품의 전부)</h2>
@@ -161,8 +161,8 @@
   </dl>
   <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/monthly-summary.ts</code></li><li><code>web/src/app/monthly-summary-view.tsx</code></li><li><code>web/src/app/page.tsx</code></li><li><code>docs/function-specification.md(F12, §5.2)</code></li></ul></details>
 </div>
-<div class="card s-doing">
-  <div class="card-head"><span class="wid">W13</span><strong>실제 발주 테스트 라운드</strong><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span></div>
+<div class="card s-done">
+  <div class="card-head"><span class="wid">W13</span><strong>실제 발주 테스트 라운드</strong><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span></div>
   <p class="plain">실제 받았던 발주(가명 처리)를 길게 여러 번 넣어보며 파싱·검색·매입처 분리가 현장에서 통하는지 반복 확인합니다. 1차 라운드(2026-07-08) 완료: 현장식 문장으로 파서 보강 2건.</p>
   <dl>
     <dt>왜 필요한가</dt><dd>샘플로는 못 잡는 현장 표현(오타·줄임말·규격)이 반드시 나옵니다. 손님 받기 전 마지막 관문.</dd>
@@ -240,6 +240,36 @@
     <dt>확인 방법</dt><dd>인쇄 미리보기에서 A4 한 장 정돈 확인, 품목 적을 때 빈행 유지.</dd>
   </dl>
   <details><summary>관련 문서/파일</summary><ul><li><code>docs/delivery-note-print-spec.md</code></li></ul></details>
+</div></div><h2 class="phase">2차 보강</h2><div class="grid">
+<div class="card s-doing">
+  <div class="card-head"><span class="wid">W19</span><strong>Phase 2 — 품목 카테고리 6종</strong><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span></div>
+  <p class="plain">품목을 6종(농산물/공산품/냉식/육류/수산/기타)으로 분류합니다. 품목·별칭 관리 화면에서 카테고리를 고르고, 목록을 카테고리로 걸러 봅니다. DB에는 컬럼 하나(category)만 추가 — 6종 고정이라 별도 표는 안 만듭니다. 코드 완료, 0007 Supabase 적용 완료.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>품목이 늘면 종류별로 묶어 봐야 관리·발주가 편합니다. 사장님 실사용 피드백. 스키마가 필요해 별도 세션으로 분리했고, 컬럼 1개라 위험 낮음.</dd>
+    <dt>선행 조건</dt><dd>W03(품목 관리). 0007 적용은 Codex 승인 게이트.</dd>
+    <dt>확인 방법</dt><dd>코드 완료(2026-07-09): 데모 smoke — 목록 카테고리 표시·필터(냉식 5종)·신규 육류 품목 추가·회귀(발주→확정→합산표) 정상, 콘솔 앱오류 0. TDD web 128→133. 0007 미적용 DB 폴백(안 깨짐). 적용 후 DB 실측은 guide-apply-0007 가이드 체크리스트. 스냅샷·집계 무변경.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/product-category.ts</code></li><li><code>web/src/lib/product-store.ts</code></li><li><code>web/supabase/migrations/0007_product_category.sql</code></li><li><code>docs/guide-apply-0007-product-category.md</code></li></ul></details>
+</div>
+<div class="card s-done">
+  <div class="card-head"><span class="wid">W20</span><strong>실제 엑셀 기반 품목 기준정보 초안</strong><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span></div>
+  <p class="plain">친구가 실제로 운영하며 내려받은 이카운트 엑셀(품목마스터+단가마스터)에서 품목명·규격·단위·단가 패턴을 뽑아 검수용 초안(catalog-real-draft.json, 1590품목)을 만들었습니다. 가명/더미 샘플 33종 대신 실제 현장 품목 패턴을 기준으로 삼기 위함. 상호·거래처·공급처 등 식별정보는 아예 안 읽고 제외했고, 단가는 100원 반올림. import(DB 반영)는 W21에서.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>실 베타는 품목 수가 많아 샘플 33종으론 부족. 사용자 결정: 상호는 제외하되 품목·단위·단가는 실제 엑셀 패턴 우선. import 전에 검수 가능한 산출물이 있어야 안전.</dd>
+    <dt>선행 조건</dt><dd>원본 엑셀은 저장소 밖. 추출 스크립트만 커밋. import/DB 반영은 W21(Codex 승인).</dd>
+    <dt>확인 방법</dt><dd>scripts/extract-real-catalog.py(self-check 6종) → 초안 JSON 1590품목. 식별정보 자체 스캔 0건(괄호 화이트리스트로 공급사/브랜드 제거). 카테고리 자동 60.8%(나머지 needsReview). 관찰: 다규격/다단위 210그룹=Phase3 근거, 조미료/가공은 6종 밖(기타). 앱 코드 무변경 → web 133 그대로.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>scripts/extract-real-catalog.py</code></li><li><code>docs/order-moa-catalog-real-draft.json</code></li><li><code>docs/agent-worklog.md</code></li></ul></details>
+</div>
+<div class="card s-doing">
+  <div class="card-head"><span class="wid">W21</span><strong>카탈로그 import (미리보기/검수 + 반영)</strong><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span></div>
+  <p class="plain">W20 초안(JSON)을 앱에서 올려 미리보기로 검수하고, 고른 품목만 기준정보로 반영하는 화면입니다. 업로드·요약·필터·행편집·중복명 경고·기존일치 표시를 제공하고, 데모는 화면 반영, 로그인 DB 모드는 200건 배치 insert/update와 source_code 멱등 매칭으로 영구 반영합니다. 출고단가는 참고만 하고 저장 안 함(기본 판매단가는 이후).</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>샘플 33종으론 부족한 현장 품목을, 검수를 거쳐 안전하게 기준정보로 올리기 위함. 잘못된 대량 반영·중복 품목을 막는 게 핵심.</dd>
+    <dt>선행 조건</dt><dd>W20 초안. 0007(카테고리)+0008(source_code) SQL Editor 적용 완료(사용자 확인). 공유 Supabase 쿼터 부담 때문에 전체 반영 전 소량 smoke 권장.</dd>
+    <dt>확인 방법</dt><dd>2026-07-09: catalog-import.ts/test + catalog-import-view.tsx. 데모 smoke — 업로드 8건→기존일치/중복명/검토 뱃지, 중복명 동시선택 경고+차단, 신규 4건 반영→품목관리·파서 매칭, 앱오류 0. W21-B: applyCatalogImportToDb 추가(source_code 멱등 재분류, 200건 배치, 별칭 upsert, 반영 후 reload). 로그인 DB 소량 실측은 다음 확인 포인트.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/catalog-import.ts</code></li><li><code>web/src/app/catalog-import-view.tsx</code></li><li><code>web/supabase/migrations/0008_product_source_code.sql</code></li><li><code>docs/guide-apply-0008-product-source-code.md</code></li></ul></details>
 </div></div><h2 class="phase">2차</h2><div class="grid">
 <div class="card s-hold">
   <div class="card-head"><span class="wid">W16</span><strong>2차 보류: 미수금·세금계산서 근거·원가/재고</strong><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span></div>
