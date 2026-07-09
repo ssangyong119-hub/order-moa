@@ -20,6 +20,8 @@ export interface ProductFormInput {
   baseUnit: string;
   /** 폼 입력 그대로(문자열 허용). 빈 값 = 미등록(null) */
   basePurchasePrice?: string | number | null;
+  /** 기본 출고단가(W22). 폼 입력 그대로. 빈 값 = 미등록(null) — 파싱 fallback도 미적용. */
+  baseSalePrice?: string | number | null;
   /** "" 또는 undefined = 매입처 미지정(null) */
   purchaseSupplierId?: string | null;
   /** 카테고리 6종. 미지정이면 기타(Phase 2). */
@@ -30,6 +32,7 @@ export interface NormalizedProductInput {
   name: string;
   baseUnit: string;
   basePurchasePrice: number | null;
+  baseSalePrice: number | null;
   purchaseSupplierId: string | null;
   category: ProductCategory;
 }
@@ -45,10 +48,12 @@ function parsePrice(raw: string | number | null | undefined): number | null | "i
 
 export function normalizeProductInput(input: ProductFormInput): NormalizedProductInput {
   const price = parsePrice(input.basePurchasePrice);
+  const salePrice = parsePrice(input.baseSalePrice);
   return {
     name: input.name.trim(),
     baseUnit: input.baseUnit.trim(),
     basePurchasePrice: price === "invalid" ? null : price,
+    baseSalePrice: salePrice === "invalid" ? null : salePrice,
     purchaseSupplierId: input.purchaseSupplierId ? input.purchaseSupplierId : null,
     category: normalizeProductCategory(input.category),
   };
@@ -60,6 +65,9 @@ export function validateProductInput(input: ProductFormInput): string | null {
   if (parsePrice(input.basePurchasePrice) === "invalid") {
     return "기준 매입단가는 0 이상 숫자로 입력해주세요.";
   }
+  if (parsePrice(input.baseSalePrice) === "invalid") {
+    return "기본 출고단가는 0 이상 숫자로 입력해주세요.";
+  }
   return null;
 }
 
@@ -70,6 +78,7 @@ export function toProductInsert(companyId: string, input: ProductFormInput) {
     name: clean.name,
     base_unit: clean.baseUnit,
     base_purchase_price: clean.basePurchasePrice,
+    base_sale_price: clean.baseSalePrice,
     purchase_supplier_id: clean.purchaseSupplierId,
     category: clean.category,
   };
@@ -81,6 +90,7 @@ export function toProductUpdate(input: ProductFormInput) {
     name: clean.name,
     base_unit: clean.baseUnit,
     base_purchase_price: clean.basePurchasePrice,
+    base_sale_price: clean.baseSalePrice,
     purchase_supplier_id: clean.purchaseSupplierId,
     category: clean.category,
   };
@@ -142,6 +152,8 @@ interface ProductRow {
   purchase_supplier_id: string | null;
   /** 0007 미적용 DB에서는 select 폴백으로 빠질 수 있음 → 없으면 기타. */
   category?: string | null;
+  /** 0009 미적용 DB에서는 select 폴백으로 빠질 수 있음 → 없으면 null. */
+  base_sale_price?: number | null;
 }
 
 function mapProduct(row: ProductRow, aliases: string[], supplierName: string | null): Product {
@@ -153,18 +165,36 @@ function mapProduct(row: ProductRow, aliases: string[], supplierName: string | n
     purchaseSupplierId: row.purchase_supplier_id,
     purchaseSupplierName: supplierName,
     basePurchasePrice: row.base_purchase_price,
+    baseSalePrice: row.base_sale_price ?? null,
     category: normalizeProductCategory(row.category),
   };
 }
 
-/** 0007 미적용 DB 대비 두 벌 — category 포함/미포함. 미포함으로 읽으면 mapProduct가 기타로 폴백.
- *  as const로 리터럴 타입 유지 → Supabase가 행 타입을 추론(동적 string이면 GenericStringError). */
+/** 마이그레이션 미적용 DB 대비 3벌 — 없는 컬럼은 select에서 빼고 mapProduct가 기본값으로 폴백.
+ *  FULL(0007+0009) → CAT(0007만) → BASE(둘 다 미적용). as const로 Supabase 행 타입 추론 유지. */
 export const PRODUCT_COLS_BASE = "id,name,base_unit,base_purchase_price,purchase_supplier_id" as const;
-export const PRODUCT_COLS = "id,name,base_unit,base_purchase_price,purchase_supplier_id,category" as const;
+export const PRODUCT_COLS_CAT = "id,name,base_unit,base_purchase_price,purchase_supplier_id,category" as const;
+export const PRODUCT_COLS = "id,name,base_unit,base_purchase_price,purchase_supplier_id,category,base_sale_price" as const;
+
+/** select 폴백: FULL → (base_sale_price 없음)CAT → (category 없음)BASE. 어느 컬럼이 없어도 앱은 안 깨진다. */
+export async function selectProductsWithFallback<T>(
+  query: (cols: string) => Promise<{ data: unknown; error: unknown }> | { data: unknown; error: unknown } | T,
+) {
+  let res = (await query(PRODUCT_COLS)) as { data: unknown; error: unknown };
+  if (res.error && isMissingColumnError(res.error, "base_sale_price")) res = (await query(PRODUCT_COLS_CAT)) as typeof res;
+  if (res.error && isMissingCategoryColumn(res.error)) res = (await query(PRODUCT_COLS_BASE)) as typeof res;
+  return res;
+}
 
 /** insert/update body에서 category 키만 제거(0007 미적용 폴백용). */
 function stripCategory<T extends { category?: unknown }>(row: T): Omit<T, "category"> {
   const { category: _omit, ...rest } = row;
+  return rest;
+}
+
+/** insert/update body에서 base_sale_price 키만 제거(0009 미적용 폴백용). */
+function stripBaseSalePrice<T extends { base_sale_price?: unknown }>(row: T): Omit<T, "base_sale_price"> {
+  const { base_sale_price: _omit, ...rest } = row;
   return rest;
 }
 
@@ -178,9 +208,13 @@ export async function createProduct(
   if (error) throw new Error(error);
   const row = toProductInsert(companyId, input);
   let res = await db.from("ordermoa_products").insert(row).select(PRODUCT_COLS).single();
+  if (res.error && isMissingColumnError(res.error, "base_sale_price")) {
+    // 0009 미적용 DB — base_sale_price 제외하고 재시도(품목·카테고리는 저장).
+    res = await db.from("ordermoa_products").insert(stripBaseSalePrice(row)).select(PRODUCT_COLS_CAT).single();
+  }
   if (res.error && isMissingCategoryColumn(res.error)) {
-    // 0007 미적용 DB — category 제외하고 재시도(품목 자체는 저장, 카테고리는 기타로 표시).
-    res = await db.from("ordermoa_products").insert(stripCategory(row)).select(PRODUCT_COLS_BASE).single();
+    // 0007 미적용 DB — category(+base_sale_price)까지 제외하고 재시도(품목 자체는 저장).
+    res = await db.from("ordermoa_products").insert(stripCategory(stripBaseSalePrice(row))).select(PRODUCT_COLS_BASE).single();
   }
   if (res.error) throw res.error;
   return mapProduct(res.data, [], supplierName);
@@ -204,11 +238,21 @@ export async function updateProduct(
     .eq("id", productId)
     .select(PRODUCT_COLS)
     .single();
-  if (res.error && isMissingCategoryColumn(res.error)) {
-    // 0007 미적용 DB — category 제외하고 재시도.
+  if (res.error && isMissingColumnError(res.error, "base_sale_price")) {
+    // 0009 미적용 DB — base_sale_price 제외하고 재시도.
     res = await db
       .from("ordermoa_products")
-      .update(stripCategory(patch))
+      .update(stripBaseSalePrice(patch))
+      .eq("company_id", companyId)
+      .eq("id", productId)
+      .select(PRODUCT_COLS_CAT)
+      .single();
+  }
+  if (res.error && isMissingCategoryColumn(res.error)) {
+    // 0007 미적용 DB — category(+base_sale_price)까지 제외하고 재시도.
+    res = await db
+      .from("ordermoa_products")
+      .update(stripCategory(stripBaseSalePrice(patch)))
       .eq("company_id", companyId)
       .eq("id", productId)
       .select(PRODUCT_COLS_BASE)
@@ -256,8 +300,7 @@ export async function listArchivedProducts(
       .eq("company_id", companyId)
       .not("archived_at", "is", null)
       .order("created_at", { ascending: true });
-  let prod = await archived(PRODUCT_COLS);
-  if (prod.error && isMissingCategoryColumn(prod.error)) prod = await archived(PRODUCT_COLS_BASE);
+  const prod = await selectProductsWithFallback(archived);
   const alias = await db
     .from("ordermoa_product_aliases")
     .select("product_id,alias")
@@ -349,6 +392,7 @@ export async function applyCatalogImportToDb(
       name: i.name,
       base_unit: i.baseUnit,
       base_purchase_price: i.basePurchasePrice,
+      base_sale_price: i.baseSalePrice, // W22: 출고단가는 여기(품목 기본가). customer_prices 아님.
       category: i.category,
       source_code: i.sourceCode,
       purchase_supplier_id: null as string | null,
@@ -378,7 +422,8 @@ export async function applyCatalogImportToDb(
   for (const u of plan.updates) {
     const res = await db
       .from("ordermoa_products")
-      .update({ base_purchase_price: u.basePurchasePrice, category: u.category, source_code: u.sourceCode })
+      // W22: 재import(source_code 멱등) 시 기존 품목의 base_sale_price도 갱신.
+      .update({ base_purchase_price: u.basePurchasePrice, base_sale_price: u.baseSalePrice, category: u.category, source_code: u.sourceCode })
       .eq("company_id", companyId)
       .eq("id", u.productId);
     if (res.error) {

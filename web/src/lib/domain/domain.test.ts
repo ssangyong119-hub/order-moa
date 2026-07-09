@@ -5,8 +5,29 @@ import {
   createId,
   findCustomerPrice,
   getOrderTotal,
+  resolveSalePrice,
 } from "./index";
 import type { Customer, CustomerPrice, Order, Product } from "./types";
+
+// W22 단가 우선순위: 거래처별 > 품목 기본 출고단가 > 미등록(0원).
+test("resolveSalePrice: 거래처별 단가가 있으면 항상 우선", () => {
+  const prices: CustomerPrice[] = [{ customerId: "c1", productId: "p1", price: 3000 }];
+  const product = { id: "p1", baseSalePrice: 9999 };
+  expect(resolveSalePrice(prices, "c1", product)).toEqual({ unitPrice: 3000, source: "customer" });
+});
+
+test("resolveSalePrice: 거래처별 단가 없으면 품목 기본 출고단가로 fallback", () => {
+  const product = { id: "p1", baseSalePrice: 2500 };
+  expect(resolveSalePrice([], "c1", product)).toEqual({ unitPrice: 2500, source: "base" });
+  // 0원 기본가도 유효한 기본가(base)로 취급 — null만 미등록.
+  expect(resolveSalePrice([], "c1", { id: "p1", baseSalePrice: 0 })).toEqual({ unitPrice: 0, source: "base" });
+});
+
+test("resolveSalePrice: 둘 다 없으면 0원/미등록(none)", () => {
+  expect(resolveSalePrice([], "c1", { id: "p1", baseSalePrice: null })).toEqual({ unitPrice: 0, source: "none" });
+  expect(resolveSalePrice([], "c1", { id: "p1" })).toEqual({ unitPrice: 0, source: "none" });
+  expect(resolveSalePrice([], "c1", null)).toEqual({ unitPrice: 0, source: "none" });
+});
 
 // 기존 tests/domain.test.mjs 의 5개 테스트를 TypeScript + Vitest 로 동일 재현.
 

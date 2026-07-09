@@ -2,7 +2,8 @@
 
 // W21 — 실 카탈로그 초안 JSON을 업로드해 미리보기·검수하고, 선택분만 반영하는 화면.
 // 순수 로직은 @/lib/catalog-import. 여기선 파일 업로드/필터/페이지네이션/행 편집/선택 상태만.
-// 원칙: 출고단가(repSalePrice)는 참고 표시만 — 저장하지 않는다(기본 판매단가는 Phase 3).
+// 원칙: 입고단가는 기준 매입단가, 출고단가(repSalePrice)는 품목 기본 출고단가로 저장한다.
+// customer_prices에는 자동 저장하지 않는다(거래처별 예외단가는 별도).
 import { useMemo, useRef, useState } from "react";
 import type { Product } from "@/lib/domain/types";
 import { PRODUCT_CATEGORIES, type ProductCategory } from "@/lib/product-category";
@@ -129,13 +130,14 @@ export function CatalogImportView({ existingProducts, persisted, onApply }: Prop
       const price = finalPrice(r);
       if (r.match === "existing") {
         const pid = existingIdByName.get(r.name);
-        if (pid) updates.push({ productId: pid, category: cat, basePurchasePrice: price, sourceCode: r.code });
+        if (pid) updates.push({ productId: pid, category: cat, basePurchasePrice: price, baseSalePrice: r.repSalePrice, sourceCode: r.code });
       } else {
         inserts.push({
           name: finalName(r),
           baseUnit: (finalUnit(r) ?? "").trim() || "개",
           category: cat,
           basePurchasePrice: price,
+          baseSalePrice: r.repSalePrice, // W22: 출고단가 → 품목 기본 출고단가(customer_prices 아님)
           sourceCode: r.code,
           aliases: r.aliasCandidates,
         });
@@ -160,7 +162,7 @@ export function CatalogImportView({ existingProducts, persisted, onApply }: Prop
       <h2>카탈로그 가져오기 (검수 후 반영)</h2>
       <p className="muted" style={{ marginTop: 0 }}>
         실제 엑셀에서 뽑은 품목 초안(JSON)을 올려 <strong>검수</strong>한 뒤, 고른 품목만 기준정보로 반영합니다.
-        {" "}출고단가는 참고만 하고 저장하지 않습니다(기본 판매단가는 이후 단계). 매입단가만 기준 매입단가로 들어갑니다.
+        {" "}입고단가는 기준 매입단가로, 출고단가는 <strong>품목 기본 출고단가</strong>로 저장됩니다(거래처별 단가가 없을 때만 파싱에 쓰이는 대체값 — customer_prices에는 넣지 않습니다).
       </p>
 
       <div className="row-actions" style={{ marginBottom: 8 }}>
@@ -232,7 +234,7 @@ export function CatalogImportView({ existingProducts, persisted, onApply }: Prop
                   <th>단위</th>
                   <th>카테고리</th>
                   <th className="num">매입단가</th>
-                  <th className="num">출고단가(참고)</th>
+                  <th className="num">기본 출고단가</th>
                   <th>상태</th>
                 </tr>
               </thead>

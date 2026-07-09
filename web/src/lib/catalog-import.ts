@@ -112,23 +112,25 @@ export function summarizeImport(rows: ImportRow[], selectedIds: Set<string>) {
   };
 }
 
-/** 신규 품목 insert 본문. 출고단가는 넣지 않는다. */
+/** 신규 품목 insert 본문. 입고단가→base_purchase_price, 출고단가→base_sale_price(W22). */
 export function toCatalogInsert(companyId: string, row: ImportRow, edit: ImportEdit) {
   return {
     company_id: companyId,
     name: (edit.name ?? row.name).trim(),
     base_unit: (edit.unit ?? row.unit ?? "").trim() || "개",
     base_purchase_price: edit.purchasePrice !== undefined ? edit.purchasePrice : row.repPurchasePrice,
+    base_sale_price: row.repSalePrice,
     category: edit.category ?? row.category,
     source_code: row.code,
     purchase_supplier_id: null,
   };
 }
 
-/** 기존일치 품목 update 패치. 이름은 바꾸지 않는다(source_code·단가·카테고리만). */
+/** 기존일치 품목 update 패치. 이름은 안 바꿈(source_code·매입/출고단가·카테고리만). */
 export function toCatalogUpdatePatch(row: ImportRow, edit: ImportEdit) {
   return {
     base_purchase_price: edit.purchasePrice !== undefined ? edit.purchasePrice : row.repPurchasePrice,
+    base_sale_price: row.repSalePrice,
     category: edit.category ?? row.category,
     source_code: row.code,
   };
@@ -148,6 +150,8 @@ export interface CatalogInsert {
   baseUnit: string;
   category: ProductCategory;
   basePurchasePrice: number | null;
+  /** 기본 출고단가(W22). 엑셀 출고단가(repSalePrice)를 여기 저장 — customer_prices 아님. */
+  baseSalePrice: number | null;
   sourceCode: string | null;
   aliases: string[];
 }
@@ -155,6 +159,8 @@ export interface CatalogUpdate {
   productId: string;
   category: ProductCategory;
   basePurchasePrice: number | null;
+  /** 기본 출고단가(W22). 재import 시 기존 품목도 갱신. */
+  baseSalePrice: number | null;
   sourceCode: string | null;
   /** 재분류로 붙는 별칭(이름매칭 update엔 없음, source_code 재import엔 초안 후보가 붙음). */
   aliases?: string[];
@@ -185,6 +191,7 @@ export function planCatalogDbWrite(
         productId: id,
         category: ins.category,
         basePurchasePrice: ins.basePurchasePrice,
+        baseSalePrice: ins.baseSalePrice,
         sourceCode: ins.sourceCode,
         aliases: ins.aliases,
       });

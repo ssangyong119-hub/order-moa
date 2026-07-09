@@ -21,6 +21,8 @@ export interface Product {
   purchaseSupplierName?: string | null;
   /** 기준 매입단가(원, 정수). 예상 마진 표시용 참고값. 미등록(없음)이면 마진 미표시. */
   basePurchasePrice?: number | null;
+  /** 기본 출고단가(원, 정수). 거래처별 단가가 없을 때 발주 파싱 fallback(W22, 0009). customer_prices와 별개. */
+  baseSalePrice?: number | null;
   /** 품목 카테고리 6종(Phase 2). 미지정/구 데이터는 '기타'로 폴백. */
   category?: ProductCategory;
   /** 외부(이카운트) 품목코드. import 멱등 매칭 전용(W21, 0008). 앱 내 신규 품목은 null. */

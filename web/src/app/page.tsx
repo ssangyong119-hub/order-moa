@@ -13,6 +13,7 @@ import {
   parseOrderText,
   type ParsedLine,
 } from "@/lib/order-parser";
+import { resolveSalePrice } from "@/lib/domain";
 import {
   estimatedLineMargin,
   estimatedOrderMargin,
@@ -372,15 +373,15 @@ export default function HomePage() {
     }
     const product = products.find((p) => p.id === productId);
     if (!product) return;
-    const saved = customerPrices.find(
-      (cp) => cp.customerId === selectedCustomerId && cp.productId === productId,
-    );
+    // W22 단가 우선순위: 거래처별 > 품목 기본 출고단가 > 미등록.
+    const resolved = resolveSalePrice(customerPrices, selectedCustomerId, product);
     updateLine(line.id, {
       productId,
       productName: product.name,
       unit: line.unit || product.baseUnit,
-      unitPrice: saved ? saved.price : 0,
-      priceRegistered: Boolean(saved),
+      unitPrice: resolved.unitPrice,
+      priceRegistered: resolved.source === "customer",
+      priceSource: resolved.source === "none" ? undefined : resolved.source,
       status: statusFor(productId, line.quantity),
       needsProductConfirmation: false,
     });
@@ -391,7 +392,8 @@ export default function HomePage() {
   }
   function setPrice(line: ParsedLine, value: string) {
     const p = value === "" ? 0 : Number(value);
-    updateLine(line.id, { unitPrice: p < 0 ? 0 : p });
+    // 사용자가 단가를 직접 고치면 출처 표시(기본 단가 적용 등)는 지운다.
+    updateLine(line.id, { unitPrice: p < 0 ? 0 : p, priceSource: undefined });
   }
   function savePrice(line: ParsedLine) {
     if (!line.productId) return;
@@ -400,7 +402,7 @@ export default function HomePage() {
       ...prev.filter((cp) => !(cp.customerId === selectedCustomerId && cp.productId === pid)),
       { customerId: selectedCustomerId, productId: pid, price: line.unitPrice },
     ]);
-    updateLine(line.id, { priceRegistered: true });
+    updateLine(line.id, { priceRegistered: true, priceSource: "customer" });
     // DB 모드: customer_prices upsert — 새로고침 후에도 자동 적용 유지
     if (db && companyId) {
       const client = db;
@@ -444,7 +446,7 @@ export default function HomePage() {
       ...changes.map((c) => ({ customerId: c.customerId, productId: c.productId, price: c.price })),
     ]);
     setLines((prev) =>
-      prev.map((l) => (l.productId && changedIds.has(l.productId) ? { ...l, priceRegistered: true } : l)),
+      prev.map((l) => (l.productId && changedIds.has(l.productId) ? { ...l, priceRegistered: true, priceSource: "customer" } : l)),
     );
     setPriceSaving(false);
     const conflictNote = conflicts.length > 0 ? ` (같은 품목 여러 줄은 마지막 값으로 저장: ${conflicts.join(", ")})` : "";
@@ -697,6 +699,7 @@ export default function HomePage() {
       purchaseSupplierId: clean.purchaseSupplierId,
       purchaseSupplierName: supplierName,
       basePurchasePrice: clean.basePurchasePrice,
+      baseSalePrice: clean.baseSalePrice,
       category: clean.category,
     };
     setProducts((prev) => (id ? prev.map((p) => (p.id === id ? saved : p)) : [...prev, saved]));
@@ -728,7 +731,7 @@ export default function HomePage() {
       const updateById = new Map(result.updates.map((u) => [u.productId, u]));
       const next = prev.map((p) => {
         const u = updateById.get(p.id);
-        return u ? { ...p, category: u.category, basePurchasePrice: u.basePurchasePrice, sourceCode: u.sourceCode } : p;
+        return u ? { ...p, category: u.category, basePurchasePrice: u.basePurchasePrice, baseSalePrice: u.baseSalePrice, sourceCode: u.sourceCode } : p;
       });
       for (const ins of result.inserts) {
         next.push({
@@ -739,6 +742,7 @@ export default function HomePage() {
           purchaseSupplierId: null,
           purchaseSupplierName: null,
           basePurchasePrice: ins.basePurchasePrice,
+          baseSalePrice: ins.baseSalePrice,
           category: ins.category,
           sourceCode: ins.sourceCode,
         });
@@ -2064,8 +2068,13 @@ function ReviewView(props: {
                         <span className="badge amber">단가 미등록</span>
                       </div>
                     )}
+                    {line.productId && line.priceSource === "base" && line.unitPrice > 0 && (
+                      <div>
+                        <span className="badge">기본 단가 적용</span>
+                      </div>
+                    )}
                     {line.productId && (
-                      <button className="link" onClick={() => props.onSavePrice(line)}>
+                      <button className="link" onClick={() => props.onSavePrice(line)} title="이 거래처 전용 단가로 저장합니다(품목 기본 출고단가는 바뀌지 않습니다).">
                         이 단가 저장
                       </button>
                     )}

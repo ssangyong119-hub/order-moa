@@ -56,11 +56,11 @@
   </div>
 </header>
 <div class="wrap">
-  <div class="focus">📌 <strong>지금 하는 일:</strong> W21 — 카탈로그 import 미리보기/검수 + 선택 DB 반영. W20 초안(1590품목) JSON을 데이터 화면에서 업로드→요약/필터/50페이지/행편집/중복명 경고/기존일치 검수→선택분만 반영. DB 모드는 0007(category)+0008(source_code) 적용 후 200건 배치 insert/update, source_code 멱등 재분류, 별칭 충돌 무시 upsert, 반영 후 products 재조회. 데모 모드는 메모리 반영. 매핑: 입고단가→base_purchase_price, 출고단가는 저장 안 함(기본 판매단가는 Phase 3), category→products.category, code→source_code. order_items·집계·파서 무변경(스냅샷 유지). 다음: 로그인 모드 10~20건 소량 DB smoke, 전용 Supabase 분리 vs Phase 3.</div>
+  <div class="focus">📌 <strong>지금 하는 일:</strong> W22 — 품목 기본 출고단가(base_sale_price) 도입. 베타 검증에서 금액이 0원으로만 나오지 않게, 엑셀 출고단가를 products.base_sale_price에 저장하고 파싱 단가 우선순위를 거래처별 단가(customer_prices) &gt; 품목 기본 출고단가 &gt; 미등록으로 변경. customer_prices 자동 생성 없음, order_items.unit_price 스냅샷 불변. 0009 마이그레이션 작성(적용 대기), 카탈로그 재import 시 source_code 멱등으로 기존 품목 base_sale_price 갱신.</div>
 
-  <h2>전체 진행률 (작업 보드 21개 기준)</h2>
-  <div class="progressbar"><div style="width:76%"></div></div>
-  <p class="counts">완료 16 · 다음 0 · 보류 2 — 1차 트랙(보류 제외) 16/19 완료</p>
+  <h2>전체 진행률 (작업 보드 22개 기준)</h2>
+  <div class="progressbar"><div style="width:73%"></div></div>
+  <p class="counts">완료 16 · 다음 0 · 보류 2 — 1차 트랙(보류 제외) 16/20 완료</p>
   <div class="legend"><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span><span class="badge" style="background:#fef7e0;color:#946200">다음</span><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span><span class="badge" style="background:#fde8e8;color:#b02a2a">제외</span></div>
 
   <h2>핵심 흐름 (이 순서가 제품의 전부)</h2>
@@ -266,10 +266,20 @@
   <p class="plain">W20 초안(JSON)을 앱에서 올려 미리보기로 검수하고, 고른 품목만 기준정보로 반영하는 화면입니다. 업로드·요약·필터·행편집·중복명 경고·기존일치 표시를 제공하고, 데모는 화면 반영, 로그인 DB 모드는 200건 배치 insert/update와 source_code 멱등 매칭으로 영구 반영합니다. 출고단가는 참고만 하고 저장 안 함(기본 판매단가는 이후).</p>
   <dl>
     <dt>왜 필요한가</dt><dd>샘플 33종으론 부족한 현장 품목을, 검수를 거쳐 안전하게 기준정보로 올리기 위함. 잘못된 대량 반영·중복 품목을 막는 게 핵심.</dd>
-    <dt>선행 조건</dt><dd>W20 초안. 0007(카테고리)+0008(source_code) SQL Editor 적용 완료(사용자 확인). 공유 Supabase 쿼터 부담 때문에 전체 반영 전 소량 smoke 권장.</dd>
-    <dt>확인 방법</dt><dd>2026-07-09: catalog-import.ts/test + catalog-import-view.tsx. 데모 smoke — 업로드 8건→기존일치/중복명/검토 뱃지, 중복명 동시선택 경고+차단, 신규 4건 반영→품목관리·파서 매칭, 앱오류 0. W21-B: applyCatalogImportToDb 추가(source_code 멱등 재분류, 200건 배치, 별칭 upsert, 반영 후 reload). 로그인 DB 소량 실측은 다음 확인 포인트.</dd>
+    <dt>선행 조건</dt><dd>W20 초안. 0007(카테고리)+0008(source_code) SQL Editor 적용 완료(사용자 확인). Usage 확인 결과 용량 여유 있음 — 전체 반영 리스크는 쿼터보다 중복명/검토필요 데이터 품질.</dd>
+    <dt>확인 방법</dt><dd>2026-07-09: catalog-import.ts/test + catalog-import-view.tsx. 데모 smoke — 업로드 8건→기존일치/중복명/검토 뱃지, 중복명 동시선택 경고+차단, 신규 4건 반영→품목관리·파서 매칭, 앱오류 0. W21-B: applyCatalogImportToDb 추가(source_code 멱등 재분류, 200건 배치, 별칭 upsert, 반영 후 reload). 사용자 DB 소량 실측: 품목 반영/F5 유지/재반영 중복 없음/파싱 매칭 확인.</dd>
   </dl>
   <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/catalog-import.ts</code></li><li><code>web/src/app/catalog-import-view.tsx</code></li><li><code>web/supabase/migrations/0008_product_source_code.sql</code></li><li><code>docs/guide-apply-0008-product-source-code.md</code></li></ul></details>
+</div>
+<div class="card s-doing">
+  <div class="card-head"><span class="wid">W22</span><strong>품목 기본 출고단가</strong><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span></div>
+  <p class="plain">엑셀 출고단가를 품목 기본 출고단가(base_sale_price)로 저장하고, 거래처별 단가가 없을 때 발주 파싱 금액 fallback으로 씁니다. 거래처별 단가(customer_prices)가 있으면 항상 우선하고, customer_prices를 자동 생성하지는 않습니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>베타 검증에서 품목은 매칭되지만 판매금액이 전부 0원이면 주문/명세서/합산표 검증이 어렵습니다. 다단위(product_units) 전 단계의 최소 구조로 기본 출고단가 자리를 마련합니다.</dd>
+    <dt>선행 조건</dt><dd>W21 카탈로그 import. 0009_product_base_sale_price.sql Supabase 적용 후 같은 카탈로그를 재import하면 source_code 멱등으로 기존 품목의 base_sale_price가 채워짐.</dd>
+    <dt>확인 방법</dt><dd>코드 검증: resolveSalePrice 단가 우선순위(customer &gt; base &gt; none), 파서 fallback, catalog import repSalePrice→base_sale_price, product-store 매핑 테스트. 적용 후 실측: 거래처 단가 없는 품목이 기본 단가 적용으로 금액 표시, 거래처별 단가가 있으면 우선, customer_prices 새 row 없음, 과거 주문 스냅샷 불변.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/domain/index.ts</code></li><li><code>web/src/lib/order-parser.ts</code></li><li><code>web/supabase/migrations/0009_product_base_sale_price.sql</code></li><li><code>docs/guide-apply-0009-product-base-sale-price.md</code></li></ul></details>
 </div></div><h2 class="phase">2차</h2><div class="grid">
 <div class="card s-hold">
   <div class="card-head"><span class="wid">W16</span><strong>2차 보류: 미수금·세금계산서 근거·원가/재고</strong><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span></div>

@@ -31,6 +31,24 @@ export function findCustomerPrice(
   return match ? Number(match.price) : null;
 }
 
+/**
+ * 발주 판매단가 우선순위(W22): 거래처별 단가 > 품목 기본 출고단가 > 미등록(0원).
+ * 순수 함수 — 파서와 화면 배정 로직이 같은 규칙을 쓰도록 단일 소스로 둔다.
+ * base_sale_price는 fallback일 뿐 customer_prices를 만들지 않는다.
+ */
+export function resolveSalePrice(
+  prices: CustomerPrice[],
+  customerId: string,
+  product: Pick<Product, "id" | "baseSalePrice"> | null,
+): { unitPrice: number; source: "customer" | "base" | "none" } {
+  if (!product) return { unitPrice: 0, source: "none" };
+  const customer = findCustomerPrice(prices, customerId, product.id);
+  if (customer !== null) return { unitPrice: customer, source: "customer" };
+  const base = product.baseSalePrice;
+  if (base !== null && base !== undefined) return { unitPrice: Number(base), source: "base" };
+  return { unitPrice: 0, source: "none" };
+}
+
 export function getProductLabel(products: Product[], productId: string): string {
   const product = findById(products, productId);
   return product ? product.name : "알 수 없는 품목";

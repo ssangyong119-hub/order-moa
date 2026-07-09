@@ -9,7 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Customer, CustomerPrice, Product, Supplier } from "./domain/types";
 import { estimatedOrderMargin, sumAmounts } from "./calculations";
 import { normalizeProductCategory } from "./product-category";
-import { PRODUCT_COLS, PRODUCT_COLS_BASE, isMissingCategoryColumn } from "./product-store";
+import { isMissingCategoryColumn, selectProductsWithFallback } from "./product-store";
 import {
   sampleCustomers,
   sampleCustomerPrices,
@@ -219,7 +219,7 @@ export interface CompanyData {
   seeded: boolean;
 }
 
-/** 활성 품목 select — 0007(category) 미적용 DB면 category 없이 재시도(앱은 기타 폴백). */
+/** 활성 품목 select — 0007(category)/0009(base_sale_price) 미적용 DB면 해당 컬럼 없이 재시도(앱 폴백). */
 async function selectActiveProducts(db: SupabaseClient, companyId: string) {
   const query = (cols: string) =>
     db
@@ -228,9 +228,7 @@ async function selectActiveProducts(db: SupabaseClient, companyId: string) {
       .eq("company_id", companyId)
       .is("archived_at", null)
       .order("created_at", { ascending: true });
-  const res = await query(PRODUCT_COLS);
-  if (res.error && isMissingCategoryColumn(res.error)) return query(PRODUCT_COLS_BASE);
-  return res;
+  return selectProductsWithFallback(query);
 }
 
 async function fetchCompanyData(db: SupabaseClient, companyId: string) {
@@ -286,6 +284,7 @@ async function fetchCompanyData(db: SupabaseClient, companyId: string) {
     base_purchase_price: number | null;
     purchase_supplier_id: string | null;
     category?: string | null;
+    base_sale_price?: number | null;
   }>;
   const products: Product[] = productRows.map((p) => ({
     id: p.id,
@@ -295,6 +294,7 @@ async function fetchCompanyData(db: SupabaseClient, companyId: string) {
     purchaseSupplierId: p.purchase_supplier_id ?? null,
     purchaseSupplierName: p.purchase_supplier_id ? supplierById.get(p.purchase_supplier_id) ?? null : null,
     basePurchasePrice: p.base_purchase_price,
+    baseSalePrice: p.base_sale_price ?? null,
     category: normalizeProductCategory(p.category),
   }));
   const customerPrices: CustomerPrice[] = (price.data ?? []).map((cp) => ({

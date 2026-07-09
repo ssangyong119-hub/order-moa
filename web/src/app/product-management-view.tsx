@@ -15,6 +15,7 @@ const EMPTY_FORM: ProductFormInput = {
   name: "",
   baseUnit: "",
   basePurchasePrice: "",
+  baseSalePrice: "",
   purchaseSupplierId: "",
   category: DEFAULT_PRODUCT_CATEGORY,
 };
@@ -74,6 +75,7 @@ export function ProductManagementView({
       name: product.name,
       baseUnit: product.baseUnit,
       basePurchasePrice: product.basePurchasePrice ?? "",
+      baseSalePrice: product.baseSalePrice ?? "",
       purchaseSupplierId: product.purchaseSupplierId ?? "",
       category: product.category ?? DEFAULT_PRODUCT_CATEGORY,
     });
@@ -270,6 +272,16 @@ export function ProductManagementView({
                 value={form.basePurchasePrice ?? ""}
                 onChange={(e) => setForm((p) => ({ ...p, basePurchasePrice: e.target.value }))}
                 placeholder="예상 마진 참고용"
+              />
+            </label>
+            <label>
+              기본 출고단가 (선택)
+              <input
+                type="number"
+                min={0}
+                value={form.baseSalePrice ?? ""}
+                onChange={(e) => setForm((p) => ({ ...p, baseSalePrice: e.target.value }))}
+                placeholder="거래처 단가 없을 때 파싱 기본값"
               />
             </label>
             <label>

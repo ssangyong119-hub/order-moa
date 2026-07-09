@@ -2,7 +2,7 @@
 // 완전 자동 확정 금지 — 후보(라인)만 생성하고, 최종 확정은 사용자(F9)가 한다.
 // 순수 함수: UI/저장소와 분리. 거래처는 호출 전에 선택되어 customerId로 들어온다.
 import type { CustomerPrice, Product } from "./domain/types";
-import { findCustomerPrice } from "./domain";
+import { resolveSalePrice } from "./domain";
 
 export type LineStatus = "matched" | "unmatched" | "qty_uncertain";
 
@@ -22,8 +22,10 @@ export interface ParsedLine {
   unit: string;
   /** 단가(원). 미등록이면 0 */
   unitPrice: number;
-  /** 거래처별 단가가 등록되어 있었는지 */
+  /** 거래처별 단가가 등록되어 있었는지(=priceSource "customer"). 하위호환 유지. */
   priceRegistered: boolean;
+  /** 단가 출처(W22): "customer" 거래처별 · "base" 품목 기본 출고단가 · 없음이면 undefined(미등록). */
+  priceSource?: "customer" | "base";
   status: LineStatus;
   /** 파싱 시점에 자동 매칭에 실패했는지(원문 별칭 등록 후보 판별용). */
   wasUnmatched: boolean;
@@ -221,15 +223,11 @@ export function parseOrderText(
     const needsProductConfirmation = candidateProductIds.length > 1;
     const unit = extractUnit(segment, product ? product.baseUnit : "", cluster?.unit ?? null);
 
-    let unitPrice = 0;
-    let priceRegistered = false;
-    if (product) {
-      const price = findCustomerPrice(prices, customerId, product.id);
-      if (price !== null) {
-        unitPrice = price;
-        priceRegistered = true;
-      }
-    }
+    // W22 단가 우선순위: 거래처별 > 품목 기본 출고단가 > 미등록.
+    const resolved = resolveSalePrice(prices, customerId, product);
+    const unitPrice = resolved.unitPrice;
+    const priceRegistered = resolved.source === "customer";
+    const priceSource = resolved.source === "none" ? undefined : resolved.source;
 
     let status: LineStatus;
     if (!product) {
@@ -250,6 +248,7 @@ export function parseOrderText(
       unit,
       unitPrice,
       priceRegistered,
+      priceSource,
       status,
       wasUnmatched: !product,
       candidateProductIds,

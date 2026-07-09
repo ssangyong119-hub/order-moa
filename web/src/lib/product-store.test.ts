@@ -13,13 +13,14 @@ import type { Product } from "./domain/types";
 
 test("normalizeProductInput: 공백 정리 + 단가/매입처/카테고리 정규화", () => {
   expect(
-    normalizeProductInput({ name: " 콩나물 ", baseUnit: " 박스 ", basePurchasePrice: "3500", purchaseSupplierId: "s1", category: "농산물" }),
-  ).toEqual({ name: "콩나물", baseUnit: "박스", basePurchasePrice: 3500, purchaseSupplierId: "s1", category: "농산물" });
+    normalizeProductInput({ name: " 콩나물 ", baseUnit: " 박스 ", basePurchasePrice: "3500", baseSalePrice: "5000", purchaseSupplierId: "s1", category: "농산물" }),
+  ).toEqual({ name: "콩나물", baseUnit: "박스", basePurchasePrice: 3500, baseSalePrice: 5000, purchaseSupplierId: "s1", category: "농산물" });
   // 빈 단가·미지정 매입처는 null, 카테고리 미지정은 기타
   expect(normalizeProductInput({ name: "두부", baseUnit: "판", basePurchasePrice: "", purchaseSupplierId: "" })).toEqual({
     name: "두부",
     baseUnit: "판",
     basePurchasePrice: null,
+    baseSalePrice: null,
     purchaseSupplierId: null,
     category: "기타",
   });
@@ -40,12 +41,13 @@ test("validateProductInput: 이름/단위 필수, 단가는 0 이상 정수", ()
   expect(validateProductInput({ name: "콩나물", baseUnit: "박스" })).toBeNull();
 });
 
-test("toProductInsert / toProductUpdate: DB 컬럼 형태(category 포함)", () => {
-  expect(toProductInsert("co1", { name: "콩나물", baseUnit: "박스", basePurchasePrice: "3500", purchaseSupplierId: "s1", category: "농산물" })).toEqual({
+test("toProductInsert / toProductUpdate: DB 컬럼 형태(category·base_sale_price 포함)", () => {
+  expect(toProductInsert("co1", { name: "콩나물", baseUnit: "박스", basePurchasePrice: "3500", baseSalePrice: "5000", purchaseSupplierId: "s1", category: "농산물" })).toEqual({
     company_id: "co1",
     name: "콩나물",
     base_unit: "박스",
     base_purchase_price: 3500,
+    base_sale_price: 5000,
     purchase_supplier_id: "s1",
     category: "농산물",
   });
@@ -53,6 +55,7 @@ test("toProductInsert / toProductUpdate: DB 컬럼 형태(category 포함)", () 
     name: "두부",
     base_unit: "판",
     base_purchase_price: null,
+    base_sale_price: null,
     purchase_supplier_id: null,
     category: "기타",
   });

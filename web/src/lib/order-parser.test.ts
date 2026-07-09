@@ -45,6 +45,24 @@ test("예시4 단가 미등록: 양배추 matched지만 0원 + priceRegistered=f
   expect(canConfirm(lines)).toBe(true);
 });
 
+test("W22 기본 출고단가 fallback: 거래처 단가 없으면 base_sale_price 적용(priceSource=base)", () => {
+  const custom = [
+    { id: "px", name: "테스트품목", baseUnit: "개", aliases: [], baseSalePrice: 4200 },
+  ];
+  // 거래처 단가 없음 → 기본 출고단가 4200 적용, priceRegistered=false(거래처 단가는 아님), priceSource=base
+  const [line] = parseOrderText("테스트품목 2개", "cust_none", custom, []);
+  expect(line.productId).toBe("px");
+  expect(line.unitPrice).toBe(4200);
+  expect(line.priceRegistered).toBe(false);
+  expect(line.priceSource).toBe("base");
+  // 거래처 단가가 있으면 그것이 우선(기본가 무시)
+  const [line2] = parseOrderText("테스트품목 2개", "cust_none", custom, [
+    { customerId: "cust_none", productId: "px", price: 3000 },
+  ]);
+  expect(line2.unitPrice).toBe(3000);
+  expect(line2.priceSource).toBe("customer");
+});
+
 test("예시5 미매칭: '랩' 미매칭 → 확정 차단", () => {
   const lines = parseOrderText("위생장갑 2박스\n랩 3개", "cust_happy", products, prices);
   expect(lines[0].productId).toBe("p28");

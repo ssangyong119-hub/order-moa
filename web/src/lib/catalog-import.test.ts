@@ -57,7 +57,7 @@ test("summarizeImport: 선택/신규/기존/검토필요 카운트", () => {
   expect(s).toEqual({ total: 3, selected: 1, needsReview: 1, newCount: 2, existing: 1 });
 });
 
-test("toCatalogInsert: 입고단가→basePurchasePrice, 출고단가는 저장 안 함, source_code=code", () => {
+test("toCatalogInsert: 입고단가→base_purchase_price, 출고단가→base_sale_price(W22), source_code=code", () => {
   const rows = buildImportRows((validateCatalogDraft(validDraft) as any).items, new Set());
   const row = rows.find((r) => r.code === "10001")!;
   const ins = toCatalogInsert("co1", row, {});
@@ -66,25 +66,28 @@ test("toCatalogInsert: 입고단가→basePurchasePrice, 출고단가는 저장 
     name: "콩나물",
     base_unit: "시루",
     base_purchase_price: 11000, // 입고단가
+    base_sale_price: 13000, // 출고단가 → 품목 기본 출고단가
     category: "농산물",
     source_code: "10001",
     purchase_supplier_id: null,
   });
-  expect("sale_price" in ins).toBe(false); // 출고단가는 어디에도 저장 안 함
-  // 편집 적용(이름·카테고리·단가 오버라이드)
+  expect("sale_price" in ins).toBe(false); // customer_prices의 sale_price로는 안 감(품목 base_sale_price만)
+  // 편집 적용(이름·카테고리·매입단가 오버라이드) — 출고단가는 초안값 유지
   const edited = toCatalogInsert("co1", row, { name: "콩나물(시루)", category: "냉식", purchasePrice: 12000, unit: "봉" });
   expect(edited.name).toBe("콩나물(시루)");
   expect(edited.category).toBe("냉식");
   expect(edited.base_purchase_price).toBe(12000);
+  expect(edited.base_sale_price).toBe(13000);
   expect(edited.base_unit).toBe("봉");
 });
 
-test("toCatalogUpdatePatch: 기존일치는 이름 불변, source_code·단가·카테고리만", () => {
+test("toCatalogUpdatePatch: 기존일치는 이름 불변, source_code·매입/출고단가·카테고리만", () => {
   const rows = buildImportRows((validateCatalogDraft(validDraft) as any).items, new Set(["깻잎"]));
   const row = rows.find((r) => r.name === "깻잎")!;
   const patch = toCatalogUpdatePatch(row, {});
   expect("name" in patch).toBe(false); // 이름은 안 바꿈
-  expect(patch).toEqual({ base_purchase_price: null, category: "기타", source_code: "10015" });
+  expect("sale_price" in patch).toBe(false); // customer_prices로 안 감
+  expect(patch).toEqual({ base_purchase_price: null, base_sale_price: null, category: "기타", source_code: "10015" });
 });
 
 test("chunk: 배치 분할(200단위 등)", () => {
@@ -96,11 +99,11 @@ test("chunk: 배치 분할(200단위 등)", () => {
 
 const applyResult: CatalogApplyResult = {
   inserts: [
-    { name: "콩나물", baseUnit: "Kg", category: "농산물", basePurchasePrice: 800, sourceCode: "10000", aliases: ["콩나물세척"] },
-    { name: "깻잎", baseUnit: "봉", category: "기타", basePurchasePrice: null, sourceCode: "10015", aliases: [] },
-    { name: "손두부", baseUnit: "판", category: "공산품", basePurchasePrice: 1500, sourceCode: null, aliases: ["두부"] },
+    { name: "콩나물", baseUnit: "Kg", category: "농산물", basePurchasePrice: 800, baseSalePrice: 1000, sourceCode: "10000", aliases: ["콩나물세척"] },
+    { name: "깻잎", baseUnit: "봉", category: "기타", basePurchasePrice: null, baseSalePrice: null, sourceCode: "10015", aliases: [] },
+    { name: "손두부", baseUnit: "판", category: "공산품", basePurchasePrice: 1500, baseSalePrice: 2000, sourceCode: null, aliases: ["두부"] },
   ],
-  updates: [{ productId: "p-old", category: "육류", basePurchasePrice: 9000, sourceCode: "20001" }],
+  updates: [{ productId: "p-old", category: "육류", basePurchasePrice: 9000, baseSalePrice: 11000, sourceCode: "20001" }],
 };
 
 test("planCatalogDbWrite: 이미 저장된 source_code는 insert가 아니라 update로(멱등)", () => {
@@ -113,6 +116,8 @@ test("planCatalogDbWrite: 이미 저장된 source_code는 insert가 아니라 up
   // 재분류된 건은 초안 별칭을 그대로 들고 감(재import 시에도 별칭 반영)
   const reclassified = plan.updates.find((u) => u.productId === "p-exists")!;
   expect(reclassified.aliases).toEqual(["콩나물세척"]);
+  // 재분류 update도 기본 출고단가를 그대로 들고 감(재import 시 기존 품목 base_sale_price 갱신)
+  expect(reclassified.baseSalePrice).toBe(1000);
   // 이름매칭 update는 별칭 없음(빈 배열 보정)
   expect(plan.updates.find((u) => u.productId === "p-old")!.aliases).toEqual([]);
 });

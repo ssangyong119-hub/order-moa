@@ -1882,3 +1882,47 @@ W20 초안(`docs/order-moa-catalog-real-draft.json`, 1590품목)을 앱에서 �
 
 - 실제 DB smoke 수치(반영 건수/F5/멱등/customer_prices 무변화/회귀/콘솔)는 사용자 실행 후 이 로그에 보완 기록 필요.
 - Codex 검수: (a) 정적 검증 결론 동의 여부, (b) 전용 Supabase 분리 시점 승인, (c) 사용자 smoke 결과 수치 반영 후 진행판 갱신.
+
+### Codex/사용자 후속 확인(2026-07-09)
+- 사용자가 로그인 세션에서 소량 카탈로그 반영 후 **품목·별칭 관리에 표시**, **F5 유지**, **같은 품목 재반영 시 중복 생성 없음**, **발주 붙여넣기 파싱 매칭**을 확인했다.
+- Supabase Usage를 All projects로 확인: Database 0.028/0.5GB(6%), Egress 0.001/5GB(<1%), Storage 0/1GB, MAU 4/50,000. 따라서 유료/전용 Supabase 분리는 **당장 급하지 않음**. 전체 반영의 주 리스크는 쿼터가 아니라 **중복명·검토필요 품목의 데이터 품질**.
+
+## 2026-07-09 Claude (W22 — 품목 기본 출고단가 base_sale_price + 카탈로그 출고단가 반영)
+
+상태:
+
+- **완료(코드·검증)** / 0009 마이그레이션 = 작성 완료·**적용 대기**(Codex 승인 후 사용자 SQL Editor). Claude 커밋/푸시 안 함 — 보고만.
+
+작업 목표:
+
+- 베타 검증(금액/명세서/합산표)을 위해 거래처별 단가가 없을 때 쓸 **품목 기본 출고단가** 최소 구조 도입. 카탈로그 import가 출고단가를 이 값으로 저장.
+
+설계 결정:
+
+- **base_sale_price는 products에** 둔다(customer_prices 아님). 엑셀 출고단가는 품목 표준가지 거래처 계약가가 아니고, 전 거래처에 customer_prices를 자동 생성하면 조합 폭증 + "예외 단가" 신호 소실. 우선순위는 **코드에서 판정**: 거래처별 > 품목 기본가 > 미등록.
+- 단가 우선순위 단일 소스 `resolveSalePrice(prices, customerId, product)`(`domain/index.ts`) → 파서(`parseOrderText`)와 화면 배정(`assignProduct`)이 같은 규칙 공유. `ParsedLine.priceSource`("customer"|"base"|undefined) 추가, `priceRegistered`는 "customer"만(하위호환).
+- `order_items.unit_price`는 확정 시점 스냅샷 유지 — base_sale_price는 마스터 속성이라 과거 주문/명세서/월합계 무영향. 과거 주문 재계산 없음.
+
+수정 파일:
+
+- **마이그레이션**: `web/supabase/migrations/0009_product_base_sale_price.sql`(base_sale_price integer null + CHECK(null or >=0), add column if not exists + drop/add constraint = idempotent, RLS 무변경). 가이드 `docs/guide-apply-0009-product-base-sale-price.md`.
+- **타입/도메인**: `domain/types.ts`(Product.baseSalePrice), `domain/index.ts`(resolveSalePrice).
+- **파서**: `order-parser.ts`(resolveSalePrice로 fallback + priceSource).
+- **스토어**: `product-store.ts`(ProductFormInput/normalize/validate/toProductInsert·Update에 baseSalePrice, ProductRow·mapProduct, **3단 컬럼 폴백** PRODUCT_COLS/CAT/BASE + `selectProductsWithFallback`, create/update body strip 폴백, `applyCatalogImportToDb` insert·update에 base_sale_price=재import 시 기존 품목도 갱신). `order-store.ts`(selectActiveProducts→공유 폴백, product 매핑에 baseSalePrice).
+- **import 로직**: `catalog-import.ts`(CatalogInsert/Update.baseSalePrice, planCatalogDbWrite 재분류 시 carry, toCatalogInsert/UpdatePatch에 base_sale_price=repSalePrice).
+- **화면**: `catalog-import-view.tsx`("출고단가(참고)"→"기본 출고단가", repSalePrice→baseSalePrice 매핑, 안내문 갱신). `product-management-view.tsx`(기준 매입단가 옆 **기본 출고단가 입력칸**). `page.tsx`(resolveSalePrice로 assignProduct·setPrice·savePrice·saveAllPrices priceSource, **"기본 단가 적용"** 뱃지, "이 단가 저장" title로 거래처 전용 단가임을 명시, 데모 import·saveProduct에 baseSalePrice).
+- **테스트**: domain(resolveSalePrice 3케이스), order-parser(base fallback+priceSource), catalog-import(repSalePrice→base_sale_price, sale_price로 안 감), product-store(normalize/insert/update 매핑). 진행판 3종(W22 카드 추가).
+
+원칙 확인(코드 정적):
+
+- import 경로에 `customer_prices`/`sale_price` **쓰기 0건**(출고단가는 products.base_sale_price로만). 재import(source_code 멱등) 시 기존 품목 base_sale_price update됨.
+- customer_prices 자동 대량 생성 안 함. product_units/다단위 미구현. order_items·합산표·명세서 과거 금액 재계산 없음.
+
+검증:
+
+- root `npm test` 5/5 · web `npm test` **149/149**(신규 4) · `npm run build` 성공(타입체크 포함) · `npm audit --audit-level=low` 0건 · `git diff --check` clean(CRLF 경고만).
+
+남은 이슈:
+
+- 0009 Supabase 적용(사용자, Codex 승인 후) → **기존 W21 import분은 출고단가 비어 있으므로 같은 카탈로그 재import 필요**(guide-apply-0009). 로그인 모드 소량 smoke는 W21-C 절차와 함께.
+- Codex 검수: (a) base_sale_price를 products에 둔 설계 동의, (b) 0009 CHECK/폴백 승인, (c) 3단 컬럼 폴백(현재 0009 미적용 창구간) 수용 여부.

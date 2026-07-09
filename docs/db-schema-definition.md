@@ -34,6 +34,7 @@
 - **raw_text 삭제가 확정 주문에 영향 없게**: `orders`/`order_items`는 `order_imports`와 **FK로 묶지 않는다**(논리적 파생만). 따라서 raw_text를 null로 지워도 확정 주문은 그대로 유지된다.
 - **VAT 계산 없음**(1차). `products.tax_type`은 확장 필드로만 둠.
 - **기준 매입단가**는 `products.base_purchase_price integer nullable`(품목당 단일, 선택)로만 둔다 → **예상 마진은 표시용 참고값**(판매단가 − 기준 매입단가). 매입처별/시점별 정밀 원가·재고·정확한 회계 마진은 **2차 별도 테이블**로 분리(§4.12).
+- **기본 출고단가**는 `products.base_sale_price integer nullable`(W22, 0009)로 둔다. 거래처별 단가(`customer_prices`)가 없을 때만 발주 파싱 fallback으로 사용하며, `customer_prices`를 자동 생성하지 않는다. 우선순위는 **거래처별 단가 > 품목 기본 출고단가 > 미등록**.
 - **`delivery_notes` 저장/`note_number` 채번은 후순위/선택**.
 - 삭제는 가능한 한 **soft delete**(customers/products=`archived_at`, orders=`status='cancelled'`).
 - 모든 **FK 참조는 같은 `company_id` 안에서만** 연결한다(교차 회사 혼입 차단). 강제 방식은 §5.1 / §6.1(트리거) 참조.
@@ -126,12 +127,14 @@
 | base_unit | text | ✅ | | 기본단위(참고/기본값) |
 | tax_type | text | ✅ | 'taxable' | CHECK in ('taxable','exempt'). **계산 반영 2차** |
 | base_purchase_price | integer | | null | **기준 매입단가(선택, 질문4 확정)** — CHECK (>=0). 예상 마진 표시용 참고값. **정확한 매입이력/원가이력/재고평가는 2차**(별도 테이블) |
+| base_sale_price | integer | | null | **기본 출고단가(W22, 0009)** — CHECK (>=0). 거래처별 단가가 없을 때만 파싱 fallback으로 사용. customer_prices 자동 생성 없음 |
 | category | text | ✅ | '기타' | **품목 카테고리 6종(Phase 2, W19)** — CHECK in ('농산물','공산품','냉식','육류','수산','기타'). 0007 마이그레이션. 6종 고정(사용자 정의 없음)이라 별도 테이블 없이 컬럼 1개. 품목 마스터 속성 → order_items엔 저장 안 함(과거 주문 무영향) |
+| source_code | text | | null | **외부 품목코드(W21, 0008)** — 실 카탈로그 import 멱등 매칭용. 부분 유니크 `(company_id, source_code) where source_code is not null` |
 | memo | text | | null | |
 | created_at | timestamptz | ✅ | now() | |
 | archived_at | timestamptz | | null | soft delete |
 - 인덱스: `(company_id)`
-- **Phase 2(0007)**: `category` 추가. RLS는 기존 products 테이블 정책(0002) 상속(정책 변경 없음). CHECK 제약명 `ordermoa_products_category_check`. 다단위(`product_units`)·기본/예외 단가는 **Phase 3 별도**(구현 안 함, 백로그).
+- **Phase 2(0007~0009)**: `category`(0007), `source_code`(0008), `base_sale_price`(0009) 추가. RLS는 기존 products 테이블 정책(0002) 상속(정책 변경 없음). `source_code`는 import 멱등 매칭용, `base_sale_price`는 거래처별 단가가 없을 때의 기본 판매가 fallback. 다단위(`product_units`)·거래처 예외 단가 재설계는 **Phase 3 별도**(구현 안 함, 백로그).
 
 ### 4.5 product_aliases
 | 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
@@ -311,11 +314,17 @@ create table public.products (
   base_unit text not null,
   tax_type text not null default 'taxable' check (tax_type in ('taxable','exempt')),
   base_purchase_price integer check (base_purchase_price >= 0), -- 질문4: 기준 매입단가(선택), 예상 마진 표시용 참고값. 정밀 원가는 2차
+  base_sale_price integer check (base_sale_price >= 0), -- W22: 거래처별 단가 없을 때의 기본 출고단가 fallback
+  category text not null default '기타' check (category in ('농산물','공산품','냉식','육류','수산','기타')),
+  source_code text,
   memo text,
   created_at timestamptz not null default now(),
   archived_at timestamptz
 );
 create index idx_products_company on public.products(company_id);
+create unique index ordermoa_uq_products_source_code
+  on public.products(company_id, source_code)
+  where source_code is not null;
 
 create table public.product_aliases (
   id uuid primary key default gen_random_uuid(),
