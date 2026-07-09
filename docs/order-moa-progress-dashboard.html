@@ -56,11 +56,11 @@
   </div>
 </header>
 <div class="wrap">
-  <div class="focus">📌 <strong>지금 하는 일:</strong> Phase 2 W19 — 품목 카테고리 6종(농산물/공산품/냉식/육류/수산/기타). 6종 고정이라 별도 테이블 없이 ordermoa_products.category 컬럼 1개(text NOT NULL DEFAULT &#x27;기타&#x27; CHECK 6종). 마이그레이션 0007 작성 완료, 적용은 Codex 승인 후 SQL Editor(guide-apply-0007-product-category.md). 0007 미적용 DB도 안 깨지게 읽기/쓰기 폴백(isMissingCategoryColumn). 품목·별칭 관리에 카테고리 select·목록·필터. order_items·합산표·명세서·월합계·파서 전부 무변경(스냅샷 무관). 카테고리 상수 단일 소스 product-category.ts. web 128→133, root5·build·audit0. 다음: Phase 3(product_units) 또는 엑셀 가져오기·전용 Supabase 분리.</div>
+  <div class="focus">📌 <strong>지금 하는 일:</strong> W20 — 실제 엑셀 기반 품목 기준정보 초안. 친구 실운영 이카운트 엑셀(품목마스터+단가마스터, 저장소 밖·미커밋)을 품목코드로 조인→정제해 docs/order-moa-catalog-real-draft.json(1590품목, 588KB) 산출. scripts/extract-real-catalog.py(경로 인자·self-check). 괄호 화이트리스트로 공급사/브랜드 제거→식별정보 자체 스캔 0건, 단가 100원 반올림, 카테고리 6종 키워드 초안(자동 60.8%·나머지 needsReview). import(DB 반영)는 W21로 분리 — 이번은 검수 초안까지만. .gitignore에 원시데이터 유출 안전망 추가. 앱 코드 무변경(web 133 그대로). 사용자 결정: 상호 제외·품목/단위/단가는 실 엑셀 우선. 관찰: 다규격/다단위 210그룹(Phase3 근거), 6종이 조미료/가공 못 담음. 다음: W21 import 미리보기/검수+DB반영(Codex 승인), 0007 적용, 전용 Supabase 분리.</div>
 
-  <h2>전체 진행률 (작업 보드 19개 기준)</h2>
-  <div class="progressbar"><div style="width:74%"></div></div>
-  <p class="counts">완료 14 · 다음 0 · 보류 2 — 1차 트랙(보류 제외) 14/17 완료</p>
+  <h2>전체 진행률 (작업 보드 20개 기준)</h2>
+  <div class="progressbar"><div style="width:70%"></div></div>
+  <p class="counts">완료 14 · 다음 0 · 보류 2 — 1차 트랙(보류 제외) 14/18 완료</p>
   <div class="legend"><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span><span class="badge" style="background:#fef7e0;color:#946200">다음</span><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span><span class="badge" style="background:#fde8e8;color:#b02a2a">제외</span></div>
 
   <h2>핵심 흐름 (이 순서가 제품의 전부)</h2>

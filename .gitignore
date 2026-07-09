@@ -39,3 +39,16 @@ Thumbs.db
 .tmp/
 tmp/
 docs/plans/
+
+# 실 운영 엑셀/CSV 원시 데이터(품목·단가 + 거래처/공급처 등 식별정보 가능) — 절대 커밋 금지 (W20)
+# 원칙은 원본을 저장소 밖에 두는 것. 실수로 안에 들어와도 커밋되지 않게 하는 이중 안전망.
+/private/
+/_private/
+/raw-data/
+*.xlsx
+*.xls
+*.csv
+*.tsv
+# 단, 저장소가 관리하는 산출물/테스트 스프레드시트는 예외로 계속 추적한다.
+!docs/order-moa-progress-tracker.xlsx
+!docs/order-moa-real-order-test-cases.xlsx

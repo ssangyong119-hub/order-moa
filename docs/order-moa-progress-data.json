@@ -5,7 +5,7 @@
     "updated": "2026-07-09",
     "branch": "codex/integrate-mvp-docs-web",
     "charter": "docs/order-moa-system-meta-prompt.md (헌장 — 차수·범위의 기준. 이 진행판과 어긋나면 헌장이 우선)",
-    "currentFocus": "Phase 2 W19 — 품목 카테고리 6종(농산물/공산품/냉식/육류/수산/기타). 6종 고정이라 별도 테이블 없이 ordermoa_products.category 컬럼 1개(text NOT NULL DEFAULT '기타' CHECK 6종). 마이그레이션 0007 작성 완료, 적용은 Codex 승인 후 SQL Editor(guide-apply-0007-product-category.md). 0007 미적용 DB도 안 깨지게 읽기/쓰기 폴백(isMissingCategoryColumn). 품목·별칭 관리에 카테고리 select·목록·필터. order_items·합산표·명세서·월합계·파서 전부 무변경(스냅샷 무관). 카테고리 상수 단일 소스 product-category.ts. web 128→133, root5·build·audit0. 다음: Phase 3(product_units) 또는 엑셀 가져오기·전용 Supabase 분리.",
+    "currentFocus": "W20 — 실제 엑셀 기반 품목 기준정보 초안. 친구 실운영 이카운트 엑셀(품목마스터+단가마스터, 저장소 밖·미커밋)을 품목코드로 조인→정제해 docs/order-moa-catalog-real-draft.json(1590품목, 588KB) 산출. scripts/extract-real-catalog.py(경로 인자·self-check). 괄호 화이트리스트로 공급사/브랜드 제거→식별정보 자체 스캔 0건, 단가 100원 반올림, 카테고리 6종 키워드 초안(자동 60.8%·나머지 needsReview). import(DB 반영)는 W21로 분리 — 이번은 검수 초안까지만. .gitignore에 원시데이터 유출 안전망 추가. 앱 코드 무변경(web 133 그대로). 사용자 결정: 상호 제외·품목/단위/단가는 실 엑셀 우선. 관찰: 다규격/다단위 210그룹(Phase3 근거), 6종이 조미료/가공 못 담음. 다음: W21 import 미리보기/검수+DB반영(Codex 승인), 0007 적용, 전용 Supabase 분리.",
     "recentCommits": [
       "7d05b6f feat: clarify saved-order aggregate flow",
       "755188c docs: record raw text db validation",
@@ -37,7 +37,7 @@
         "단가 관리 화면 재설계",
         "품목 검색/별칭 관리 UX 개선",
         "주문 목록 서버 날짜/기간 조회(지금은 클라 필터)",
-        "엑셀 가져오기/import (W15 나머지 절반)"
+        "엑셀 기반 기준정보 시드/import: 실제 품목·단위·단가 패턴 반영, 식별정보(상호/거래처/공급처/전화/주소/사업자번호)는 제거 — W20 초안 완료(docs/order-moa-catalog-real-draft.json), W21 미리보기/검수 UI+DB 반영(Codex 승인)"
       ]
     }
   },
@@ -241,6 +241,17 @@
       "prereq": "W03(품목 관리). 0007 적용은 Codex 승인 게이트.",
       "verify": "코드 완료(2026-07-09): 데모 smoke — 목록 카테고리 표시·필터(냉식 5종)·신규 육류 품목 추가·회귀(발주→확정→합산표) 정상, 콘솔 앱오류 0. TDD web 128→133. 0007 미적용 DB 폴백(안 깨짐). 적용 후 DB 실측은 guide-apply-0007 가이드 체크리스트. 스냅샷·집계 무변경.",
       "docs": ["web/src/lib/product-category.ts", "web/src/lib/product-store.ts", "web/supabase/migrations/0007_product_category.sql", "docs/guide-apply-0007-product-category.md"]
+    },
+    {
+      "id": "W20",
+      "name": "실제 엑셀 기반 품목 기준정보 초안",
+      "status": "진행 중",
+      "phase": "2차 보강",
+      "plain": "친구가 실제로 운영하며 내려받은 이카운트 엑셀(품목마스터+단가마스터)에서 품목명·규격·단위·단가 패턴을 뽑아 검수용 초안(catalog-real-draft.json, 1590품목)을 만들었습니다. 가명/더미 샘플 33종 대신 실제 현장 품목 패턴을 기준으로 삼기 위함. 상호·거래처·공급처 등 식별정보는 아예 안 읽고 제외했고, 단가는 100원 반올림. import(DB 반영)는 W21에서.",
+      "why": "실 베타는 품목 수가 많아 샘플 33종으론 부족. 사용자 결정: 상호는 제외하되 품목·단위·단가는 실제 엑셀 패턴 우선. import 전에 검수 가능한 산출물이 있어야 안전.",
+      "prereq": "원본 엑셀은 저장소 밖. 추출 스크립트만 커밋. import/DB 반영은 W21(Codex 승인).",
+      "verify": "scripts/extract-real-catalog.py(self-check 6종) → 초안 JSON 1590품목. 식별정보 자체 스캔 0건(괄호 화이트리스트로 공급사/브랜드 제거). 카테고리 자동 60.8%(나머지 needsReview). 관찰: 다규격/다단위 210그룹=Phase3 근거, 조미료/가공은 6종 밖(기타). 앱 코드 무변경 → web 133 그대로.",
+      "docs": ["scripts/extract-real-catalog.py", "docs/order-moa-catalog-real-draft.json", "docs/agent-worklog.md"]
     },
     {
       "id": "W14",
