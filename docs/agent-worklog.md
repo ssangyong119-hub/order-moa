@@ -2008,3 +2008,71 @@ W20 초안(`docs/order-moa-catalog-real-draft.json`, 1590품목)을 앱에서 �
 - 검증: root 5/5 · web 150/150 · build 성공 · audit 0 · `git diff --check` clean. 앱 코드·SQL 무변경 유지. **커밋/푸시 안 함 — 보고 후 중단.**
 - **(사용자 지시 추가분)** 이번 회차는 사용자 지시로 **Claude가 직접 커밋**한다(코덱스에게는 보고로 갈음, 푸시는 보류). 다음 세션용 **W23-R1 작업 프롬프트** `docs/task-prompt-W23-R1-state-model-design.md` 작성 — 핵심 검증 쟁점(status CHECK에 draft 이미 존재, unit_price NOT NULL×generated amount 충돌, loadOrders의 confirmed 필터)을 옵션 1a/1b/1b-i/1b-ii/2로 구조화, NEXT-SESSION 0번에 링크.
 - 수정 6: 현재 CHECK에 이미 존재하는 `draft`를 R1 비교 대상에 추가했다. 권장 방향은 orders 단일 소스 유지까지만 확정하고, `draft 재사용 vs 신규 상태`와 `unit_price nullable vs 별도 가격 상태/시각`은 구현 전 비교하도록 보정했다.
+
+
+## 2026-07-11 Claude (W23-R1 — 가격 대기 상태·저장 모델 설계, 승인 게이트)
+
+상태:
+
+- **설계 완료 · Codex 승인 대기.** 앱 코드·테스트 무변경, Supabase 미적용, 커밋/푸시 안 함(보고 후 중단).
+
+작업 목표:
+
+- `docs/task-prompt-W23-R1-state-model-design.md` 전문 기반 — 가격 대기 주문의 DB 표현을 확정하고 마이그레이션 초안·검증 계획까지.
+
+실측한 사실(결정의 근거, 상세는 결정 기록 §1):
+
+- orders.status CHECK에 'draft' 이미 존재(미사용) · order_items.unit_price NOT NULL DEFAULT 0 · amount NOT NULL generated stored → **nullable 안(1a)은 구조적으로 insert 실패**.
+- 0002에 order_items **update RLS 정책 이미 존재** → 가격 마감 UPDATE에 정책 추가 불필요. 교차회사 트리거(0001)는 insert or update 대상이라 UPDATE 경로에서도 방어 유지.
+- loadOrders가 confirmed만 조회 → 가격 대기 주문은 기존 화면에 자동으로 안 새어 나감(안전 기본값).
+
+산출물:
+
+1. **결정 기록** `docs/order-moa-w23-r1-state-model-decision.md` — 옵션 4개 비교(1a/1b-i/1b-ii/2), **권장 1b-ii**: order_items 무변경(단가 0 저장→마감 UPDATE, generated 자동 재계산) + orders.status에 `quantity_confirmed` 추가(CHECK 재정의 1회, draft 보존) + confirmed 라인 가드 트리거(UPDATE+DELETE 차단) + confirmed→qc 역전이 금지. 상태 매핑/전이 매트릭스, R2/R3 코드 영향 맵(파일·함수 단위), 열린 결정 6건(§8).
+2. **마이그레이션 초안** `web/supabase/migrations/0010_order_pricing_state.sql` — ⛔ 적용 금지 헤더, idempotent(drop if exists→add/create), 데이터 무접촉·backfill 0건·RLS 무변경. 하단 주석 블록에 **실험 스크립트 E1~E4**(ordermoa_tmp_r1 임시 테이블, 실데이터 무접촉, 즉시 drop — 사용자 SQL Editor 실행용).
+3. 문서 동기화: NEXT-SESSION 0번(설계 완료·심사 대상), db-schema 배너(0010 초안 포인터), 진행판 W23-R1 카드+currentFocus 갱신 → HTML/XLSX 재생성.
+
+탈락 논거 요약:
+
+- 1a(nullable): amount NOT NULL generated와 충돌(E3로 실증 예정), 스키마 완화 비가역.
+- 1b-i(draft 재사용): 가드 트리거 때문에 0010이 어차피 필요 → "마이그레이션 0건" 이점 소멸, draft 의미 충돌만 남음.
+- 2(별도 테이블): 합산 이중 소스 — 재설계 §11 기각 논거 유지(1b-ii 실패 시 후퇴안으로 보존).
+
+검증:
+
+- 코드 무변경 기준선: root `npm test` 5/5 · web `npm test` 150/150 · `npm run build` 성공 · `npm audit --audit-level=low` 0 · `git diff --check` clean — 결과는 최종 보고 참조.
+
+남은 이슈 / Codex 검수 포인트:
+
+- 결정 기록 §8 열린 결정 6건: ① 1b-ii 채택 ② 가드 범위(UPDATE+DELETE 권장) ③ draft 보존(권장) ④ 가격 대기 unit_price에 화면 값 저장(권장) ⑤ ConfirmedOrder 타입 처리(R2) ⑥ 워터마크 미리보기(기본 차단).
+- 승인 후 순서: 사용자 실험 E1~E4 → 0010 적용(Success 확인) → R2 구현 세션(영향 맵 §5).
+
+## 2026-07-11 Claude (W23-R1 실측 통과 + W23-R2 — 수량 먼저 확인 구현)
+
+상태:
+
+- **R1 게이트 통과(사용자 실측) + R2 구현·smoke 완료.** 커밋/푸시 안 함 — 보고 후 중단.
+
+R1 실측(사용자, Supabase SQL Editor):
+
+- E1·E2: unit_price 0 저장→UPDATE 2500 시 amount 7500 자동 재계산 ✅ / E3: NULL 단가 insert → 23502 not-null 위반(의도된 에러, 1a 탈락 실증) ✅ / E4: CHECK 재정의 후 기존 행 count 2 통과(backfill 0) ✅ / 실험 테이블 drop ✅ / **0010 본 적용 `Success. No rows returned`** ✅ → quantity_confirmed 상태 + 역전이 금지 + confirmed 라인 스냅샷 가드 트리거 가동.
+
+R2 구현(결정 기록 §5 영향 맵 그대로):
+
+- `order-store.ts`: `OrderStatus` 타입 · `ConfirmedOrder.status` 필드 · `toOrderInsert`/`saveOrder`에 status 인자(기본 confirmed — 경로 A 무변경) · `ORDER_SELECT`에 status · `loadOrders`를 `.in(["confirmed","quantity_confirmed"])`로 · `mapDbOrder` status 정규화(누락/모르는 값→confirmed).
+- `page.tsx`: `confirmOrder(status)` 분기 + 파싱 화면에 **"수량만 확정 (가격 나중)"** 버튼·안내문 · 주문 목록에 "가격 대기" 뱃지·금액 "미정"·마진 "-"·명세서 자리 "가격 마감 후"(버튼 제거) · note 뷰 가드(가격 대기면 발행 차단 안내 카드) · **월합계는 confirmed만 전달**(잠정 금액 유출 차단) · 합산표는 두 상태 모두 · 주문 CSV에 "상태" 열(가격 대기는 금액 빈칸) · 데모 모드 동일 규칙 · onConfirm 클릭 이벤트가 status 인자로 새는 문제 예방(래핑).
+- 테스트: order-store에 3건 추가(toOrderInsert qc/기본값, mapDbOrder 상태 정규화 3분기) + 픽스처 status 보정 → web **152/152**.
+
+브라우저 smoke(데모 강제 :3210 — 사용자 :3000 DB 서버 무접촉, launch.json에 ordermoa-demo-3210 추가):
+
+- 샘플 로드 → "콩나물 2박스/두부 3판" 파싱 → **수량만 확정** → 주문 목록: [가격 대기] 뱃지·미정·-·"가격 마감 후" ✅
+- 합산표: 가격 대기 주문 포함(주문 1건·2품목, 콩나물 2박스·두부 3판) ✅
+- 월합계: 가격 대기 제외 — "저장된 주문 없음" → 경로 A 확정(미나리 17,500) 후엔 **확정 1건 17,500원만** 집계 ✅
+- 회귀(경로 A): "주문 확정" → 명세서 정상 발행(미나리 5단 17,500원, 15행 패딩) ✅
+- 콘솔 에러 0 ✅
+
+남은 이슈:
+
+- R3(가격 마감): quantity_confirmed 주문을 최종 확정할 화면·`closeOrderPrices`(items UPDATE→orders confirmed) — 현재는 가격 대기 주문을 마감할 수단이 없음(의도된 단계 분리, 취소는 가능).
+- DB 모드 실측(로그인)은 사용자 몫: 수량만 확정 → F5 유지 → 목록 뱃지 확인.
+- Codex 검수: R2 diff + 결정 기록 §8(사후) + 0010 적용 사실.

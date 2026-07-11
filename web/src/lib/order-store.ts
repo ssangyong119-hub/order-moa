@@ -27,6 +27,9 @@ export interface OrderLine {
   basePurchasePrice: number | null;
 }
 
+/** W23-R2 주문 상태: confirmed=최종 확정(명세서 가능·월합계 포함) / quantity_confirmed=수량 확인·가격 대기(합산·매입처 발주만). */
+export type OrderStatus = "confirmed" | "quantity_confirmed";
+
 export interface ConfirmedOrder {
   id: string;
   date: string;
@@ -35,6 +38,7 @@ export interface ConfirmedOrder {
   lines: OrderLine[];
   total: number;
   margin: number | null;
+  status: OrderStatus;
   /** 발주 원문(카톡/문자). undefined=미조회, null=없음/삭제됨, string=원문. */
   rawText?: string | null;
 }
@@ -49,13 +53,18 @@ export interface DraftLine {
 
 // ── 순수 빌더 (단위 테스트 대상) ──
 
-export function toOrderInsert(companyId: string, customerId: string, orderDate: string) {
+export function toOrderInsert(
+  companyId: string,
+  customerId: string,
+  orderDate: string,
+  status: OrderStatus = "confirmed",
+) {
   return {
     company_id: companyId,
     customer_id: customerId,
     order_date: orderDate,
     source: "kakao",
-    status: "confirmed" as const,
+    status,
   };
 }
 
@@ -84,6 +93,8 @@ export interface DbOrderRow {
   id: string;
   order_date: string;
   customer_id: string;
+  /** 0010 이전 픽스처/구버전 호환 — 없거나 모르는 값이면 confirmed로 정규화. */
+  status?: string;
   customer: { name: string } | null;
   items: DbItemRow[];
 }
@@ -111,6 +122,7 @@ export function mapDbOrder(row: DbOrderRow, products: Product[]): ConfirmedOrder
     lines,
     total: sumAmounts(lines.map((l) => l.amount)),
     margin: estimatedOrderMargin(lines),
+    status: row.status === "quantity_confirmed" ? "quantity_confirmed" : "confirmed",
   };
 }
 
@@ -389,7 +401,7 @@ export async function loadCompanyData(db: SupabaseClient, companyId: string): Pr
 }
 
 const ORDER_SELECT =
-  "id,order_date,customer_id,customer:ordermoa_customers(name),items:ordermoa_order_items(product_id,raw_name,quantity,unit,unit_price,amount)";
+  "id,order_date,customer_id,status,customer:ordermoa_customers(name),items:ordermoa_order_items(product_id,raw_name,quantity,unit,unit_price,amount)";
 
 /** 확정 주문 목록(최신순). 거래처별/기간 합계는 이 데이터(order_date·customer_id·amount)로 산출 가능. */
 /** 발주 원문(order_imports)을 주문에 병합 — order_id 기준. 순수 함수(테스트 대상). */
@@ -416,7 +428,8 @@ export async function loadOrders(
     .from("ordermoa_orders")
     .select(ORDER_SELECT)
     .eq("company_id", companyId)
-    .eq("status", "confirmed")
+    // W23-R2: 가격 대기(quantity_confirmed) 주문도 목록·합산에 포함. 명세서·월합계는 화면에서 status로 거른다.
+    .in("status", ["confirmed", "quantity_confirmed"])
     .order("order_date", { ascending: false })
     .order("created_at", { ascending: false });
   if (res.error) throw res.error;
@@ -450,11 +463,12 @@ export async function saveOrder(
   lines: DraftLine[],
   products: Product[],
   rawText: string | null = null,
+  status: OrderStatus = "confirmed",
 ): Promise<ConfirmedOrder> {
   const orderRes = await db
     .from("ordermoa_orders")
-    .insert(toOrderInsert(companyId, customerId, orderDate))
-    .select("id,order_date,customer_id,customer:ordermoa_customers(name)")
+    .insert(toOrderInsert(companyId, customerId, orderDate, status))
+    .select("id,order_date,customer_id,status,customer:ordermoa_customers(name)")
     .single();
   if (orderRes.error) throw orderRes.error;
   const orderId = orderRes.data.id as string;
@@ -473,6 +487,7 @@ export async function saveOrder(
     id: orderId,
     order_date: orderRes.data.order_date as string,
     customer_id: orderRes.data.customer_id as string,
+    status: (orderRes.data as { status?: string }).status ?? status,
     customer: (orderRes.data as unknown as DbOrderRow).customer,
     items: itemsRes.data as unknown as DbItemRow[],
   };

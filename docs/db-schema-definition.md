@@ -9,7 +9,7 @@
 
 > **[2026-07-07 헌장 정렬]** 차수·범위가 어긋나면 `docs/order-moa-system-meta-prompt.md`(헌장)가 우선한다. 본 문서 이후 확정: **매입처 테이블 `ordermoa_suppliers`(id, company_id, name, memo, created_at, archived_at) + `products.purchase_supplier_id uuid nullable FK`가 1차 보강(8c 전 권장)으로 추가 예정**(additive, Codex 승인 후 마이그레이션 — 헌장 §6.4). RLS 4정책 + 교차 회사 트리거 + unique(company_id, name) 포함 조건. §4.12의 purchase_prices(매입처별 원가 이력)는 그대로 2차.
 >
-> **[2026-07-11 W23 정렬 — 적용 현황]** 위 "추가 예정"은 전부 **적용 완료**됐다. 실제 적용된 마이그레이션: 0001(9테이블)·0002(RLS)·0003(회사 RPC)·**0004(suppliers + products.purchase_supplier_id)**·**0005(suppliers.phone/address)**·**0006(order_imports.order_id 링크)**·0007(category)·0008(source_code)·0009(base_sale_price). 실 스키마의 단일 소스는 `web/supabase/migrations/0001~0009`이며, 본 문서 §6 SQL 초안은 **무접두사 설계 초안(참고용)** — 실제 객체명은 전부 `ordermoa_` 접두사다. W23 "가격 대기" 상태·저장 전략의 개념 비교는 **`docs/order-moa-system-redesign-2026-07-11.md` §5(상태 전이표)·§11(대안 비교·권장안)**이 단일 소스이고(본 문서에 복사하지 않음), 실제 마이그레이션 설계는 R1 승인 게이트 뒤 별도 세션에서 한다.
+> **[2026-07-11 W23 정렬 — 적용 현황]** 위 "추가 예정"은 전부 **적용 완료**됐다. 실제 적용된 마이그레이션: 0001(9테이블)·0002(RLS)·0003(회사 RPC)·**0004(suppliers + products.purchase_supplier_id)**·**0005(suppliers.phone/address)**·**0006(order_imports.order_id 링크)**·0007(category)·0008(source_code)·0009(base_sale_price). 실 스키마의 단일 소스는 `web/supabase/migrations/0001~0009`이며, 본 문서 §6 SQL 초안은 **무접두사 설계 초안(참고용)** — 실제 객체명은 전부 `ordermoa_` 접두사다. W23 "가격 대기" 상태·저장 전략의 개념 비교는 **`docs/order-moa-system-redesign-2026-07-11.md` §5(상태 전이표)·§11(대안 비교·권장안)**이 단일 소스이고(본 문서에 복사하지 않음), R1 설계 결과는 **`docs/order-moa-w23-r1-state-model-decision.md`**(권장: orders.status에 `quantity_confirmed` 추가 + order_items 무변경 + confirmed 라인 가드 트리거)와 **0010 초안**(작성됨·적용 금지, Codex 승인 게이트)이다. 본 문서 §4.8/§4.9는 0010 적용 전의 현행을 기술한다.
 
 ---
 

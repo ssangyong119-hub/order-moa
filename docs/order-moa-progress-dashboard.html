@@ -56,11 +56,11 @@
   </div>
 </header>
 <div class="wrap">
-  <div class="focus">📌 <strong>지금 하는 일:</strong> W23-R1 준비 — 선택형 두 경로의 문서 재설계는 완료. 다음은 가격 대기 주문의 상태·저장 모델을 설계하고 기존 확정 주문·unit_price 스냅샷·generated amount·합산표·명세서가 손상되지 않는지 검증하는 승인 게이트입니다. 코드·SQL 작성 전 orders 단일 소스와 별도 초안 객체를 비교하고, 단일 소스 안에서는 기존 draft 재사용 vs 신규 상태, unit_price nullable vs 별도 가격 상태/시각을 비교합니다.</div>
+  <div class="focus">📌 <strong>지금 하는 일:</strong> W23-R3 준비 — 수량 확인(가격 대기) 경로는 구현·smoke 완료. 다음은 &#x27;가격 마감&#x27; 화면: 매입처 명세서를 보고 품목별 매입가 1회 입력 → 거래처별 판매가 제안(거래처 단가 &gt; 기본 출고단가) 확인·수정 → 최종 확정 스냅샷(items UPDATE→orders confirmed 순). 마진 자동화·자동 저장 금지 원칙 유지.</div>
 
-  <h2>전체 진행률 (작업 보드 23개 기준)</h2>
-  <div class="progressbar"><div style="width:87%"></div></div>
-  <p class="counts">완료 20 · 다음 0 · 보류 2 — 1차 트랙(보류 제외) 20/21 완료</p>
+  <h2>전체 진행률 (작업 보드 25개 기준)</h2>
+  <div class="progressbar"><div style="width:88%"></div></div>
+  <p class="counts">완료 22 · 다음 0 · 보류 2 — 1차 트랙(보류 제외) 22/23 완료</p>
   <div class="legend"><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span><span class="badge" style="background:#fef7e0;color:#946200">다음</span><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span><span class="badge" style="background:#fde8e8;color:#b02a2a">제외</span></div>
 
   <h2>핵심 흐름 (이 순서가 제품의 전부)</h2>
@@ -290,6 +290,26 @@
     <dt>확인 방법</dt><dd>문서 산출: 감사(order-moa-document-audit-2026-07-11) + 재설계 기준(order-moa-system-redesign-2026-07-11, 15개 절) + 헌장/제품/요구(F14~F19)/기능(§5.3)/화면(§16)/DB/모듈맵(M17~M20)/로드맵(R0~R8)/검수(§12)/검증(§12) 전수 정렬. 코드 무변경 기준선: root 5/5 · web 150/150 · build 성공 · audit 0 · diff-check clean.</dd>
   </dl>
   <details><summary>관련 문서/파일</summary><ul><li><code>docs/order-moa-document-audit-2026-07-11.md</code></li><li><code>docs/order-moa-system-redesign-2026-07-11.md</code></li><li><code>docs/superpowers/specs/2026-07-11-order-moa-dual-confirmation-workflow-design.md</code></li><li><code>docs/agent-worklog.md</code></li></ul></details>
+</div>
+<div class="card s-done">
+  <div class="card-head"><span class="wid">W23-R1</span><strong>가격 대기 상태·저장 모델 설계 (승인 게이트)</strong><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span></div>
+  <p class="plain">두 경로의 기반이 되는 &#x27;가격 대기 주문을 DB에 어떻게 담을지&#x27;를 설계했습니다. 결론(권장): 품목 라인 테이블은 그대로 두고(단가 0으로 저장 후 마감 때 갱신), 주문 상태에 quantity_confirmed(수량 확인·가격 대기)를 추가하며, 최종 확정된 주문의 라인은 DB 트리거로 수정·삭제를 막아 스냅샷을 지킵니다. 마이그레이션 초안 0010과 검증 실험 스크립트(E1~E4)까지 작성 — 적용은 Codex 승인 후입니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>nullable 단가안(1a)은 실제 스키마(amount NOT NULL generated)와 충돌해 탈락, 별도 초안 테이블(2)은 조회 이중화로 탈락. 기존 확정 주문 backfill 0건·스냅샷 불변이 최우선 기준.</dd>
+    <dt>선행 조건</dt><dd>완료 — Codex 사후 검수만 남음(결정 기록 §8). 실험 E1~E4 사용자 실측 통과, 0010 Supabase 적용 완료(Success).</dd>
+    <dt>확인 방법</dt><dd>docs/order-moa-w23-r1-state-model-decision.md(사실 8건 실측·옵션 4개 비교·전이 매트릭스·R2/R3 영향 맵) + web/supabase/migrations/0010_order_pricing_state.sql 초안(idempotent·데이터 무접촉·적용 금지 헤더). 코드 무변경 기준선: root 5/5 · web 150/150 · build 성공 · audit 0 · diff-check clean. [실측 2026-07-11] E1·E2=2500/7500 자동 재계산, E3=의도된 23502 에러, E4=ok 2, 0010 적용 Success — 트리거(역전이 금지·스냅샷 가드) 가동.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>docs/order-moa-w23-r1-state-model-decision.md</code></li><li><code>web/supabase/migrations/0010_order_pricing_state.sql</code></li><li><code>docs/task-prompt-W23-R1-state-model-design.md</code></li></ul></details>
+</div>
+<div class="card s-done">
+  <div class="card-head"><span class="wid">W23-R2</span><strong>수량 먼저 확인 — 가격 대기 저장·합산·명세서 차단</strong><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span></div>
+  <p class="plain">파싱 화면에 &#x27;수량만 확정 (가격 나중)&#x27; 버튼이 생겼습니다. 단가를 몰라도 주문을 저장할 수 있고, 그 주문은 합산표·매입처 발주에는 바로 들어가지만 거래명세서는 &#x27;가격 마감 후&#x27;로 잠기며 월합계에도 잡히지 않습니다. 기존 &#x27;주문 확정&#x27;(가격 포함)은 그대로입니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>단가표를 완성하지 않아도 아침 수량 업무(확인→합산→매입처 발주)가 돌아가야 한다는 W23 재설계의 첫 사용자 가치. 잠정 금액이 명세서·월합계로 새는 것을 상태 필터로 차단.</dd>
+    <dt>선행 조건</dt><dd>0010 적용 완료(R1). 다음 = R3 가격 마감(매입가 입력→판매가 제안→최종 확정 스냅샷) — 그 전까지 가격 대기 주문의 마감 수단 없음(의도된 분리).</dd>
+    <dt>확인 방법</dt><dd>web 152/152(신규 3) · root 5/5 · build 성공 · audit 0 · diff-check clean. 데모 smoke(:3210): 수량만 확정→[가격 대기] 뱃지·금액 미정·명세서 잠금 ✅ 합산표 포함 ✅ 월합계 제외(확정분 17,500원만) ✅ 경로 A 명세서 회귀 ✅ 콘솔 0.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>docs/order-moa-w23-r1-state-model-decision.md</code></li><li><code>docs/agent-worklog.md</code></li></ul></details>
 </div></div><h2 class="phase">2차</h2><div class="grid">
 <div class="card s-hold">
   <div class="card-head"><span class="wid">W16</span><strong>2차 보류: 미수금·세금계산서 근거·원가/재고</strong><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span></div>

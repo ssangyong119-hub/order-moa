@@ -38,6 +38,7 @@ import {
   withRawTextCleared,
   type ConfirmedOrder,
   type OrderLine,
+  type OrderStatus,
 } from "@/lib/order-store";
 import { buildNewProductRegistration, type NewProductRegistrationInput } from "@/lib/product-registration";
 import { padDeliveryNoteLines } from "@/lib/delivery-note";
@@ -821,9 +822,14 @@ export default function HomePage() {
     flash(`'${alias}' 별칭을 삭제했습니다.`);
   }
 
-  async function confirmOrder() {
+  // W23-R2: status="confirmed"=최종 확정(경로 A, 기존 그대로) / "quantity_confirmed"=수량만 확정·가격 대기(경로 B).
+  async function confirmOrder(status: OrderStatus = "confirmed") {
     if (!canConfirm(lines) || saving) return;
     const customer = customers.find((c) => c.id === selectedCustomerId);
+    const doneMsg =
+      status === "quantity_confirmed"
+        ? "수량이 확정되었습니다(가격 대기). 합산표·매입처 발주에 바로 쓸 수 있고, 명세서는 가격 마감 후 발행됩니다."
+        : "주문이 저장되었습니다. 주문 목록에서 명세서를 보거나 합산표로 이동하세요.";
 
     // DB 모드: ordermoa_orders/items에 저장(단가 스냅샷, amount는 DB 생성값)
     if (db && companyId) {
@@ -843,6 +849,7 @@ export default function HomePage() {
           })),
           products,
           rawText, // 발주 원문(W09) — best-effort 저장, 실패해도 주문은 유지
+          status,
         );
         setOrders((prev) => [saved, ...prev]);
         setLines([]);
@@ -851,9 +858,9 @@ export default function HomePage() {
         setOrderListDate(saved.date); // 방금 확정한 주문 날짜로 목록을 맞춰 바로 보이게
         setCurrentOrderId(saved.id);
         setView("orders");
-        flash("주문이 저장되었습니다. 주문 목록에서 명세서를 보거나 합산표로 이동하세요.");
+        flash(doneMsg);
       } catch {
-        flash("주문 저장에 실패했습니다. 네트워크 확인 후 [주문 확정]을 다시 눌러주세요.");
+        flash("주문 저장에 실패했습니다. 네트워크 확인 후 다시 눌러주세요.");
       } finally {
         setSaving(false);
       }
@@ -884,6 +891,7 @@ export default function HomePage() {
       lines: olines,
       total,
       margin,
+      status,
       rawText: rawText.trim() ? rawText : null, // 발주 원문(W09) — 데모는 메모리 저장
     };
     setOrders((prev) => [...prev, order]);
@@ -893,7 +901,7 @@ export default function HomePage() {
     setOrderListDate(order.date); // 방금 확정한 주문 날짜로 목록을 맞춰 바로 보이게
     setCurrentOrderId(order.id);
     setView("orders");
-    flash("주문이 확정되었습니다. 주문 목록에서 명세서를 보거나 합산표로 이동하세요. (데모 모드 — 새로고침 시 초기화)");
+    flash(`${doneMsg} (데모 모드 — 새로고침 시 초기화)`);
   }
 
   // 발주 원문 삭제(W09) — raw_text만 지우고 주문/품목/금액/명세서는 유지.
@@ -1042,8 +1050,14 @@ export default function HomePage() {
   // 주문 목록 CSV (주문 1건=1행, 금액은 저장 스냅샷 order.total)
   function exportOrdersCsv() {
     downloadCsv("주문목록.csv", [
-      ["날짜", "거래처", "품목 요약", "공급가 합계"],
-      ...orders.map((o) => [o.date, o.customerName, summarizeItems(o.lines), o.total]),
+      ["날짜", "거래처", "상태", "품목 요약", "공급가 합계"],
+      ...orders.map((o) => [
+        o.date,
+        o.customerName,
+        o.status === "quantity_confirmed" ? "가격 대기" : "확정",
+        summarizeItems(o.lines),
+        o.status === "quantity_confirmed" ? "" : o.total,
+      ]),
     ]);
   }
 
@@ -1318,7 +1332,8 @@ export default function HomePage() {
       )}
 
       {view === "monthly" && (
-        <MonthlySummaryView orders={orders} persisted={session.status === "ready"} />
+        // W23-R2: 월합계는 최종 확정(스냅샷 금액 확정)만 — 가격 대기 주문의 잠정 금액이 새지 않게.
+        <MonthlySummaryView orders={orders.filter((o) => o.status === "confirmed")} persisted={session.status === "ready"} />
       )}
 
       {view === "data" && (
@@ -1446,7 +1461,8 @@ export default function HomePage() {
           onOrderDate={setConfirmDate}
           onSaveAllPrices={saveAllPrices}
           priceSaving={priceSaving}
-          onConfirm={confirmOrder}
+          onConfirm={() => confirmOrder("confirmed")}
+          onConfirmQuantityOnly={() => confirmOrder("quantity_confirmed")}
           onBack={() => setView("paste")}
         />
       )}
@@ -1694,20 +1710,36 @@ export default function HomePage() {
                       {ordersForList.map((o) => (
                         <tr key={o.id}>
                           <td>{o.date}</td>
-                          <td>{o.customerName}</td>
-                          <td>{summarizeItems(o.lines)}</td>
-                          <td className="num">{formatKRW(o.total)}</td>
-                          <td className="num">{formatMargin(o.margin)}</td>
                           <td>
-                            <button
-                              className="link"
-                              onClick={() => {
-                                setCurrentOrderId(o.id);
-                                setView("note");
-                              }}
-                            >
-                              보기
-                            </button>
+                            {o.customerName}
+                            {o.status === "quantity_confirmed" && (
+                              <>
+                                {" "}
+                                <span className="badge amber">가격 대기</span>
+                              </>
+                            )}
+                          </td>
+                          <td>{summarizeItems(o.lines)}</td>
+                          <td className="num">
+                            {o.status === "quantity_confirmed" ? <span className="muted">미정</span> : formatKRW(o.total)}
+                          </td>
+                          <td className="num">
+                            {o.status === "quantity_confirmed" ? <span className="muted">-</span> : formatMargin(o.margin)}
+                          </td>
+                          <td>
+                            {o.status === "quantity_confirmed" ? (
+                              <span className="muted" title="가격 마감 후 발행할 수 있습니다">가격 마감 후</span>
+                            ) : (
+                              <button
+                                className="link"
+                                onClick={() => {
+                                  setCurrentOrderId(o.id);
+                                  setView("note");
+                                }}
+                              >
+                                보기
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -1720,7 +1752,20 @@ export default function HomePage() {
         </section>
       )}
 
-      {view === "note" && currentOrder && (
+      {view === "note" && currentOrder && currentOrder.status === "quantity_confirmed" && (
+        <section className="card">
+          <h2>거래명세서</h2>
+          <div className="notice warn">
+            이 주문은 <strong>가격 대기</strong> 상태입니다. 판매단가가 최종 확정(가격 마감)된 뒤에 거래명세서를
+            발행할 수 있습니다. 합산표·매입처 발주에는 지금도 포함되어 있습니다.
+          </div>
+          <div className="row-actions" style={{ marginTop: 10 }}>
+            <button onClick={() => setView("orders")}>← 주문 목록</button>
+          </div>
+        </section>
+      )}
+
+      {view === "note" && currentOrder && currentOrder.status !== "quantity_confirmed" && (
         <section>
           <div className="row-actions no-print" style={{ marginBottom: 10 }}>
             <button onClick={() => setView("orders")}>← 주문 목록</button>
@@ -1798,6 +1843,8 @@ function ReviewView(props: {
   onSaveAllPrices: () => void;
   priceSaving?: boolean;
   onConfirm: () => void;
+  /** W23-R2 경로 B: 수량·단위만 확정하고 가격은 나중에 마감. */
+  onConfirmQuantityOnly: () => void;
   onBack: () => void;
 }) {
   const { lines, products, customerName } = props;
@@ -2115,9 +2162,14 @@ function ReviewView(props: {
         <button className="primary" onClick={props.onConfirm} disabled={!confirmable || props.busy}>
           {props.busy ? "저장 중…" : "주문 확정"}
         </button>
+        <button onClick={props.onConfirmQuantityOnly} disabled={!confirmable || props.busy}>
+          {props.busy ? "저장 중…" : "수량만 확정 (가격 나중)"}
+        </button>
       </div>
       <p className="muted" style={{ marginTop: 8 }}>
         확정하면 이 거래처의 판매 주문으로 저장됩니다. 매입처 발주는 &lsquo;품목별 합산표&rsquo;에서 따로 합니다.
+        {" "}<strong>수량만 확정</strong>은 단가를 아직 몰라도 저장하는 것 — 합산표·매입처 발주에는 바로 쓰이고,
+        거래명세서는 매입가 확인 후 <strong>가격 마감</strong>을 거쳐야 발행됩니다.
       </p>
     </section>
   );

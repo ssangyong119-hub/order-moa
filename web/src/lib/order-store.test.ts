@@ -28,6 +28,14 @@ test("toOrderInsert: confirmed 주문 + 스냅샷 기준 필드", () => {
   });
 });
 
+test("toOrderInsert(W23-R2): 수량만 확정은 quantity_confirmed로 저장(가격 대기)", () => {
+  expect(toOrderInsert("comp1", "cust1", "2026-07-11", "quantity_confirmed").status).toBe(
+    "quantity_confirmed",
+  );
+  // 기본값은 여전히 confirmed — 기존 경로 A 무변경
+  expect(toOrderInsert("comp1", "cust1", "2026-07-11").status).toBe("confirmed");
+});
+
 test("toItemInserts: amount(generated) 미포함 + unit_price 스냅샷 포함", () => {
   const rows = toItemInserts("comp1", "ord1", [
     { productId: "p1", rawName: "콩나물 2박스", quantity: 2, unit: "박스", unitPrice: 8000 },
@@ -63,6 +71,20 @@ test("mapDbOrder: total=Σ라인 amount, 마진은 basePurchasePrice로 표시 �
   expect(order.lines[1].unit).toBe("판"); // unit null → baseUnit 폴백
   expect(order.margin).toBe((8000 - 6500) * 2); // p2는 매입단가 없음 → 제외
   expect(order.customerName).toBe("가람식당");
+  expect(order.status).toBe("confirmed"); // status 누락(구 픽스처/구버전 행) → confirmed 정규화
+});
+
+test("mapDbOrder(W23-R2): quantity_confirmed는 가격 대기로, 모르는 값은 confirmed로 정규화", () => {
+  const base: DbOrderRow = {
+    id: "o2",
+    order_date: "2026-07-11",
+    customer_id: "c1",
+    customer: { name: "가람식당" },
+    items: [],
+  };
+  expect(mapDbOrder({ ...base, status: "quantity_confirmed" }, []).status).toBe("quantity_confirmed");
+  expect(mapDbOrder({ ...base, status: "confirmed" }, []).status).toBe("confirmed");
+  expect(mapDbOrder({ ...base, status: "draft" }, []).status).toBe("confirmed"); // 예약값 방어
 });
 
 const orderWithLines = (id: string): ConfirmedOrder => ({
@@ -75,6 +97,7 @@ const orderWithLines = (id: string): ConfirmedOrder => ({
   ],
   total: 16000,
   margin: 3000,
+  status: "confirmed",
 });
 
 test("attachRawText: order_id로 원문 병합, 매칭 없으면 그대로", () => {
