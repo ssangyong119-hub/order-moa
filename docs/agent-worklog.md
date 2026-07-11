@@ -2243,3 +2243,39 @@ SQL 자체 점검(0011):
 
 - R5b(확정 주문 정정) · W24(품목코드 app_code·과세구분) = **각각 별도 마이그레이션·별도 Codex 승인** — 이번 범위 아님.
 - Codex 검수: override/편집분 비저장 원칙, formatSupplierPurchaseText 형식 변경(기존 테스트 갱신), 단가 관리 Enter=저장 유지 판단, source_code·스냅샷 무변경.
+
+## 2026-07-11 Claude (오늘 전체 마감 검수 — W23-R1/R2/R3·R5a, 데모 smoke)
+
+상태:
+
+- **완료(검수·디버깅).** HEAD `f3f8791`(R5a 커밋, Codex의 필터 초기화 보강 포함)에서 시작. 커밋/푸시/Supabase 적용 없음. 새 기능 없음.
+
+발견 문제와 처리:
+
+1. **[낮음] page.tsx 죽은 코드** — `purchaseTitle`/`purchaseText` memo와 `formatPurchaseOrderText` import가 어디에도 사용되지 않음(구 UI 잔재, R5a로 대체됨). → 제거(page.tsx 유일 변경). 라이브러리 함수 자체(`aggregate.formatPurchaseOrderText`)는 테스트 있는 순수 함수라 유지.
+2. 그 외 결함 없음. Codex의 `purchase-draft-scope`(필터 변경 시 override·편집본 초기화) 로직·테스트 정합 확인.
+
+검수 결과(A — 주문 상태/가격 마감, 코드 경로 + 데모 실측):
+
+- qc→confirmed 마감: `closeOrderPrices` 영향행 1행 검증(`length !== 1` throw)·flip `.eq(status,'quantity_confirmed')` 경합 차단 유지 ✓ (order-store 571·574·669·681)
+- 스냅샷 불변 **실측**: 마감(명세서 36,500·콩나물 8,000) 후 단가 관리에서 콩나물 99,999로 변경 → 명세서 8,000/36,500·월합계 36,500 **불변** ✓
+- 가격 대기 격리: 월합계 `filter(status==='confirmed')`(page 1499)·note 뷰 qc 가드(1986/2000) ✓, 목록 [가격 대기]·미정 ✓
+- 합산표 포함: `loadOrders .in(confirmed,quantity_confirmed)`(504) + qc 주문 합산 실측 ✓
+- raw_text 삭제 **실측**: 원문 삭제 후 주문·명세서 유지 ✓. 취소·가드는 0010/0011 트리거(커밋됨)와 앱 soft cancel 경로 정합, 실패 메시지 notes 분리(951~998) ✓
+
+검수 결과(B — R5a 운영 UX, 데모 실측):
+
+- 가격 입력: focus 전체선택·Enter 다음 칸 이동·선행 0 정리(05→5, focusout 실측) ✓ (단가 관리 Enter=저장은 의도된 유지)
+- 단가 관리: 거래처별/기본 출고/적용 단가 3열·"기본 단가 적용 중" 표시 정합 ✓
+- 발주 문장: 날짜 첫 줄·직접 수정("수정됨" 뱃지)·매입처별/전체 복사(편집 반영)·명시 재생성 ✓
+- **필터 초기화 실측**: 계란 override(야채)+문장 편집 상태에서 날짜 필터 변경→복귀 → override 전부 해제(미지정 복귀·select 초기값)·편집본·뱃지 소거 ✓ — "이번 발주만"이 다른 날짜/거래처에 안 섞임
+- 이번 발주만 vs 기본 저장 혼동: override select 라벨 "기본 · {매입처명}"과 "이번만" 배지로 구분, products.purchase_supplier_id 미변경(기본 저장 명령은 미구현 — R5b 이후) ✓
+
+검증:
+
+- root 5/5 · web **186/186** · build 성공 · `tsc --noEmit` 통과 · audit 0 · `git diff --check` clean(CRLF만). 데모 smoke(임시 :3222, 사용자 :3210 미접촉·launch.json 원복): 수량만 확정→합산표/문장→가격 마감→명세서 전 구간 + 콘솔 0.
+
+남은 이슈:
+
+- 미커밋 1건: page.tsx 죽은 코드 제거(+이 worklog 검수 기록) — Codex 커밋 판단.
+- 다음: W23-R4(대시보드) 또는 R5b(정정, 별도 마이그레이션 승인). W24(품목코드·과세구분)는 별도 승인 게이트 유지.

@@ -51,7 +51,6 @@ import {
   buildContributionText,
   buildPurchaseChecklistSummary,
   buildSupplierPurchaseSections,
-  formatPurchaseOrderText,
   formatSupplierPurchaseText,
   supplierColorIndex,
 } from "@/lib/aggregate";
@@ -1105,16 +1104,6 @@ export default function HomePage() {
     };
   }, [view, db, companyId]);
 
-  // 복사용 발주 문장 (현재 필터 기준)
-  const purchaseTitle = useMemo(() => {
-    if (aggDate === today()) return "오늘 발주 합산";
-    if (aggDate !== "") return `${aggDate} 발주 합산`;
-    return "발주 합산";
-  }, [aggDate]);
-  const purchaseText = useMemo(
-    () => formatPurchaseOrderText(aggregate, purchaseTitle),
-    [aggregate, purchaseTitle],
-  );
   const purchaseSelectedSet = useMemo(() => new Set(purchaseSelectedIds), [purchaseSelectedIds]);
   // 발주 문장 인사말용 회사명 (DB=로그인 회사명, 데모=샘플 회사명)
   const companyName =
