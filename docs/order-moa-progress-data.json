@@ -1,17 +1,17 @@
 {
   "meta": {
     "project": "오더모아 (Order-Moa)",
-    "purpose": "전체 ERP 대체가 아니라, 도소매/식당납품 사장님용 좁은 웹 ERP MVP. 핵심 가치: 카톡/문자 발주를 붙여넣으면 파싱, 합산표, 매입처별 발주 문장, 거래명세서까지 이어지는 것.",
-    "updated": "2026-07-09",
+    "purpose": "전체 ERP 대체가 아니라, 중간 납품업자의 흩어진 발주를 모아 품목·수량을 확인하고 합산·매입처 발주로 이은 뒤, 준비된 판매가격 또는 매입가 확인 후 마감한 가격으로 거래명세서까지 연결하는 반응형 웹 업무 도구.",
+    "updated": "2026-07-11",
     "branch": "codex/integrate-mvp-docs-web",
     "charter": "docs/order-moa-system-meta-prompt.md (헌장 — 차수·범위의 기준. 이 진행판과 어긋나면 헌장이 우선)",
-    "currentFocus": "W22 — 품목 기본 출고단가(base_sale_price) 도입. 베타 검증에서 금액이 0원으로만 나오지 않게, 엑셀 출고단가를 products.base_sale_price에 저장하고 파싱 단가 우선순위를 거래처별 단가(customer_prices) > 품목 기본 출고단가 > 미등록으로 변경. customer_prices 자동 생성 없음, order_items.unit_price 스냅샷 불변. 0009 마이그레이션 작성(적용 대기), 카탈로그 재import 시 source_code 멱등으로 기존 품목 base_sale_price 갱신.",
+    "currentFocus": "W23-R1 준비 — 선택형 두 경로의 문서 재설계는 완료. 다음은 가격 대기 주문의 상태·저장 모델을 설계하고 기존 확정 주문·unit_price 스냅샷·generated amount·합산표·명세서가 손상되지 않는지 검증하는 승인 게이트입니다. 코드·SQL 작성 전 orders 단일 소스와 별도 초안 객체를 비교하고, 단일 소스 안에서는 기존 draft 재사용 vs 신규 상태, unit_price nullable vs 별도 가격 상태/시각을 비교합니다.",
     "recentCommits": [
-      "7d05b6f feat: clarify saved-order aggregate flow",
-      "755188c docs: record raw text db validation",
-      "ed2898c feat: add order raw text retention controls",
-      "6ff34f7 docs: record db mode validation",
-      "bdc1323 docs: update next session handoff after final review"
+      "f563f50 docs: plan dual confirmation workflow redesign",
+      "c3dc098 fix: exclude base sale price fallback lines from bulk price save",
+      "222920a feat: add product base sale price",
+      "f1a3a58 docs: record catalog import smoke plan",
+      "66d1af2 feat: add catalog import workflow"
     ],
     "supabase": "신규 Supabase 프로젝트 한도 때문에 기존 yangsan-inventory 프로젝트를 공유. 충돌 방지를 위해 모든 오더모아 DB 객체는 ordermoa_ 접두사 사용.",
     "statusLegend": {
@@ -30,15 +30,15 @@
       ],
       "phase2Done": [
         "품목 카테고리 6종(농산물/공산품/냉식/육류/수산/기타) — W19, 컬럼 1개+CHECK, 0007 Supabase 적용 완료",
-        "품목 기본 출고단가(base_sale_price) — W22, 거래처별 단가가 없을 때만 파싱 fallback으로 사용(0009 적용 대기)"
+        "실 카탈로그 미리보기·선택 DB 반영 — W20~W21, source_code 멱등 import와 735품목·별칭 207건 실측 완료",
+        "품목 기본 출고단가(base_sale_price) — W22, 0009 Supabase 적용·카탈로그 재import·파싱 fallback 실측 완료"
       ],
       "deferred": [
         "품목 다단위 구조(한 품목 여러 단위, 환산 안 함) — Phase 3, product_units 스키마",
         "기본 판매단가 + 거래처별 예외 단가 구조 — Phase 3, 스키마",
         "단가 관리 화면 재설계",
         "품목 검색/별칭 관리 UX 개선",
-        "주문 목록 서버 날짜/기간 조회(지금은 클라 필터)",
-        "엑셀 기반 기준정보 시드/import: 실제 품목·단위·단가 패턴 반영, 식별정보(상호/거래처/공급처/전화/주소/사업자번호)는 제거 — W20 초안 완료(docs/order-moa-catalog-real-draft.json), W21 미리보기/검수 UI+DB 반영(Codex 승인)"
+        "주문 목록 서버 날짜/기간 조회(지금은 클라 필터)"
       ]
     }
   },
@@ -317,7 +317,7 @@
     {
       "id": "W19",
       "name": "Phase 2 — 품목 카테고리 6종",
-      "status": "진행 중",
+      "status": "완료",
       "phase": "2차 보강",
       "plain": "품목을 6종(농산물/공산품/냉식/육류/수산/기타)으로 분류합니다. 품목·별칭 관리 화면에서 카테고리를 고르고, 목록을 카테고리로 걸러 봅니다. DB에는 컬럼 하나(category)만 추가 — 6종 고정이라 별도 표는 안 만듭니다. 코드 완료, 0007 Supabase 적용 완료.",
       "why": "품목이 늘면 종류별로 묶어 봐야 관리·발주가 편합니다. 사장님 실사용 피드백. 스키마가 필요해 별도 세션으로 분리했고, 컬럼 1개라 위험 낮음.",
@@ -348,7 +348,7 @@
     {
       "id": "W21",
       "name": "카탈로그 import (미리보기/검수 + 반영)",
-      "status": "진행 중",
+      "status": "완료",
       "phase": "2차 보강",
       "plain": "W20 초안(JSON)을 앱에서 올려 미리보기로 검수하고, 고른 품목만 기준정보로 반영하는 화면입니다. 업로드·요약·필터·행편집·중복명 경고·기존일치 표시를 제공하고, 데모는 화면 반영, 로그인 DB 모드는 200건 배치 insert/update와 source_code 멱등 매칭으로 영구 반영합니다. 출고단가는 참고만 하고 저장 안 함(기본 판매단가는 이후).",
       "why": "샘플 33종으론 부족한 현장 품목을, 검수를 거쳐 안전하게 기준정보로 올리기 위함. 잘못된 대량 반영·중복 품목을 막는 게 핵심.",
@@ -364,17 +364,33 @@
     {
       "id": "W22",
       "name": "품목 기본 출고단가",
-      "status": "진행 중",
+      "status": "완료",
       "phase": "2차 보강",
       "plain": "엑셀 출고단가를 품목 기본 출고단가(base_sale_price)로 저장하고, 거래처별 단가가 없을 때 발주 파싱 금액 fallback으로 씁니다. 거래처별 단가(customer_prices)가 있으면 항상 우선하고, customer_prices를 자동 생성하지는 않습니다.",
       "why": "베타 검증에서 품목은 매칭되지만 판매금액이 전부 0원이면 주문/명세서/합산표 검증이 어렵습니다. 다단위(product_units) 전 단계의 최소 구조로 기본 출고단가 자리를 마련합니다.",
-      "prereq": "W21 카탈로그 import. 0009_product_base_sale_price.sql Supabase 적용 후 같은 카탈로그를 재import하면 source_code 멱등으로 기존 품목의 base_sale_price가 채워짐.",
+      "prereq": "완료 — W21 카탈로그 import, 0009_product_base_sale_price.sql Supabase 적용, 같은 카탈로그 재import를 통한 기존 품목 base_sale_price 갱신까지 실측.",
       "verify": "코드 검증: resolveSalePrice 단가 우선순위(customer > base > none), 파서 fallback, catalog import repSalePrice→base_sale_price, product-store 매핑 테스트. 적용 후 실측: 거래처 단가 없는 품목이 기본 단가 적용으로 금액 표시, 거래처별 단가가 있으면 우선, customer_prices 새 row 없음, 과거 주문 스냅샷 불변. [디버깅검사] 파싱 화면 \"변경 단가 전체 저장\"이 품목 기본 출고단가로만 뜬(사용자 미수정) 라인까지 customer_prices에 쓸어담던 문제 수정 — priceSource=\"base\"는 일괄 저장 제외(개별 저장·직접 수정은 그대로). price-store 테스트 추가, web 150/150.",
       "docs": [
         "web/src/lib/domain/index.ts",
         "web/src/lib/order-parser.ts",
         "web/supabase/migrations/0009_product_base_sale_price.sql",
         "docs/guide-apply-0009-product-base-sale-price.md"
+      ]
+    },
+    {
+      "id": "W23",
+      "name": "전체 시스템 재설계 — 두 경로·가격 마감 (문서 개편)",
+      "status": "완료",
+      "phase": "2차 보강",
+      "plain": "실사용 인터뷰에서 '단위 생략 카톡 발주는 거래처별 관습 문제'와 '판매단가는 매입처 명세서를 받은 뒤 그때그때 결정'이 확인됐습니다. 그래서 기존 '가격 포함 바로 확정'을 유지한 채, '수량 먼저 확인 → 합산·매입처 발주 → 매입가 입력 → 가격 마감(최종 확정)' 경로를 선택형으로 추가하고, 대시보드를 '오늘 업무' 큐로 바꾸는 재설계를 확정했습니다. 이번 회차는 문서 전수 감사·개편까지만 완료(코드/SQL 무변경).",
+      "why": "단가 마스터 1,500개를 항상 관리해야 돌아가는 구조는 실사용과 맞지 않음. 한 사용자 습관에 과적합하지 않도록 공통 문제(수량이 가격보다 먼저 확정됨)는 핵심에, 개인 방식은 선택 경로로 격리. 과거 주문 스냅샷 불변 원칙은 '판매단가가 최종 확정되는 시점'으로 재정의해 유지.",
+      "prereq": "구현은 R1(상태·저장 모델 + 마이그레이션 설계, Codex 승인 게이트)부터 별도 세션. 권장 방향은 orders 단일 소스 유지지만 기존 draft 재사용/신규 상태와 unit_price nullable/별도 가격 상태를 비교하기 전 구현 확정 금지. OCR은 '보류된 입력 어댑터 실험'으로 재분류(게이트 3조건 통과 전 착수 금지).",
+      "verify": "문서 산출: 감사(order-moa-document-audit-2026-07-11) + 재설계 기준(order-moa-system-redesign-2026-07-11, 15개 절) + 헌장/제품/요구(F14~F19)/기능(§5.3)/화면(§16)/DB/모듈맵(M17~M20)/로드맵(R0~R8)/검수(§12)/검증(§12) 전수 정렬. 코드 무변경 기준선: root 5/5 · web 150/150 · build 성공 · audit 0 · diff-check clean.",
+      "docs": [
+        "docs/order-moa-document-audit-2026-07-11.md",
+        "docs/order-moa-system-redesign-2026-07-11.md",
+        "docs/superpowers/specs/2026-07-11-order-moa-dual-confirmation-workflow-design.md",
+        "docs/agent-worklog.md"
       ]
     },
     {

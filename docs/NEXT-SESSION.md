@@ -1,6 +1,6 @@
 # 세션 인계 — 오더모아 (Order-Moa) MVP
 
-작성일: 2026-07-08 (DB 모드 실측 마무리 후)
+작성일: 2026-07-08 · 최종 갱신 2026-07-11 (W23 문서 전수 개편 후)
 작업 폴더: `D:\Documents\ERP-1` ← **Claude Code를 반드시 이 폴더에서 열 것** (자동낙찰기 `D:\Projects\new app`에서 열면 문서 클릭·경로가 어긋남)
 브랜치: `codex/integrate-mvp-docs-web`
 
@@ -41,17 +41,19 @@
 - **W19 메모(2026-07-09, Phase 2 카테고리)**: 품목 카테고리 6종(농산물/공산품/냉식/육류/수산/기타) 도입. **컬럼 1개**(`ordermoa_products.category text NOT NULL DEFAULT '기타' CHECK 6종`) — 6종 고정이라 별도 테이블 없음. **마이그레이션 0007 Supabase 적용 완료**(사용자 SQL Editor `Success. No rows returned`). 품목·별칭 관리 화면에 카테고리 select·목록 표시·필터 추가. **order_items·합산표·명세서·월합계·파서 전부 무변경**(카테고리=품목 마스터 속성, 스냅샷 무관). 적용 가이드: `docs/guide-apply-0007-product-category.md`. 상세: `docs/agent-worklog.md`(2026-07-09 W19). Phase 3(다단위·기본/예외 단가)는 백로그 유지·미구현.
 - **W20 메모(2026-07-09, 실 엑셀 기준정보 초안)**: **사용자 결정 — "상호명은 제외하되, 품목·단위·단가 기준정보는 실제 엑셀 패턴을 우선한다."** 친구 실운영 이카운트 엑셀(저장소 밖·미커밋)의 `품목마스터.xlsx`+`단가마스터.xlsx`를 품목코드로 조인→정제해 **`docs/order-moa-catalog-real-draft.json`(1590품목, 588KB)** 산출. `scripts/extract-real-catalog.py`(경로 인자·self-check). 괄호 화이트리스트로 공급사/브랜드 제거(식별정보 자체 스캔 **0건**), 단가 100원 반올림, 카테고리 6종 키워드 초안(자동 60.8%, 나머지 needsReview). **import(DB 반영)는 W21로 분리 — 이번은 초안까지만.** `.gitignore`에 원시데이터 유출 안전망 추가. 관찰: 같은 품목명 다규격/다단위 **210그룹(549품목)** = Phase 3 다단위 근거 / 6종이 조미료·장류·가공을 못 담음(기타 623). 상세: `docs/agent-worklog.md`(2026-07-09 W20).
 - **W21 메모(2026-07-09, 카탈로그 import 미리보기/검수 + DB 반영)**: W20 초안(1590품목)을 앱에서 업로드·검수→선택분만 기준정보로 반영하는 흐름. `catalog-import.ts`(순수 로직+test) · `catalog-import-view.tsx`(업로드·요약·필터·50/페이지·행편집·중복명 경고·기존일치). 데이터 뷰를 "데이터 내보내기/가져오기"로 확장(새 메뉴 없음). DB 모드는 `applyCatalogImportToDb`가 200건 배치 insert/update, source_code 멱등 재분류, 별칭 upsert 충돌 무시 후 products 재조회. 데모 모드는 메모리 반영. **0007·0008 Supabase 적용 완료**(사용자 SQL Editor `Success. No rows returned`). 이후 Usage 확인 결과(All projects DB 0.028/0.5GB, Storage 0/1GB, Egress <1%)로 **쿼터보다 데이터 품질(중복명·검토필요)이 핵심 리스크**로 정정. 상세: `docs/agent-worklog.md`(2026-07-09 W21/W21-C).
-- 검증 최신값(2026-07-09, W21): root `npm test` 5/5 · web `npm test` **145/145** · `npm run build` 성공 · `npm audit --audit-level=low` 0건 · `git diff --check` 통과(CRLF 경고만).
+- 검증 최신값(2026-07-11, W23 문서 세션 재확인): root `npm test` 5/5 · web `npm test` **150/150** · `npm run build` 성공 · `npm audit --audit-level=low` 0건 · `git diff --check` 통과(CRLF 경고만).
 - **W21-C 메모(2026-07-09, DB smoke + 전략 점검)**: W21-A/B는 커밋 `66d1af2`로 반영됨. 실 DB smoke는 **로그인 인증 필요 → Claude(헤드리스) 실행 불가**, 사용자 로그인 세션에서 실행한다. 사용자가 소량 import 후 F5 유지·재반영 중복 없음·파싱 매칭을 확인했다. 이후 Supabase Usage(All projects) 확인 결과 사용량이 매우 낮아 유료/전용 분리는 급하지 않음. **전체 반영 판단은 쿼터가 아니라 데이터 품질 기준**: 중복명/검토필요는 보류하고, 검토필요 아닌 신규·중복명 제외 품목은 한 번에 반영 가능.
-- **W22 메모(2026-07-09, 품목 기본 출고단가 base_sale_price)**: 베타 검증용 최소 구조. 거래처별 단가 없으면 발주 금액 0원 → 품목에 **기본 출고단가**를 두고 fallback. **단가 우선순위 = 거래처별(customer_prices) > 품목 base_sale_price > 미등록(0원)**, 단일 소스 `resolveSalePrice`(domain)로 파서·화면 공유. 파싱 화면에 **"기본 단가 적용"** 뱃지. 카탈로그 import가 `repSalePrice→base_sale_price` 저장(재import 시 기존 품목도 갱신), **customer_prices엔 안 넣음**. `order_items.unit_price` 스냅샷 불변, 과거 주문 재계산 없음. 품목·별칭 관리에 기본 출고단가 입력칸 추가. 마이그레이션 **0009 작성 완료·적용 대기**(Codex 승인 후 사용자 SQL Editor). 코드는 미적용 DB에서도 **3단 컬럼 폴백**(FULL→category만→base)으로 안 깨짐. **적용 후 기존 W21 import분의 출고단가는 비어 있으므로 같은 카탈로그를 재import**해야 채워짐(source_code 멱등, 중복 없음) — 절차 `docs/guide-apply-0009-product-base-sale-price.md`. 검증: root 5/5 · web **149/149** · build 성공 · audit 0 · diff-check clean. 상세: `docs/agent-worklog.md`(2026-07-09 W22). Phase 3(product_units 다단위)는 여전히 별개·미착수.
-- **W23 기획 준비(2026-07-11, 코드 미착수)**: 실사용 인터뷰를 반영해 `가격 포함 바로 최종 확정`과 `수량 확인→매입처 발주→가격 입력→최종 확정`을 함께 제공하는 선택형 흐름을 사용자와 합의했다. 기존 화면·사이드바는 유지하고 대시보드만 `오늘 업무/새 발주/매입처 발주/가격 대기/명세서 준비` 중심으로 개편한다. 기준 설계: `docs/superpowers/specs/2026-07-11-order-moa-dual-confirmation-workflow-design.md`. Claude 문서개편 지시: `docs/task-prompt-W23-system-redesign-planning.md`. 다음 세션은 **기획·설계·문서만** 개편하고 코드·SQL은 건드리지 않는다.
+- **W22 메모(2026-07-09, 품목 기본 출고단가 base_sale_price — 적용·실측 완료)**: 베타 검증용 최소 구조. 거래처별 단가 없으면 발주 금액 0원 → 품목에 **기본 출고단가**를 두고 fallback. **단가 우선순위 = 거래처별(customer_prices) > 품목 base_sale_price > 미등록(0원)**, 단일 소스 `resolveSalePrice`(domain)로 파서·화면 공유. 파싱 화면에 **"기본 단가 적용"** 뱃지. 카탈로그 import가 `repSalePrice→base_sale_price` 저장(재import 시 기존 품목도 갱신), **customer_prices엔 안 넣음**. `order_items.unit_price` 스냅샷 불변, 과거 주문 재계산 없음. 품목·별칭 관리에 기본 출고단가 입력칸 추가. 0009는 적용됐고 카탈로그 재import·파싱 fallback 실측도 완료했다. 코드는 미적용 DB에서도 **3단 컬럼 폴백**(FULL→category만→base)으로 안 깨진다. 적용 절차 기록: `docs/guide-apply-0009-product-base-sale-price.md`. 구현 당시 검증: root 5/5 · web **149/149** · build 성공 · audit 0 · diff-check clean. 상세: `docs/agent-worklog.md`(2026-07-09 W22). Phase 3(product_units 다단위)는 여전히 별개·미착수.
+- **W22 실측 완료(2026-07-10~11, 사용자)**: **0009 Supabase 적용 완료**(`Success. No rows returned`) → 개별 품목 기본 출고단가 저장 → 파싱에서 "기본 단가 적용" 금액 표시 실측 확인 → **카탈로그 735건 DB 반영 완료**(신규 735 · 별칭 207건 시도 · 전부 성공, 중복명·검토필요 품목은 앱이 자동 제외). 잔여: 중복명 품목은 이름 구분(예: `콩나물(시루)`) 후 개별 반영, '기타'로 들어간 카테고리 정리(급하지 않음). Claude 후속 디버깅 1건(`c3dc098` — 기본 단가 fallback 라인의 일괄 저장 제외)까지 푸시됨.
+- **W23 기획 준비(2026-07-11, Codex)**: 실사용 인터뷰를 반영해 `가격 포함 바로 최종 확정`과 `수량 확인→매입처 발주→가격 입력→최종 확정`을 함께 제공하는 선택형 흐름을 사용자와 합의했다. 기준 설계: `docs/superpowers/specs/2026-07-11-order-moa-dual-confirmation-workflow-design.md`. Claude 문서개편 지시: `docs/task-prompt-W23-system-redesign-planning.md`.
+- **W23 문서 전수 개편(2026-07-11, Claude — 문서 완료·코드 미착수)**: ① 문서·구현 충돌 감사 `docs/order-moa-document-audit-2026-07-11.md`(17개 문서 × 코드 대조, 충돌 7류 확인·처리) ② 새 기준 설계 `docs/order-moa-system-redesign-2026-07-11.md`(15개 절 — 용어·상태 전이표·두 경로·가격 마감 UX·데이터 대안 비교(권장 방향: orders 단일 소스 유지, 내부 표현은 R1에서 비교)·단계 R0~R8·성공/중단 기준·승인 게이트) ③ 헌장·제품정의·요구(F14~F19)·기능(§5.3)·화면(§2-1/§16/§17)·DB(적용 현황·0006 order_id)·모듈맵(M17~M20)·로드맵(W23 단계표)·검수(§12)·검증(§12) 전수 정렬. **앱 코드·SQL 무변경.** 스냅샷 원칙은 "판매단가가 최종 확정되는 시점"으로 재정의(기존 주문 의미 불변). OCR은 "제외"→"검증 게이트 있는 보류 실험(입력 어댑터)"로 재분류.
 
 ## 다음에 이어서 할 일 (우선순위)
-0. **W18 Phase 1 UX** — 주문일(KST) 표시/수정 · 파싱 화면 단가 Enter이동+변경단가 전체저장 · 주문목록 날짜조회. 마이그레이션 없음, 데모 실측 완료(합산표/월합계 무영향 확인함).
-1. **W22 0009 적용 + 카탈로그 재import (사용자, Codex 승인 후)** — `docs/guide-apply-0009-product-base-sale-price.md`대로 0009 SQL Editor 적용 → 같은 카탈로그 재import(출고단가=base_sale_price 채우기, source_code 멱등이라 중복 없음). 먼저 소량 확인 후, **검토필요 아닌 신규·중복명 제외 품목은 한 번에 반영 가능**. 확인: 품목·별칭 관리에 기본 출고단가 표시·F5 유지, 거래처 단가 없는 품목 발주 시 "기본 단가 적용"으로 금액 뜸, `customer_prices` 새 row 없음, 과거 주문 금액 불변.
-2. **Phase 3 — 다단위 + 기본단가/거래처 예외(product_units)** — 스키마 설계 필요, 별도 Phase. **W20 실데이터가 근거 뒷받침**(같은 품목명 다규격/다단위 210그룹). 아직 미착수(백로그).
-3. **전용 Supabase 분리 논의(보류 가능)** — 2026-07-09 Usage 기준으로 현재 급하지 않음(DB 6%, Storage 0%, Egress <1%). 베타 운영/외부 사용자 확대 전에는 다시 검토.
-4. **잔여 보강** — 인쇄 실물 육안(A4 1장), 품목 15개↑ 다중 페이지, 명세서 채번(별도 승인). W14(명세서 양식 심화)·미수금·세금(2차)은 헌장 순서대로.
+0. **W23-R1 — 상태·저장 모델 확정 + 마이그레이션 설계 (Codex 승인 게이트)** — 재설계 기준 §11의 권장안(orders 단일 소스 유지) 검증: 기존 `draft` 재사용 vs 신규 상태, `unit_price` nullable vs 별도 가격 상태/시각을 비교한다. nullable 후보는 generated `amount`·기존 조회(합산·명세서·월합계)와 안전하게 공존하는지 실측 설계 포함. 기존 확정 주문 backfill 0건 목표.
+1. **W23-R2 — 수량 먼저 확인** — 가격 없이 저장·합산·매입처 발주. 가격 대기 주문의 명세서 발행 차단.
+2. **W23-R3 — 가격 마감** — 품목별 매입가 1회 입력 → 판매가 제안(거래처 단가 > 기본 출고단가) → 최종 확정 스냅샷. 이후 R4(대시보드 오늘 업무 큐) → R5(수정 UX+모바일 결함 3종) → R6~R8(해석 기억·표/CSV·OCR 실험)은 `docs/order-moa-expanded-roadmap.md` W23 단계표.
+3. **Phase 3 — 다단위 + 거래처 예외단가 재설계(product_units)** — W20 실데이터 근거(동일 품목명 다규격 210그룹). R6(해석 기억)과 맞물림 — 백로그.
+4. **잔여 보강** — 카탈로그 중복명 품목 이름 구분 반영·카테고리 정리(사용자, 짬날 때) · 인쇄 실물 육안 · 명세서 채번(별도 승인) · 전용 Supabase 분리(Usage 낮아 보류) · W14·미수금·세금(2차)은 헌장 순서대로.
 
 ## 사용자 실사용 피드백 백로그
 > 사장님 실사용에서 나온 개선 요구를 모아 둔 곳. **아래 "추후" 항목은 기록만 — 해당 Phase 전까지 구현하지 않는다.**
@@ -75,7 +77,7 @@
 > 스키마가 필요한 항목(카테고리·다단위·기본/예외 단가)은 반드시 **별도 마이그레이션 세션**에서 RLS·교차회사 검사·idempotent backfill(`on conflict do nothing` 또는 `if not exists`)을 포함해 진행.
 
 ## 꼭 알아야 할 맥락·주의
-- **좁은 MVP**: 세금계산서 발행·회계 마진·재고평가·매입처 원가이력·OCR·카톡 자동·이카운트 연동 = 후순위/제외. 사이드바에 2차 메뉴 추가 금지.
+- **좁은 MVP**: 세금계산서 발행·회계 마진·재고평가·매입처 원가이력은 후순위, 카톡 자동·이카운트 연동은 제외. OCR은 R8 검증 게이트 전 보류 실험이며 핵심 흐름과 분리한다. 사이드바에 2차 메뉴 추가 금지.
 - **용어(피드백 정리)**: 주문 확정=거래처 발주를 우리 판매 장부에 저장 / 매입처 발주=우리가 매입처에 보낼 구매 문장. **매입처 쪽 거래명세서는 매입처가 발행 — 우리가 안 만듦.** (상세 `docs/order-moa-feedback-design-2026-07-07.md` §0)
 - **DB 불변 규칙(헌장 §3)**: `order_items.amount`는 generated → insert 제외. `unit_price`=확정 시점 스냅샷, 과거 명세서는 customer_prices 재조회 금지. 예상 마진 저장 안 함. raw_text 삭제 가능(확정 주문 유지). soft delete.
 - **검증 한 세트**: root `npm test` · web `npm test` · web `npm run build` · web `npm audit --audit-level=low`. UI 변경은 브라우저 확인까지. 진행판 고치면 `py -3 scripts/generate-progress.py`로 HTML/XLSX 재생성(JSON이 단일 소스).

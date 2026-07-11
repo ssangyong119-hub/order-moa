@@ -8,6 +8,8 @@
 > 표본 한계: 수요 근거가 된 설문은 **5건**으로 작다. 본 문서는 기능 사양을 정의할 뿐, 우선순위·수익화 판단은 가설 전제다.
 
 > **[2026-07-07 헌장 정렬]** 차수·범위가 본 문서와 어긋나면 `docs/order-moa-system-meta-prompt.md`(헌장)가 우선한다. 본 문서 작성(2026-06-29) 이후 확정된 변경: ① **품목별 기본 매입처 + 매입처별 발주 문장 복사는 1차로 편입되어 구현 완료**(화면 상태 기준). ② **매입처 DB화**(`ordermoa_suppliers` + `products.purchase_supplier_id`)는 **1차 보강(8c 전 권장)** — 2차 아님. 매입처별 원가·발주 기록 저장/전송은 2차 유지. ③ raw_text 저장/삭제, 저장 주문 기반 재출력, 거래처별 월 합계는 **8c(1차)**. ④ `order_items.amount`는 generated 컬럼으로 확정(§7 반영됨).
+>
+> **[2026-07-11 W23 정렬]** ①~③은 이후 전부 **구현·적용 완료**됐다(0004~0006). 추가 확정: ⑤ 품목에 카테고리(0007)·외부코드(0008)·**기본 출고단가(0009)**가 추가됐고, 파싱 단가 자동 적용은 **거래처별 단가 > 품목 기본 출고단가 > 미등록(0원)** 3순위다(§6.2 갱신됨, W22 구현). ⑥ **두 경로**(가격 포함 바로 확정=현행 유지 / 수량 먼저 확인·가격 나중 확정=선택형 추가)가 승인됐다 — 신규 기능 정의는 **§5.3(F14~F19, 설계 승인·미구현)**, 상태·용어는 재설계 기준(`docs/order-moa-system-redesign-2026-07-11.md`) §2·§5가 단일 소스. 본 문서의 F10 "확정"은 W23 용어로 **최종 확정**(경로 A)에 해당한다.
 
 ---
 
@@ -296,11 +298,11 @@
 
 ### F10 거래처별 주문 저장
 - 목적: 확정 주문 저장 / 사용자: 회사 소속 / 선행: F9
-- 입력값: 확정된 라인 집합, 거래처, 일자
-- 처리 규칙: orders + order_items 트랜잭션 저장, 라인 단가는 저장 시점 customer_prices 적용(미등록 시 0+경고)
+- 입력값: 확정된 라인 집합, 거래처, 일자(주문일 수정 가능 — W18)
+- 처리 규칙: orders + order_items 트랜잭션 저장. 라인 단가는 **확인 화면의 값 그대로 스냅샷 저장**(자동 적용 제안값 §6.2 + 사용자 수정 반영. 미등록이면 0원+경고 상태로 저장 가능). W23 용어로 이 행위가 경로 A의 **최종 확정**이다.
 - 출력값: 저장된 주문(S9)
 - 저장/변경: orders, order_items, order_imports.confirmed_at
-- 예외: 부분 실패 롤백
+- 예외: 부분 실패 롤백(현 구현: items 실패 시 status='cancelled' 보상)
 - 검증: 최소 1라인, 수량>0, 금액 integer
 - MVP 포함: 필수
 
@@ -362,6 +364,22 @@
 - 2차: 실제 세금계산서 직접 발행, 홈택스/이카운트 연동, VAT/과세 계산 자동화, 발행 금액 대조를 구현한다.
 - 원칙: 세금계산서 발행은 후순위지만, **그 근거가 되는 거래처별 기간 금액 데이터는 1차 DB 설계에서 보존**한다.
 
+### 5.3 W23 신규 기능 정의 (F14~F19 — 전부 **설계 승인·미구현**)
+
+> 상태 전이·화면·데이터 대안은 재설계 기준 §5·§6·§11 참조. 아래는 기능 계약만 정의하고, DB 모델·마이그레이션은 R1 승인 게이트 뒤 확정한다.
+
+**F14 수량 확인 저장(가격 대기)** — 목적: 판매단가 없이 품목·수량·단위만 확정해 저장 / 선행: F9(미매칭·수량불확실 차단 규칙 동일 적용, 단가 검증만 제외) / 처리: 가격 대기 상태로 저장, 합산표(F11)·매입처 발주 문장에 포함 / 출력: 가격 대기 주문 / 제약: 거래명세서(F13) 발행 불가.
+
+**F15 가격 대기 목록** — 목적: 가격 미확정 주문의 업무 큐 / 처리: 상태 집계 조회(별도 저장 없음) / 출력: 날짜·거래처·품목 수·경과 표시, 가격 마감(F17) 진입점 / 대시보드 "가격 대기" 카드와 연결.
+
+**F16 매입가 입력** — 목적: 매입처 명세서 수신 후 품목별 오늘 매입가 기록 / 입력: 품목×매입가(품목당 1회 — 거래처 수만큼 반복하지 않음) / 처리: 해당 품목이 걸린 가격 대기 라인들의 참고 마진 즉시 갱신. 기본은 이번 가격 마감에만 사용하고, 사용자가 `품목 기본 매입가에도 저장`을 별도 선택한 경우에만 `products.base_purchase_price`를 갱신(이력 없음 — 시점별 원가 이력은 2차 `purchase_prices`) / 제약: 예상 마진 저장 금지(표시 전용), 자동 기본값 덮어쓰기 금지.
+
+**F17 가격 마감·최종 확정** — 목적: 가격 대기 주문의 판매단가 확정 / 입력: 라인별 최종 판매가(제안값: 거래처 단가 > 기본 출고단가, 자동 확정 금지) / 처리: `order_items.unit_price` 스냅샷 고정=최종 확정, 이후 F13 발행 가능 / UX: Enter 이동·일괄 적용·변경값 강조·참고 마진 표시 / 명령 구분: `이번 주문만 변경` vs `거래처 기본 단가에도 저장`(customer_prices upsert — F6 재사용) / 제약: 고정 마진 공식 금지, 최종 확정 후 수정은 F18 정정만.
+
+**F18 정정** — 목적: 최종 확정 주문의 사후 수정 절차(조용한 덮어쓰기 금지) / 상태: 방향만 확정, 상세(이력·표시 방식)는 후속 설계.
+
+**F19 입력 어댑터 확장** — 목적: 표 복사·CSV/엑셀을 F8~F9와 같은 공통 검수표로 연결 / 우선순위: 파일·표 우선, 사진 OCR 2종(발주표·매입명세서)은 검증 게이트(실사진 10~20장 정확도·시간 절감 측정, 원본 미보존·사용자 검수·저신뢰 차단) 통과 후 보류 실험 / 제약: 어댑터는 핵심 흐름과 분리(추출 결과도 반드시 사람 검수 후 반영).
+
 ---
 
 ## 6. 발주 파싱 기능 상세 정의 (F8)
@@ -385,7 +403,7 @@
 4. **수량 후보 추출**: 아라비아 숫자 우선. 한글 수사("세개")는 후보로만 변환하고 **불확실 표시**.
 5. **단위 후보 추출**: 품목 `base_unit` 및 일반 단위(박스/판/단/개/kg) 사전과 매칭.
 6. **품목 별칭 매칭**: 품목명 후보를 `product_aliases`(회사 범위)와 매칭 → 품목 후보 확정. 다중 후보 시 사용자 선택.
-7. **단가 자동 적용**: 매칭 품목 + 선택 거래처로 `customer_prices` 조회 → 단가 채움(미등록 0 + 경고).
+7. **단가 자동 적용(W22 갱신)**: 매칭 품목 + 선택 거래처로 3순위 적용 — ① `customer_prices`(거래처별 단가) ② `products.base_sale_price`(품목 기본 출고단가, "기본 단가 적용" 표시) ③ 둘 다 없으면 0원 + "단가 미등록" 경고. 적용값은 **제안값**이며 화면에서 직접 수정 가능. 기본 출고단가로만 채워진 라인은 "변경 단가 전체 저장"의 일괄 저장 대상에서 제외된다(customer_prices 남발 방지).
 
 ### 6.3 상태 처리
 | 상태 | 조건 | 표시 |
@@ -449,10 +467,14 @@
 | base_unit | text | ✅ | | 기본단위 |
 | tax_type | text | | 'taxable' | 과세/면세(계산 반영 2차) |
 | base_purchase_price | integer | | null | **기준 매입단가(선택)** — 예상 마진 표시용 참고값(≥0). 정확한 매입이력/원가는 2차 |
+| base_sale_price | integer | | null | **기본 출고단가(W22, 0009 적용됨)** — 거래처별 단가 없을 때 파싱 제안값(≥0). customer_prices 자동 생성 없음 |
+| category | text | ✅ | '기타' | **카테고리 6종(W19, 0007 적용됨)** — CHECK 6종 |
+| source_code | text | | null | **외부 품목코드(W21, 0008 적용됨)** — 카탈로그 import 멱등 매칭, 부분 유니크 |
+| purchase_supplier_id | uuid | | null | **기본 매입처(0004 적용됨)** — FK suppliers |
 | memo | text | | null | |
 | created_at | timestamptz | ✅ | now() | |
 | archived_at | timestamptz | | null | soft delete |
-- 관계: 1:N 별칭·단가·주문품목 / MVP: ✅ (`base_purchase_price`는 1차 후보·nullable)
+- 관계: 1:N 별칭·단가·주문품목, N:1 매입처 / MVP: ✅ (상세 스키마·적용 이력은 `db-schema-definition.md` §4.4가 단일 소스)
 
 ### product_aliases
 | 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
@@ -485,9 +507,10 @@
 | raw_text | text | | null | Q1/C3 확정: 파싱 검수 보조. **1차 기본 저장 ON.** 민감정보 가능→**사용자 삭제 가능(삭제 시 확정 주문 유지, `raw_text`만 null)**. 장기보관 후순위, 첨부/OCR 원본 제외 |
 | parsed_at | timestamptz | | null | |
 | confirmed_at | timestamptz | | null | 확정 시각 |
+| order_id | uuid | | null | **0006 적용됨** — FK `orders(id)` ON DELETE CASCADE. FK 방향은 원문→주문이며 raw_text를 null로 지워도 주문은 유지 |
 | created_by | uuid | ✅ | | FK auth.users |
 | created_at | timestamptz | ✅ | now() | |
-- 관계: 1:N 주문(파생) / MVP: 🔶(원문 기본 저장 ON·삭제 가능(→null), `customer_id`는 1차 필수)
+- 관계: N:1 주문(0006의 nullable `order_id` 링크) / MVP: ✅(원문 기본 저장 ON·삭제 가능(→null), `customer_id`는 1차 필수)
 
 ### orders
 | 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
@@ -508,7 +531,7 @@
 | id | uuid | ✅ | gen_random_uuid() | PK |
 | company_id | uuid | ✅ | | FK |
 | order_id | uuid | ✅ | | FK orders |
-| product_id | uuid | ✅ | | FK products. **NOT NULL** — 1차 `order_items`는 확정 주문 라인만 저장(파싱 후보 미저장) (C1/A 확정) |
+| product_id | uuid | ✅ | | FK products. **현재 0001~0009 NOT NULL** — 확정 주문 라인만 저장. W23 가격 대기 모델은 R1에서 재검토 |
 | raw_name | text | | null | 원문 토막 |
 | quantity | numeric | ✅ | | >0 |
 | unit | text | | null | |
@@ -645,7 +668,7 @@
 
 | 결정 | DB 영향 |
 |---|---|
-| C1 product_id | **확정(A)**: 1차 `order_items`는 확정 라인만 저장 → `product_id` **NOT NULL**. 파싱 후보는 화면+`order_imports.raw_text`로 관리, 후보 영구저장 테이블 후순위 |
+| C1 product_id | **현재 0001~0009 확정값(A)**: `order_items`는 확정 라인만 저장 → `product_id` **NOT NULL**. W23 가격 대기 라인의 저장 모델은 R1 승인 게이트에서 별도 결정 |
 | C2 반올림 | 라인 `amount = round(quantity × unit_price)`(integer), **합계 = Σ 라인 amount**(합산 후 반올림 없음, B). quantity numeric. **VAT 컬럼 1차 없음** |
 | C3 raw_text | **기본 저장 ON(C)**, 사용자 삭제 가능(삭제 시 확정 주문 유지·`raw_text`만 null). 장기보관·첨부/OCR 컬럼 없음 |
 | C4 customer_id | `order_imports.customer_id` **NOT NULL**. 거래처 자동추정용 컬럼 없음 |
@@ -657,7 +680,7 @@
 - PK는 `uuid`(default `gen_random_uuid()`), 시각은 `timestamptz`로 통일한다.
 - 금액은 KRW 원 단위 `integer`. 라인 `line_amount = round(quantity × unit_price)`, **주문/명세 합계 = Σ line_amount(합산 후 반올림 없음)**. **1차는 VAT 계산을 포함하지 않는다.**
 - 수량은 `numeric`으로 받아 소수 확장에 대비하되, 저장 금액은 항상 integer로 떨어뜨린다.
-- **1차 `order_items`는 확정 주문 라인만 저장**한다(`product_id` NOT NULL). 파싱 후보/draft는 DB에 영구 저장하지 않고 화면+`order_imports.raw_text`로 관리(후보 저장 테이블 후순위).
+- **[현재 0001~0009] `order_items`는 확정 주문 라인만 저장**한다(`product_id` NOT NULL). 파싱 후보/draft는 DB에 영구 저장하지 않고 화면+`order_imports.raw_text`로 관리한다. W23 가격 대기 라인의 저장 위치는 R1에서 별도 결정한다.
 - 삭제는 가능한 한 `archived_at`/`status` 기반 soft delete를 우선한다(주문 cancelled, 거래처/품목 archived).
 - 민감 보조 데이터(`order_imports.raw_text`)는 nullable·사용자 삭제 가능으로 두고, 장기보관·첨부·OCR 원본 저장은 스키마에 넣지 않는다(후순위/제외).
 - 과세/면세(`products.tax_type`)·미수금(`receivables`)·세금계산서 정리·`delivery_notes` 저장/`note_number` 채번은 컬럼/테이블 여지만 두고, 자동 계산·매칭·채번 로직은 2차/후순위로 분리한다.
@@ -684,7 +707,7 @@
 
 | ID | 결정 | 확정값 |
 |---|---|---|
-| A | C1 구현 방식 | 1차 `order_items`는 **확정 주문 라인만 저장**. `product_id` **NOT NULL**. 파싱 후보/draft는 DB 미저장(화면+`order_imports.raw_text`). 미매칭/수량 불확실은 S8에서 해결, 미해결 시 F10 차단. 후보 저장 테이블 후순위 |
+| A | C1 구현 방식 | **현재 0001~0009** `order_items`는 확정 주문 라인만 저장. `product_id` **NOT NULL**. 미매칭/수량 불확실은 S8에서 해결하고 미해결 시 F10 차단. W23 가격 대기 라인은 R1 모델 승인 후 이 결정을 명시적으로 개정 |
 | B | 금액 합계 | 라인 `line_amount = round(quantity × unit_price)`. 주문/명세 합계 = **Σ line_amount**(합산 후 반올림 금지). 1차 VAT 없음 |
 | C | raw_text 기본값 | **기본 저장 ON**. 사용자 삭제 가능(삭제 시 **확정 주문 유지, `raw_text`만 null**). 첨부/OCR 원본 제외 |
 | D | 거래명세서 번호 | `delivery_notes.note_number` **자동 채번 1차 불필요**. 주문 기반 미리보기/인쇄 우선. 저장형 명세서·번호 규칙 후순위. `delivery_notes`는 둘 수 있으나 1차 선택/후순위 |

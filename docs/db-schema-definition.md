@@ -8,6 +8,8 @@
 > 본 문서는 Supabase(PostgreSQL) 기준 **테이블 설계 문서**다. SQL은 **초안(참고용)**이며, 실제 Supabase 적용·마이그레이션 파일 생성은 하지 않는다(별도 단위). RLS 정책은 `supabase-rls-policy.md`에 둔다.
 
 > **[2026-07-07 헌장 정렬]** 차수·범위가 어긋나면 `docs/order-moa-system-meta-prompt.md`(헌장)가 우선한다. 본 문서 이후 확정: **매입처 테이블 `ordermoa_suppliers`(id, company_id, name, memo, created_at, archived_at) + `products.purchase_supplier_id uuid nullable FK`가 1차 보강(8c 전 권장)으로 추가 예정**(additive, Codex 승인 후 마이그레이션 — 헌장 §6.4). RLS 4정책 + 교차 회사 트리거 + unique(company_id, name) 포함 조건. §4.12의 purchase_prices(매입처별 원가 이력)는 그대로 2차.
+>
+> **[2026-07-11 W23 정렬 — 적용 현황]** 위 "추가 예정"은 전부 **적용 완료**됐다. 실제 적용된 마이그레이션: 0001(9테이블)·0002(RLS)·0003(회사 RPC)·**0004(suppliers + products.purchase_supplier_id)**·**0005(suppliers.phone/address)**·**0006(order_imports.order_id 링크)**·0007(category)·0008(source_code)·0009(base_sale_price). 실 스키마의 단일 소스는 `web/supabase/migrations/0001~0009`이며, 본 문서 §6 SQL 초안은 **무접두사 설계 초안(참고용)** — 실제 객체명은 전부 `ordermoa_` 접두사다. W23 "가격 대기" 상태·저장 전략의 개념 비교는 **`docs/order-moa-system-redesign-2026-07-11.md` §5(상태 전이표)·§11(대안 비교·권장안)**이 단일 소스이고(본 문서에 복사하지 않음), 실제 마이그레이션 설계는 R1 승인 게이트 뒤 별도 세션에서 한다.
 
 ---
 
@@ -29,9 +31,9 @@
 - **`order_items.unit_price`는 주문 확정 시점의 단가 스냅샷**이다. 확정 후 `customer_prices`가 바뀌어도 과거 주문/거래명세서 금액은 변하지 않는다 → **거래명세서 재출력·거래처별 기간 금액 집계·세금계산서 대조의 기준**(§5.2 기능정의서). 재출력 시 단가를 `customer_prices`에서 다시 조회하지 않는다.
 - **예상 마진은 주문에 스냅샷 저장하지 않는다**(1차). 표시 시점에 `products.base_purchase_price`로 계산하는 **참고값**일 뿐이며, 회계 기록이 아니다. 정확 마진은 2차.
 - 거래처별 **일/월/년 금액 집계**는 별도 집계 테이블 없이 `orders.order_date`(+`customer_id`)와 `order_items.amount`의 합으로 쿼리한다(1차). 집계 캐시/월정산 테이블은 후순위.
-- **`order_items`는 확정 주문 라인만 저장** → `product_id` **NOT NULL**. 파싱 후보/draft는 DB 영구 저장 안 함(화면 + `order_imports.raw_text`).
+- **[현재 0001~0009] `order_items`는 확정 주문 라인만 저장** → `product_id` **NOT NULL**. 파싱 후보/draft는 DB 영구 저장 안 함(화면 + `order_imports.raw_text`). W23 가격 대기 라인 저장 방식은 R1에서 별도 확정하며 이 현재 규칙을 조용히 바꾸지 않는다.
 - **`order_imports.customer_id` NOT NULL**. `raw_text` **기본 저장 ON**, 사용자 삭제 가능(→null).
-- **raw_text 삭제가 확정 주문에 영향 없게**: `orders`/`order_items`는 `order_imports`와 **FK로 묶지 않는다**(논리적 파생만). 따라서 raw_text를 null로 지워도 확정 주문은 그대로 유지된다.
+- **raw_text 삭제가 확정 주문에 영향 없게**: 0006의 FK는 `order_imports.order_id → orders.id` 방향이다. 사용자 삭제는 원문 행 삭제가 아니라 `raw_text = null`이며, 주문/주문품목이 원문을 참조하지 않으므로 확정 주문은 그대로 유지된다.
 - **VAT 계산 없음**(1차). `products.tax_type`은 확장 필드로만 둠.
 - **기준 매입단가**는 `products.base_purchase_price integer nullable`(품목당 단일, 선택)로만 둔다 → **예상 마진은 표시용 참고값**(판매단가 − 기준 매입단가). 매입처별/시점별 정밀 원가·재고·정확한 회계 마진은 **2차 별도 테이블**로 분리(§4.12).
 - **기본 출고단가**는 `products.base_sale_price integer nullable`(W22, 0009)로 둔다. 거래처별 단가(`customer_prices`)가 없을 때만 발주 파싱 fallback으로 사용하며, `customer_prices`를 자동 생성하지 않는다. 우선순위는 **거래처별 단가 > 품목 기본 출고단가 > 미등록**.
@@ -64,7 +66,7 @@
 | order_imports | ✅ | 붙여넣기 원문/세션 |
 | orders | ✅ | 확정 주문 |
 | order_items | ✅ | 확정 라인(generated amount) |
-| suppliers | 🔶 1차 보강(8c 전 권장, 승인 대기) | 매입처 — 헌장 §6.4, products.purchase_supplier_id FK와 세트 |
+| suppliers | ✅ **적용됨(0004+0005)** | 매입처 — products.purchase_supplier_id FK와 세트, phone/address 포함(§4.13) |
 | delivery_notes | 🔶 선택/후순위 | 미리보기 우선 |
 | receivables | 🔶 수동만 | 자동화 2차 |
 | price_history | ⛔ 2차 | 단가 이력 |
@@ -167,10 +169,11 @@
 | raw_text | text | | null | **기본 저장 ON, 삭제 가능(→null)(C3)**. 민감정보 가능 |
 | parsed_at | timestamptz | | null | |
 | confirmed_at | timestamptz | | null | 확정 시각 |
+| order_id | uuid | | null | **(0006 적용됨, W09)** 확정 주문 링크 — FK `ordermoa_orders(id) on delete cascade` + 교차회사 트리거 검증. 구버전 원문 호환 위해 null 허용 |
 | created_by | uuid | ✅ | | FK auth.users(id) |
 | created_at | timestamptz | ✅ | now() | |
-- 인덱스: `(company_id)`, `(customer_id)`
-- 비고: `orders`와 FK로 연결하지 않음 → raw_text 삭제가 확정 주문에 영향 없음.
+- 인덱스: `(company_id)`, `(customer_id)`, `(order_id)`(0006)
+- 비고(원칙 유지): FK 방향이 **imports→orders**라서 원문(raw_text) 삭제·원문 행 삭제는 확정 주문에 영향이 없다(원래 원칙 "raw_text 삭제가 주문에 영향 없음" 유지). 반대로 주문이 실제 삭제되면 원문도 cascade 정리되지만, 주문은 soft cancel이라 실제 삭제는 일어나지 않는다. 원문 보기/삭제(W09)가 이 컬럼으로 주문↔원문을 잇는다.
 
 ### 4.8 orders
 | 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
@@ -184,7 +187,7 @@
 | memo | text | | null | |
 | created_at | timestamptz | ✅ | now() | |
 - 인덱스: `(company_id, order_date)`, `(customer_id)`
-- 비고: 1차는 확정 시점에 생성(draft 주문 미저장). 취소는 `status='cancelled'`(soft).
+- 비고: **현재 구현**은 확정 시점에 생성(draft 주문 미저장). 취소는 `status='cancelled'`(soft). W23의 가격 대기 상태는 R1 승인 게이트 전까지 미구현이다.
 
 ### 4.9 order_items
 | 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
@@ -199,7 +202,7 @@
 | unit_price | integer | ✅ | 0 | CHECK (unit_price >= 0), KRW |
 | amount | integer | ✅ | (generated) | **GENERATED `round(quantity*unit_price)`**(B). |
 - 인덱스: `(order_id)`, `(company_id, product_id)`(합산표)
-- 비고: 파싱 후보/draft 라인은 저장하지 않음. 모든 행은 확정 라인.
+- 비고: **현재 0001~0009에서는** 파싱 후보/draft 라인을 저장하지 않고 모든 행이 확정 라인이다. W23 R1이 채택되면 이 절과 실제 마이그레이션을 함께 갱신한다.
 
 ### 4.10 delivery_notes — 🔶 선택/후순위
 | 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
@@ -227,6 +230,20 @@
 | paid_at | timestamptz | | null | |
 - 비고: **주문 확정 시 자동 생성 안 함**. 사용자가 수동 생성·수동 status. 자동 매칭/알림 2차.
 
+### 4.13 suppliers — ✅ 적용됨(0004+0005, 본 문서 초판 이후 추가)
+
+| 필드 | 타입 | 필수 | 기본값 | 제약/비고 |
+|---|---|---|---|---|
+| id | uuid | ✅ | gen_random_uuid() | PK |
+| company_id | uuid | ✅ | | FK companies(id) ON DELETE CASCADE |
+| name | text | ✅ | | trim 비빈값, unique(company_id, name) |
+| phone | text | | null | 0005 |
+| address | text | | null | 0005 |
+| memo | text | | null | |
+| created_at | timestamptz | ✅ | now() | |
+| archived_at | timestamptz | | null | soft delete |
+- `products.purchase_supplier_id uuid nullable FK`(0004)와 세트. RLS 4정책 + 교차회사 트리거 적용. 원가·발주이력·미지급은 2차(§4.12).
+
 ### 4.12 후순위(2차) 테이블 — 스키마 여지만
 
 - **price_history**: `id, company_id, customer_id, product_id, old_price int, new_price int, changed_at timestamptz, changed_by uuid`. 단가 변경 감사/이력. (1차 미생성)
@@ -245,7 +262,8 @@ customers 1─N {customer_prices, orders, order_imports, receivables}
 products  1─N {product_aliases, customer_prices, order_items}
 orders    1─N order_items
 orders    1─N delivery_notes (선택)
-order_imports  —(FK 없음, 논리적 파생)→ orders
+order_imports  —(order_id FK, 0006: imports→orders 방향·on delete cascade)→ orders
+  ※ 원문 삭제 UX는 행 삭제가 아니라 raw_text=null이므로 확정 주문에 영향 없음(§4.7)
 ```
 
 ### 5.1 교차 회사 FK 무결성 (Codex 리뷰 반영)
