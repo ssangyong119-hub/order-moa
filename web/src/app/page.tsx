@@ -31,14 +31,18 @@ import {
   type CustomerFormInput,
 } from "@/lib/customer-store";
 import {
+  closeOrderPrices,
   deleteOrderRawText,
   loadCompanyData,
   loadOrders,
+  planCloseOrderPrices,
+  planCustomerPriceSaves,
   saveOrder,
   withRawTextCleared,
   type ConfirmedOrder,
   type OrderLine,
   type OrderStatus,
+  type PriceCloseInput,
 } from "@/lib/order-store";
 import { buildNewProductRegistration, type NewProductRegistrationInput } from "@/lib/product-registration";
 import { padDeliveryNoteLines } from "@/lib/delivery-note";
@@ -99,6 +103,7 @@ type View =
   | "aggregate"
   | "orders"
   | "note"
+  | "priceClose"
   | "customers"
   | "suppliers"
   | "products"
@@ -158,6 +163,7 @@ const VIEW_TITLES: Record<View, string> = {
   aggregate: "품목별 합산표",
   orders: "주문 목록",
   note: "거래명세서",
+  priceClose: "가격 마감",
   customers: "거래처 관리",
   suppliers: "매입처 관리",
   products: "품목·별칭 관리",
@@ -177,7 +183,7 @@ function Shell(props: {
   const isActive = (v?: View) =>
     v === view ||
     (v === "paste" && view === "review") ||
-    (v === "orders" && view === "note");
+    (v === "orders" && (view === "note" || view === "priceClose"));
   return (
     <div className="shell">
       <aside className="sidebar no-print">
@@ -872,6 +878,7 @@ export default function HomePage() {
       const product = products.find((p) => p.id === l.productId);
       const qty = l.quantity as number;
       return {
+        id: crypto.randomUUID(), // 데모 모드 합성 라인 id (가격 마감 매핑용)
         productId: l.productId as string,
         productName: l.productName,
         quantity: qty,
@@ -917,6 +924,115 @@ export default function HomePage() {
     }
     setOrders((prev) => withRawTextCleared(prev, order.id));
     flash("발주 원문을 삭제했습니다. 주문 내역은 그대로 유지됩니다.");
+  }
+
+  // ---- 가격 마감 (W23-R3) ----
+  // 가격 대기(quantity_confirmed) 주문의 라인별 판매단가를 확정 → confirmed 전환.
+  // 매입가/판매가 기본값 저장은 전부 사용자 명시 선택(basePurchaseSaves/customerPriceSaves)일 때만.
+  async function closeOrder(
+    order: ConfirmedOrder,
+    inputs: PriceCloseInput[],
+    basePurchaseSaves: Array<{ productId: string; price: number }>,
+    customerPriceSaves: Array<{ productId: string; price: number }>,
+    customerPriceConflicts: string[] = [],
+  ) {
+    if (saving) return;
+    const plan = planCloseOrderPrices(order.lines, inputs);
+    if (!plan.ok) {
+      flash(plan.error);
+      return;
+    }
+    setSaving(true);
+
+    // 최종 확정(스냅샷)은 성공했는데 부수적 기본값 저장이 실패할 수 있다.
+    // 실패를 모아 마지막 성공 메시지에 함께 표기(성공 flash가 실패를 덮지 않게).
+    const notes: string[] = [];
+    if (customerPriceConflicts.length > 0) {
+      notes.push(`같은 품목의 판매단가가 여러 값이라 거래처 기본 단가 저장은 제외했습니다(${customerPriceConflicts.join(", ")}). 단가 관리에서 확인하세요.`);
+    }
+
+    // DB 모드: 라인 단가 UPDATE → status=confirmed (order-store가 순서·경합·영향행 보장)
+    if (db && companyId) {
+      let saved: ConfirmedOrder;
+      try {
+        saved = await closeOrderPrices(db, companyId, order.id, inputs, products);
+      } catch (e) {
+        // 스냅샷 확정 실패 — 주문은 가격 대기로 남아 재시도 가능. 부수 저장은 시도하지 않는다.
+        flash(e instanceof Error ? e.message : "가격 마감에 실패했습니다. 네트워크 확인 후 다시 시도해주세요.");
+        setSaving(false);
+        return;
+      }
+      // 여기부터 주문 스냅샷은 이미 확정됨 — 이후 실패는 주문 확정을 되돌리지 않고 note로만 알린다.
+      let basePurchaseFail = 0;
+      for (const s of basePurchaseSaves) {
+        const r = await db
+          .from("ordermoa_products")
+          .update({ base_purchase_price: s.price })
+          .eq("company_id", companyId)
+          .eq("id", s.productId);
+        if (r.error) basePurchaseFail += 1;
+      }
+      let customerPriceFail = 0;
+      for (const s of customerPriceSaves) {
+        const r = await db.from("ordermoa_customer_prices").upsert(
+          { company_id: companyId, customer_id: order.customerId, product_id: s.productId, sale_price: s.price },
+          { onConflict: "company_id,customer_id,product_id" },
+        );
+        if (r.error) customerPriceFail += 1;
+      }
+      if (basePurchaseFail > 0) notes.push(`기본 매입가 ${basePurchaseFail}건 저장 실패. 기준정보에서 다시 저장하세요.`);
+      if (customerPriceFail > 0) notes.push(`거래처 기본 단가 ${customerPriceFail}건 저장 실패. 단가 관리에서 다시 저장하세요.`);
+
+      // 화면 상태 반영 — 저장 성공분만(실패해도 스냅샷 주문엔 영향 없음)
+      const okPurchase = basePurchaseFail === 0 ? basePurchaseSaves : [];
+      if (okPurchase.length > 0) {
+        const byId = new Map(okPurchase.map((s) => [s.productId, s.price]));
+        setProducts((prev) => prev.map((p) => (byId.has(p.id) ? { ...p, basePurchasePrice: byId.get(p.id)! } : p)));
+      }
+      const okCustomer = customerPriceFail === 0 ? customerPriceSaves : [];
+      if (okCustomer.length > 0) {
+        setCustomerPrices((prev) => [
+          ...prev.filter((cp) => !(cp.customerId === order.customerId && okCustomer.some((s) => s.productId === cp.productId))),
+          ...okCustomer.map((s) => ({ customerId: order.customerId, productId: s.productId, price: s.price })),
+        ]);
+      }
+      setOrders((prev) => prev.map((o) => (o.id === saved.id ? saved : o)));
+      setCurrentOrderId(saved.id);
+      setView("note");
+      setSaving(false);
+      flash(`주문은 최종 확정되었습니다. 이제 거래명세서를 발행할 수 있습니다.${notes.length ? " 다만 " + notes.join(" ") : ""}`);
+      return;
+    }
+
+    // 데모 모드: 메모리에서 라인 단가 확정 → confirmed
+    const priceByLine = new Map(plan.updates.map((u) => [u.lineId, u.unitPrice]));
+    const purchaseByProduct = new Map(basePurchaseSaves.map((s) => [s.productId, s.price]));
+    const newLines: OrderLine[] = order.lines.map((l) => {
+      const unitPrice = priceByLine.get(l.id) ?? l.unitPrice;
+      const basePurchasePrice = purchaseByProduct.get(l.productId) ?? l.basePurchasePrice;
+      return { ...l, unitPrice, amount: lineAmount(l.quantity, unitPrice), basePurchasePrice };
+    });
+    const closed: ConfirmedOrder = {
+      ...order,
+      lines: newLines,
+      total: sumAmounts(newLines.map((l) => l.amount)),
+      margin: estimatedOrderMargin(newLines),
+      status: "confirmed",
+    };
+    if (basePurchaseSaves.length > 0) {
+      setProducts((prev) => prev.map((p) => (purchaseByProduct.has(p.id) ? { ...p, basePurchasePrice: purchaseByProduct.get(p.id)! } : p)));
+    }
+    if (customerPriceSaves.length > 0) {
+      setCustomerPrices((prev) => [
+        ...prev.filter((cp) => !(cp.customerId === order.customerId && customerPriceSaves.some((s) => s.productId === cp.productId))),
+        ...customerPriceSaves.map((s) => ({ customerId: order.customerId, productId: s.productId, price: s.price })),
+      ]);
+    }
+    setOrders((prev) => prev.map((o) => (o.id === closed.id ? closed : o)));
+    setCurrentOrderId(closed.id);
+    setView("note");
+    setSaving(false);
+    flash(`주문은 최종 확정되었습니다.${notes.length ? " 다만 " + notes.join(" ") : ""} (데모 모드 — 새로고침 시 초기화)`);
   }
 
   // ---- 합산표 (매입처 발주용) ----
@@ -1728,7 +1844,16 @@ export default function HomePage() {
                           </td>
                           <td>
                             {o.status === "quantity_confirmed" ? (
-                              <span className="muted" title="가격 마감 후 발행할 수 있습니다">가격 마감 후</span>
+                              <button
+                                className="link"
+                                title="매입가 확인 후 판매단가를 확정해 명세서를 발행합니다"
+                                onClick={() => {
+                                  setCurrentOrderId(o.id);
+                                  setView("priceClose");
+                                }}
+                              >
+                                가격 마감
+                              </button>
                             ) : (
                               <button
                                 className="link"
@@ -1752,6 +1877,31 @@ export default function HomePage() {
         </section>
       )}
 
+      {view === "priceClose" && currentOrder && currentOrder.status === "quantity_confirmed" && (
+        <PriceCloseView
+          key={currentOrder.id}
+          order={currentOrder}
+          products={products}
+          prices={customerPrices}
+          orders={orders}
+          busy={saving}
+          onBack={() => setView("orders")}
+          onClose={closeOrder}
+        />
+      )}
+
+      {view === "priceClose" && currentOrder && currentOrder.status !== "quantity_confirmed" && (
+        <section className="card">
+          <h2>가격 마감</h2>
+          <div className="notice">
+            이 주문은 이미 <strong>최종 확정</strong>되었습니다. 거래명세서는 주문 목록에서 [보기]로 발행할 수 있습니다.
+          </div>
+          <div className="row-actions" style={{ marginTop: 10 }}>
+            <button onClick={() => setView("orders")}>← 주문 목록</button>
+          </div>
+        </section>
+      )}
+
       {view === "note" && currentOrder && currentOrder.status === "quantity_confirmed" && (
         <section className="card">
           <h2>거래명세서</h2>
@@ -1761,6 +1911,7 @@ export default function HomePage() {
           </div>
           <div className="row-actions" style={{ marginTop: 10 }}>
             <button onClick={() => setView("orders")}>← 주문 목록</button>
+            <button className="primary" onClick={() => setView("priceClose")}>가격 마감하기</button>
           </div>
         </section>
       )}
@@ -2170,6 +2321,250 @@ function ReviewView(props: {
         확정하면 이 거래처의 판매 주문으로 저장됩니다. 매입처 발주는 &lsquo;품목별 합산표&rsquo;에서 따로 합니다.
         {" "}<strong>수량만 확정</strong>은 단가를 아직 몰라도 저장하는 것 — 합산표·매입처 발주에는 바로 쓰이고,
         거래명세서는 매입가 확인 후 <strong>가격 마감</strong>을 거쳐야 발행됩니다.
+      </p>
+    </section>
+  );
+}
+
+// W23-R3 가격 마감 화면 — 매입가 입력(품목당 1회) → 라인별 판매가 확정 → 최종 확정.
+// 제안값은 자동 확정하지 않고(사용자가 마감 버튼으로 확정), 기본값 저장은 전부 명시 선택. 예상 마진은 표시 전용.
+function PriceCloseView(props: {
+  order: ConfirmedOrder;
+  products: Product[];
+  prices: CustomerPrice[];
+  orders: ConfirmedOrder[];
+  busy?: boolean;
+  onBack: () => void;
+  onClose: (
+    order: ConfirmedOrder,
+    inputs: PriceCloseInput[],
+    basePurchaseSaves: Array<{ productId: string; price: number }>,
+    customerPriceSaves: Array<{ productId: string; price: number }>,
+    customerPriceConflicts: string[],
+  ) => void;
+}) {
+  const { order, products, prices, orders } = props;
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const productIds = useMemo(() => [...new Set(order.lines.map((l) => l.productId))], [order.lines]);
+
+  // 이 거래처 제안 판매가(거래처 단가 > 기본 출고단가 > 없음) — 자동 확정 아님, 표시/기본값용
+  const suggestSale = (productId: string): { price: number; source: "customer" | "base" } | null => {
+    const r = resolveSalePrice(prices, order.customerId, productById.get(productId) ?? null);
+    return r.source === "none" ? null : { price: r.unitPrice, source: r.source };
+  };
+  // 이 거래처의 최근 최종 확정 판매가(참고) — 다른 confirmed 주문에서
+  const lastConfirmedSale = (productId: string): number | null => {
+    const cands = orders
+      .filter((o) => o.status === "confirmed" && o.customerId === order.customerId && o.id !== order.id)
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+    for (const o of cands) {
+      const l = o.lines.find((ln) => ln.productId === productId);
+      if (l) return l.unitPrice;
+    }
+    return null;
+  };
+
+  const [purchase, setPurchase] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      productIds.map((pid) => {
+        const bp = productById.get(pid)?.basePurchasePrice;
+        return [pid, bp != null ? String(bp) : ""];
+      }),
+    ),
+  );
+  const [savePurchase, setSavePurchase] = useState<Record<string, boolean>>({});
+  const [sale, setSale] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      order.lines.map((l) => {
+        if (l.unitPrice > 0) return [l.id, String(l.unitPrice)];
+        const s = suggestSale(l.productId);
+        return [l.id, s ? String(s.price) : ""];
+      }),
+    ),
+  );
+  const [saleTouched, setSaleTouched] = useState<Record<string, boolean>>({});
+  const [saveCustomer, setSaveCustomer] = useState<Record<string, boolean>>({});
+
+  const purchaseValueOf = (productId: string): number | null => {
+    const raw = purchase[productId];
+    if (raw === undefined || raw === "") return productById.get(productId)?.basePurchasePrice ?? null;
+    const v = Number(raw);
+    return Number.isFinite(v) ? v : null;
+  };
+
+  const inputs: PriceCloseInput[] = order.lines.map((l) => ({
+    lineId: l.id,
+    unitPrice: sale[l.id] === "" || sale[l.id] === undefined ? Number.NaN : Number(sale[l.id]),
+  }));
+  const plan = planCloseOrderPrices(order.lines, inputs);
+  const canClose = plan.ok && !props.busy;
+
+  function focusNextSale(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const all = Array.from(
+      e.currentTarget.closest("table")?.querySelectorAll<HTMLInputElement>("input.close-sale") ?? [],
+    );
+    const i = all.indexOf(e.currentTarget);
+    if (i >= 0 && i < all.length - 1) all[i + 1].focus();
+    else e.currentTarget.blur();
+  }
+
+  function submit() {
+    if (!plan.ok) return;
+    const basePurchaseSaves = productIds
+      .filter((pid) => savePurchase[pid])
+      .map((pid) => ({ productId: pid, value: purchaseValueOf(pid) }))
+      .filter((s): s is { productId: string; value: number } => s.value != null && s.value >= 0)
+      .map((s) => ({ productId: s.productId, price: Math.round(s.value) }));
+    // 라인별 '거래처 기본 단가에도 저장' — 같은 품목 여러 줄·다른 단가면 조용히 덮어쓰지 않고 제외+경고(순수 계획)
+    const priceByLine: Record<string, number> = {};
+    for (const l of order.lines) {
+      if (sale[l.id] !== "" && Number.isFinite(Number(sale[l.id]))) priceByLine[l.id] = Math.round(Number(sale[l.id]));
+    }
+    const { saves: customerPriceSaves, conflicts } = planCustomerPriceSaves(
+      order.lines.map((l) => ({ id: l.id, productId: l.productId, productName: l.productName })),
+      priceByLine,
+      saveCustomer,
+    );
+    props.onClose(order, inputs.map((i) => ({ ...i, unitPrice: Math.round(i.unitPrice) })), basePurchaseSaves, customerPriceSaves, conflicts);
+  }
+
+  return (
+    <section className="card">
+      <div className="row-actions no-print" style={{ marginBottom: 10 }}>
+        <button onClick={props.onBack}>← 주문 목록</button>
+      </div>
+      <h2>가격 마감 · {order.customerName} <span className="muted">{order.date}</span></h2>
+      <p className="muted" style={{ marginTop: 0 }}>
+        매입가를 확인하고 라인별 판매단가를 확정하면 최종 확정됩니다. 제안값은 참고일 뿐 자동 확정되지 않으며,
+        <strong>기본값 저장</strong>(품목 기본 매입가·거래처 기본 단가)은 각 체크를 선택했을 때만 반영됩니다. 예상 마진은 표시용(저장 안 함)입니다.
+      </p>
+
+      <h3 style={{ marginBottom: 6 }}>1) 오늘 매입가 <span className="muted">(품목당 1회 — 이번 마감에만 사용)</span></h3>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>품목</th>
+              <th className="num">기준 매입가</th>
+              <th className="num">오늘 매입가</th>
+              <th>품목 기본 매입가에도 저장</th>
+            </tr>
+          </thead>
+          <tbody>
+            {productIds.map((pid) => {
+              const p = productById.get(pid);
+              return (
+                <tr key={pid}>
+                  <td>{p?.name ?? order.lines.find((l) => l.productId === pid)?.productName ?? "품목"}</td>
+                  <td className="num muted">{p?.basePurchasePrice != null ? formatKRW(p.basePurchasePrice) : "-"}</td>
+                  <td className="num">
+                    <input
+                      type="number"
+                      min={0}
+                      value={purchase[pid] ?? ""}
+                      placeholder="미입력"
+                      onChange={(e) => setPurchase((prev) => ({ ...prev, [pid]: e.target.value }))}
+                    />
+                  </td>
+                  <td>
+                    <label className="checkline">
+                      <input
+                        type="checkbox"
+                        checked={!!savePurchase[pid]}
+                        onChange={(e) => setSavePurchase((prev) => ({ ...prev, [pid]: e.target.checked }))}
+                      />
+                      <span className="muted">기본값으로 저장</span>
+                    </label>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <h3 style={{ marginTop: 18, marginBottom: 6 }}>2) 판매단가 확정</h3>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>품목</th>
+              <th className="num">수량</th>
+              <th className="num">거래처 단가</th>
+              <th className="num">기본 출고단가</th>
+              <th className="num">최근 확정가</th>
+              <th className="num">최종 판매가</th>
+              <th className="num">예상 마진(참고)</th>
+              <th>거래처 기본 단가에도 저장</th>
+            </tr>
+          </thead>
+          <tbody>
+            {order.lines.map((l) => {
+              const p = productById.get(l.productId);
+              const sug = suggestSale(l.productId);
+              const custPrice = sug?.source === "customer" ? sug.price : null;
+              const basePrice = p?.baseSalePrice ?? null;
+              const lastPrice = lastConfirmedSale(l.productId);
+              const saleNum = sale[l.id] !== "" && sale[l.id] !== undefined ? Number(sale[l.id]) : null;
+              const margin =
+                saleNum != null && Number.isFinite(saleNum)
+                  ? estimatedLineMargin(saleNum, purchaseValueOf(l.productId), l.quantity)
+                  : null;
+              const suggested = !saleTouched[l.id] && sale[l.id] !== "" && l.unitPrice === 0;
+              return (
+                <tr key={l.id}>
+                  <td>{l.productName}</td>
+                  <td className="num">{l.quantity}{l.unit}</td>
+                  <td className="num muted">{custPrice != null ? formatKRW(custPrice) : "-"}</td>
+                  <td className="num muted">{basePrice != null ? formatKRW(basePrice) : "-"}</td>
+                  <td className="num muted">{lastPrice != null ? formatKRW(lastPrice) : "-"}</td>
+                  <td className="num">
+                    <input
+                      className="close-sale price"
+                      type="number"
+                      min={0}
+                      value={sale[l.id] ?? ""}
+                      placeholder="입력"
+                      onChange={(e) => {
+                        setSale((prev) => ({ ...prev, [l.id]: e.target.value }));
+                        setSaleTouched((prev) => ({ ...prev, [l.id]: true }));
+                      }}
+                      onKeyDown={focusNextSale}
+                    />
+                    {suggested && <div><span className="badge">제안값</span></div>}
+                    {(sale[l.id] === "" || sale[l.id] === undefined) && <div><span className="badge amber">미입력</span></div>}
+                  </td>
+                  <td className="num">{formatMargin(margin)}</td>
+                  <td>
+                    <label className="checkline">
+                      <input
+                        type="checkbox"
+                        checked={!!saveCustomer[l.id]}
+                        onChange={(e) => setSaveCustomer((prev) => ({ ...prev, [l.id]: e.target.checked }))}
+                      />
+                      <span className="muted">기본값으로 저장</span>
+                    </label>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {!plan.ok && (
+        <p className="notice" style={{ marginTop: 10 }}>{plan.error}</p>
+      )}
+      <div className="row-actions" style={{ marginTop: 12 }}>
+        <button onClick={props.onBack}>← 취소</button>
+        <button className="primary danger" onClick={submit} disabled={!canClose}>
+          {props.busy ? "확정 중…" : "가격 마감 = 최종 확정"}
+        </button>
+      </div>
+      <p className="muted" style={{ marginTop: 8 }}>
+        최종 확정 후에는 판매단가가 스냅샷으로 잠깁니다(가격 대기로 되돌릴 수 없음). 확정하면 거래명세서를 발행할 수 있습니다.
       </p>
     </section>
   );

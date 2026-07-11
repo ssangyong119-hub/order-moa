@@ -2076,3 +2076,129 @@ R2 구현(결정 기록 §5 영향 맵 그대로):
 - R3(가격 마감): quantity_confirmed 주문을 최종 확정할 화면·`closeOrderPrices`(items UPDATE→orders confirmed) — 현재는 가격 대기 주문을 마감할 수단이 없음(의도된 단계 분리, 취소는 가능).
 - DB 모드 실측(로그인)은 사용자 몫: 수량만 확정 → F5 유지 → 목록 뱃지 확인.
 - Codex 검수: R2 diff + 결정 기록 §8(사후) + 0010 적용 사실.
+
+## 2026-07-11 Claude (W23-R3 — 가격 마감 구현 + 0010 가드 보강 0011)
+
+상태:
+
+- **완료(구현·데모 smoke).** 커밋/푸시 안 함 · 직접 SQL 적용 안 함 · 0010 무수정. 보고 후 중단.
+
+작업 목표:
+
+- 가격 대기(quantity_confirmed) 주문에서 라인별 판매단가를 확정해 최종 확정(confirmed)으로 전환하는 화면·저장 경로. 0010 스냅샷 가드의 우회 3종을 0011로 보강.
+
+0단계 — 0010 가드 보강(신규 `web/supabase/migrations/0011_order_pricing_guard_hardening.sql`, **미적용 — 사용자 SQL Editor 실행 대기**):
+
+- 확인된 갭: ① 0010 상태 트리거가 `confirmed→quantity_confirmed`만 막아 **confirmed→draft→라인수정→confirmed 우회** 가능. ② order_items 가드가 `NEW.order_id` 상태만 보고 `order_id`를 변경 컬럼 목록에서 누락 → 확정 라인 **타주문 이동(탈출)·확정 주문 라인 주입** 가능. ③ cancelled 라인 미보호.
+- 보강(전부 additive·idempotent·backfill 0·RLS 무변경, 0010 함수의 순수 상위집합이라 `create or replace`로 안전 교체): ① 전이 규칙 = confirmed는 cancelled로만·cancelled는 종결(되살리기 금지). ② order_items 가드가 OLD/NEW.order_id 상태를 모두 보고 order_id 변경 시 어느 쪽이든 확정/취소면 차단 + 변경 컬럼에 order_id 추가. ③ 라인 잠금을 confirmed→(confirmed OR cancelled)로 확장(취소 라인 보존).
+- **결정(가드 범위 — cancelled 라인)**: 앱은 취소 주문 라인을 수정/삭제하는 경로가 없고(soft cancel은 status만 변경), cancelled는 ①로 종결되어 리포트(loadOrders 필터)에서 제외되므로, DB 잠금 확장이 앱과 충돌하지 않고 "확정됐던 주문 라인 보존" 권장을 만족. 비용: 관리자 수동 정리 시 트리거 drop 후 정리(0010 DELETE-cascade와 동일 패턴).
+- 파일 하단에 실험 블록 H1~H6(실 테이블 + `begin…rollback`, 실데이터 원복) — 승인 후 사용자 실측용.
+
+R3 구현:
+
+- `order-store.ts`: `OrderLine.id`(order_items.id) 추가 · `DbItemRow.id`·`ORDER_SELECT`·`saveOrder` items select에 `id` 포함 · `mapDbOrder`가 라인 id 전파. 순수 계획 함수 **`planCloseOrderPrices(lines, inputs)`**(라인 0/누락/중복 id/타주문 id/라인수 불일치/음수·NaN·무한대 → `{ok:false}`, 통과 시 라인순 정수 updates — **product_id 아닌 라인 id로만 매핑**). DB 실행 **`closeOrderPrices(db,company,orderId,inputs,products)`**: ① qc 상태+실제 라인 재조회 → ② 플랜 검증(실패면 무-UPDATE throw) → ③ 라인별 `unit_price` UPDATE(company+order+id 3중 조건, amount 자동 재계산) → ④ status=confirmed UPDATE(`…AND status='quantity_confirmed'` 경합 차단). 부분 실패 시 주문은 qc로 남아 재시도 멱등.
+- `page.tsx`: `View`에 `priceClose` · 주문 목록 가격 대기 행의 명세서 칸을 **[가격 마감]** 버튼으로 · `closeOrder` 핸들러(DB=closeOrderPrices+명시 선택분만 base_purchase_price/customer_prices 저장, 데모=메모리 확정) · **`PriceCloseView`**(①품목별 오늘 매입가 입력+`품목 기본 매입가에도 저장` 체크 ②라인별: 거래처 단가/기본 출고단가/최근 확정가 표시·최종 판매가 입력·참고 마진·`거래처 기본 단가에도 저장` 체크, Enter 이동, plan.ok 전엔 마감 비활성) · 데모 OrderLine에 합성 id.
+- **원칙 준수**: 제안값 자동 확정 없음, 기본값 저장은 전부 명시 체크, 마진 자동 공식·저장 없음(표시 전용), unit_price 스냅샷·raw_text 삭제 가능·amount generated 불변. 경로 A(바로 확정) 무변경.
+
+테스트(TDD, 테스트 우선):
+
+- `order-store.test.ts`에 `planCloseOrderPrices` 11건(정상·반올림·동일품목 다줄 정확 매핑·라인0·누락·음수·NaN·무한대·중복 id·타주문 id·초과) + `mapDbOrder` 라인 id 전파 2 assert 추가. RED(12 실패: 함수 미존재 11 + id 전파 1) 확인 후 GREEN.
+- DB 트리거 동작(confirmed→draft/qc 차단·order_id 이동·DELETE·cancelled 종결)은 vitest 밖 — 0011 하단 H1~H6 SQL 실험으로 사용자 실측(0010 E1~E4와 동일 관행).
+
+검증:
+
+- root `npm test` 5/5 · web `npm test` **163/163** · `npm run build` 성공 · `npm audit --audit-level=low` 0 · `tsc --noEmit` 통과 · `git diff --check` clean(미커밋).
+- 데모 smoke(:3210, ordermoa-demo-3210): 붙여넣기→바로확정(41,000)→명세서 회귀 · 수량만확정→[가격 대기]·미정 · 합산표 포함(콩나물4·두부6·미나리10)·월합계 제외(1건) · 가격마감 진입(거래처단가·최근확정가·참고마진 표시) · 콩나물 8,000→8,500 수정·거래처저장·두부 매입가저장 체크 · 마감→명세서 42,000(라인 id 정확 반영) · 마감후 월합계 2건 83,000 · 재파싱 시 콩나물 8,500 제안(거래처 단가 저장 반영) · 콘솔 0. 전 항목 통과.
+
+남은 이슈:
+
+- **0011 미적용** — 사용자 SQL Editor 실행 필요. 적용 전에는 DB 트리거 강화가 실효되지 않음(앱 경로는 0010만으로도 안전, 0011은 raw-DB 우회 방어).
+- DB 모드 실측(로그인, 사용자): 가격 대기 저장→F5 유지→가격 마감→F5 유지→명세서 재출력. 테스트 주문 1건만 사용.
+- Codex 검수: R3 diff + 0011 SQL 전문·가드 범위 결정(cancelled 라인 잠금) + 라인 id 도입.
+
+## 2026-07-11 Claude (W23-R3 검수 보강 — INSERT 가드·영향행 검증·메시지/충돌 처리)
+
+상태:
+
+- **완료(구현·mock 테스트·데모 smoke).** 커밋/푸시 안 함 · 직접 SQL 적용 안 함 · 0010 무수정 · 기존 변경 reset/revert 안 함. 보고 후 중단.
+
+작업 목표:
+
+- R3 최종 보강: 이전 세션에서 "검토 후 보류"했던 INSERT 주입 우회를 실제로 차단하고, 가격 마감/저장 경로의 부분 실패·충돌을 정교화. 사용자 지시 5개 항목.
+
+수정 내역:
+
+1. **0011 INSERT 가드 보강** — `ordermoa_check_order_items_frozen`에 `TG_OP='INSERT'` 분기 추가(NEW.order_id가 confirmed/cancelled면 라인 추가 차단, quantity_confirmed는 허용). 트리거를 `before insert or update or delete`로 확장. 헤더 ② 설명을 구현과 일치시킴. **경로 A 공존**: `saveOrder`를 `quantity_confirmed로 주문 생성 → items insert(가격 마감 전이라 허용) → confirmed로 승격(qc→confirmed 허용 전이)`으로 재구성. 승격은 `.eq("status","quantity_confirmed").select("id")`로 경합 차단·영향행 확인. 승격 실패 시 주문은 qc로 남아 가격 마감으로 재확정(스냅샷 유실 없음). **H7 실험 추가**(confirmed에 INSERT → 오류, qc에 INSERT → 성공). 0011 idempotent 유지, 0010 무수정.
+2. **영향행 검증** — `closeOrderPrices`의 라인별 UPDATE에 `.select("id")` 추가, `data.length !== 1`이면(0행=라인 사라짐/불일치, 2행+=비정상) status 승격 전에 throw → 주문 qc 유지·재시도 안전. mock 테스트로 실측(정상 승격 / 0행→미승격 / flip 0행→오류 / qc 아님→어떤 UPDATE도 안 함).
+3. **기준정보 저장 실패 메시지 분리** — `closeOrder`(page.tsx): 스냅샷 확정(closeOrderPrices) 성공 후 base_purchase/customer_price 저장 실패를 카운트해 `notes[]`에 모으고, 마지막에 "주문은 최종 확정되었습니다. 다만 기본 매입가 N건 저장 실패…"처럼 **한 번에** 표기(성공 flash가 실패를 덮지 않음). 저장 실패해도 주문 스냅샷은 되돌리지 않음. 화면 상태는 저장 성공분만 반영.
+4. **거래처 기본단가 충돌** — `planCustomerPriceSaves`(순수, order-store): 체크된 라인을 품목별로 묶어 **단가가 여러 값이면 저장 제외+conflicts에 품목명**(조용한 last-wins 금지), 같은 값이면 1건 저장. `PriceCloseView.submit`이 이걸 사용해 conflicts를 closeOrder로 전달 → 경고 표기. **판매단가 스냅샷은 라인별로 정상 확정**(충돌은 '거래처 기본단가에도 저장'에만 영향).
+5. **confirmed_at 확인(코드 무변경)** — `order_imports.confirmed_at`은 발주 원문을 주문으로 등록한 시각(saveOrder 시점)이며, 경로 B에선 "수량 확인 시각"이지 가격 마감 시각이 아님. imports는 원문↔주문 링크 이벤트 테이블이라 의미 정합. closeOrderPrices는 이 값을 갱신하지 않음. `docs/db-schema-definition.md` confirmed_at 설명에 명시(별도 컬럼/마이그레이션은 승인 후·현재 불필요).
+
+테스트(TDD):
+
+- 신규 10건 — planCustomerPriceSaves 4(단일/동일단가1건/다른단가 충돌 제외/체크만 판정) + closeOrderPrices mock 4(정상 승격·0행 미승격·flip 0행·qc 아님) + saveOrder mock 2(경로 A qc삽입→승격·경로 B 미승격). RED(6 실패: 함수 미존재 4 + 영향행 미검증 1 + saveOrder 미재구성 1) 확인 후 GREEN. fake supabase 체이너블 빌더 목으로 오케스트레이션·영향행·status 승격 순서를 검증.
+
+검증:
+
+- root `npm test` 5/5 · web `npm test` **173/173** · `npm run build` 성공 · `tsc --noEmit` 통과 · `npm audit --audit-level=low` 0 · `git diff --check` clean(미커밋).
+- 데모 smoke(임시 :3220 — 기존 3210 포트에 로그인 모드 서버가 점유 중이라 건드리지 않고 임시 데모 포트 사용 후 launch.json 원복): 같은 품목 2줄(콩나물 2박스+3박스) 수량 확정→가격 마감에서 단가 누락 시 마감 비활성 확인→라인별 8,000/8,500 입력(각 라인 id에 정확 매핑, 명세서 16,000+25,500=41,500)→두 줄 '거래처 기본단가 저장' 체크 시 충돌 경고 표기·저장 제외→재파싱 시 콩나물 여전히 8,000 제안(덮어쓰기 안 됨)→콘솔 0.
+
+남은 이슈:
+
+- **0011 미적용** — 사용자 SQL Editor 실행 필요(H1~H7). 적용 전엔 DB smoke를 완료로 보지 않음.
+- DB 모드 실측(로그인, 사용자): 수량 확정→F5→가격 마감→F5→명세서, 테스트 주문 1건.
+- Codex 검수: INSERT 가드 + saveOrder 재구성(qc→confirmed 승격) + 영향행 검증 + planCustomerPriceSaves + confirmed_at 문서화.
+
+## 2026-07-11 Codex (운영 UX·품목코드·과세구분 고정 설계)
+
+상태:
+
+- **설계 고정·구현 미착수.** 실사용 피드백 6건(정정, 숫자 입력, 단가 관리, 매입처 발주 문장/재배정, 품목코드, 면세·과세)을 W23 기존 재설계의 후속 단위로 분해했다.
+- W23-R3의 0011 가드 SQL은 사용자 SQL Editor에서 적용 완료했고, 로그인 DB 앱 경로로 가격 마감→최종 확정→거래명세서 표시를 확인했다. H1~H7b raw-DB 가드 실험은 SQL Editor 임시 테이블 세션 제약으로 보류한다.
+
+결정:
+
+1. 첫 구현은 W23-R5a(마이그레이션 없음): 가격 입력 전체선택/Enter, 단가 관리의 기본·실제 적용 단가, 발주 문장 날짜·편집·명시 재생성, 이번 발주만 매입처 변경.
+2. 최종 확정 주문은 직접 덮어쓰지 않는다. R5b에서 취소→복사→재확정과 원주문 연결을 별도 마이그레이션·승인으로 만든다.
+3. 신규 품목도 자체코드를 반드시 가진다. 외부 import 코드(`source_code`)와 별도로 회사별 순번 `OM-000001` 형식 `app_code`를 W24에서 도입한다.
+4. 과세구분은 `미설정/면세/과세`, 가격은 공급가 기준, 과세 VAT는 과세 공급가 합계의 10%로 한 번 계산한다. 최종 주문 라인에는 과세구분 스냅샷을 저장하고 기존 주문 출력은 바꾸지 않는다.
+5. R3 가격 마감은 단일 owner MVP에서 버튼 busy 상태와 상태 전환 조건으로 중복 실행을 막는다. 향후 staff UI 또는 여러 탭 동시 마감이 실제 요구되면 REST 다단 UPDATE를 DB RPC 트랜잭션으로 승격해 원자 처리해야 한다. 이번에는 새 마이그레이션을 억지로 추가하지 않는다.
+
+산출물:
+
+- 기준 설계: `docs/superpowers/specs/2026-07-11-order-moa-operations-ux-tax-design.md`
+- Claude 실행 지시: `docs/task-prompt-W23-R5a-operational-ux-pack.md`
+
+## 2026-07-11 Claude (W23-R3 — 0011 적용 가이드·실험 절차 보정, 문서 전용)
+
+상태:
+
+- **완료(문서·SQL 주석 절차 보정만).** 앱 코드 무변경 · 커밋/푸시 안 함 · 직접 SQL 적용 안 함 · 0010 무수정 · 기존 변경 reset/revert 안 함.
+
+작업 목표:
+
+- 0011 실험 H1~H7의 실행 절차 결함 수정 + 사용자용 적용 가이드 작성. DB 적용 전 문서만.
+
+보정 내역:
+
+1. **실험 트랜잭션 결함 수정** — 기존 H1~H7 블록은 예상 오류(H3·H4·H5·H6b·H7a)를 **한 트랜잭션에서 연속 실행** → 첫 오류에서 트랜잭션이 aborted 상태가 되어 이후 검증이 전부 무의미해지는 문제. **각 검증을 `DO $$ … EXCEPTION WHEN OTHERS … $$` 블록으로 격리**해 오류가 나도 트랜잭션이 계속되게 하고, `_r3log` 임시 테이블에 PASS/FAIL을 남겨 마지막 `SELECT`로 확인. 전체를 `begin … rollback`으로 감싸 **무커밋(실데이터 무변경, 원복 자동·삭제 불필요)**.
+2. **:oid2 준비 추가** — H7b(가격 마감 전 INSERT 허용) 대조군으로 **quantity_confirmed 주문 B(:oid2)+라인(:iid2)** 을 준비 단계에서 실제 생성(CTE `insert … returning` → 임시 테이블 `_r3`에 id 저장). H7a는 H2로 confirmed가 된 :oid에 INSERT 시도(차단 기대).
+3. **H1~H7b 기대결과 명시** — H1 성공 / H2 성공 / H3 차단 / H4a 차단 / H4b 차단 / H5 차단 / H6a 성공 / H6b 차단 / H7a 차단 / H7b 성공. 10행 전부 PASS여야 함.
+4. **가이드 작성** — `docs/guide-apply-0011-order-pricing-guard.md`: SQL Editor 접속 → 본문 실행(기대 `Success. No rows returned`) → 실험 스크립트(runnable 전문) → 기대표 → 실패 시 중단 기준 → 원복(자동) → 적용 후 로그인 smoke → "0011 적용 전 DB smoke 미완" 명시.
+5. **0011 파일 실험 주석 교체** — 결함 있던 rollback 방식 주석을 "DO/EXCEPTION 격리 필요 + 가이드 참조 + H 목록·기대" 요약으로 대체(마이그레이션 본문 SQL은 무변경, 여전히 idempotent·0010 무수정).
+
+SQL 자체 점검(0011):
+
+- 트리거 이벤트: orders `before update of status`(0010 유지) · order_items `before insert or update or delete` ✓
+- confirmed/cancelled 주문 = INSERT·UPDATE·DELETE 차단 / quantity_confirmed = 가격 마감 UPDATE·INSERT 허용 ✓
+- 전이: confirmed→cancelled만 / cancelled 종결(되살리기 차단) / confirmed→qc·draft 차단 ✓
+- idempotent(create or replace ×2 + drop trigger if exists ×2), 신규 테이블/RLS/백필 0, 0010 무수정 ✓
+
+검증(문서·주석만 변경 — 회귀 없음 확인):
+
+- root `npm test` 5/5 · web `npm test` **173/173** · `npm run build` 성공 · `npm audit --audit-level=low` 0 · `git diff --check` clean(미커밋).
+
+남은 이슈:
+
+- **0011 미적용** — 사용자가 가이드대로 본문 적용 + H1~H7b 전부 PASS 확인 후 로그인 DB smoke. 그 전엔 DB smoke 미완.
+- Codex 검수: 가이드 + 0011 실험 주석 + (기존) R3 코드/가드.

@@ -18,6 +18,8 @@ import {
 } from "./sample-data";
 
 export interface OrderLine {
+  /** order_items.id — 가격 마감(R3)에서 정확한 한 줄만 UPDATE하기 위한 라인 식별자. 데모 모드는 합성 id. */
+  id: string;
   productId: string;
   productName: string;
   quantity: number;
@@ -82,6 +84,7 @@ export function toItemInserts(companyId: string, orderId: string, lines: DraftLi
 }
 
 interface DbItemRow {
+  id: string;
   product_id: string;
   raw_name: string | null;
   quantity: number | string;
@@ -105,6 +108,7 @@ export function mapDbOrder(row: DbOrderRow, products: Product[]): ConfirmedOrder
   const lines: OrderLine[] = row.items.map((it) => {
     const p = byId.get(it.product_id);
     return {
+      id: it.id,
       productId: it.product_id,
       productName: p?.name ?? it.raw_name ?? "품목",
       quantity: Number(it.quantity),
@@ -124,6 +128,74 @@ export function mapDbOrder(row: DbOrderRow, products: Product[]): ConfirmedOrder
     margin: estimatedOrderMargin(lines),
     status: row.status === "quantity_confirmed" ? "quantity_confirmed" : "confirmed",
   };
+}
+
+// ── W23-R3 가격 마감 (순수 계획 + DB 실행 분리) ──
+
+/** 사용자가 입력한 라인별 최종 판매단가. lineId = order_items.id. */
+export interface PriceCloseInput {
+  lineId: string;
+  unitPrice: number;
+}
+
+export type CloseOrderPlan =
+  | { ok: true; updates: Array<{ lineId: string; unitPrice: number }> }
+  | { ok: false; error: string };
+
+/**
+ * 가격 마감 계획(순수 · 테스트 대상). DB 라인(id 기준)과 입력을 대조해 확정 전 전량 검증한다.
+ *  - 라인 0건 / 누락 / 중복 / 다른 주문 라인 / 라인 수 불일치 / 음수·NaN·무한대 → { ok:false }
+ *  - 통과 시 라인 순서대로 정수 단가 updates 반환. product_id가 아니라 **라인 id**로만 매핑한다.
+ * DB 실행 함수는 ok=false면 아무것도 UPDATE하지 않는다.
+ */
+export function planCloseOrderPrices(
+  lines: Array<{ id: string }>,
+  inputs: PriceCloseInput[],
+): CloseOrderPlan {
+  if (lines.length === 0) return { ok: false, error: "확정할 품목이 없습니다." };
+
+  const lineIds = new Set(lines.map((l) => l.id));
+  const byLine = new Map<string, number>();
+  for (const inp of inputs) {
+    if (!lineIds.has(inp.lineId)) return { ok: false, error: "이 주문에 없는 품목이 포함됐습니다. 새로고침 후 다시 시도해주세요." };
+    if (byLine.has(inp.lineId)) return { ok: false, error: "같은 품목이 중복 입력됐습니다." };
+    const v = Number(inp.unitPrice);
+    if (!Number.isFinite(v) || v < 0) return { ok: false, error: "판매단가는 0 이상의 숫자여야 합니다." };
+    byLine.set(inp.lineId, Math.round(v));
+  }
+  if (byLine.size !== lines.length) {
+    return { ok: false, error: "판매단가를 입력하지 않은 품목이 있습니다." };
+  }
+  return { ok: true, updates: lines.map((l) => ({ lineId: l.id, unitPrice: byLine.get(l.id)! })) };
+}
+
+/**
+ * '거래처 기본 단가에도 저장' 계획(순수 · 테스트 대상).
+ * 같은 품목이 한 주문에 여러 줄이고 체크된 라인끼리 판매단가가 다르면 — 조용히 마지막 값으로 덮어쓰지 않고
+ * 해당 품목을 저장에서 **제외**하고 conflicts에 담는다(판매단가 스냅샷 자체는 상위에서 정상 확정된다).
+ * 같은 단가면 1건으로 저장. 체크되지 않은 라인은 판정에서 제외한다.
+ */
+export function planCustomerPriceSaves(
+  lines: Array<{ id: string; productId: string; productName: string }>,
+  priceByLine: Record<string, number>,
+  saveFlags: Record<string, boolean>,
+): { saves: Array<{ productId: string; price: number }>; conflicts: string[] } {
+  const byProduct = new Map<string, { name: string; prices: Set<number> }>();
+  for (const l of lines) {
+    if (!saveFlags[l.id]) continue;
+    const price = priceByLine[l.id];
+    if (price === undefined || !Number.isFinite(price)) continue;
+    const entry = byProduct.get(l.productId) ?? { name: l.productName, prices: new Set<number>() };
+    entry.prices.add(Math.round(price));
+    byProduct.set(l.productId, entry);
+  }
+  const saves: Array<{ productId: string; price: number }> = [];
+  const conflicts: string[] = [];
+  for (const [productId, { name, prices }] of byProduct) {
+    if (prices.size > 1) conflicts.push(name); // 서로 다른 단가 → 충돌, 저장 제외
+    else saves.push({ productId, price: [...prices][0] });
+  }
+  return { saves, conflicts };
 }
 
 export interface NamedRow {
@@ -401,7 +473,7 @@ export async function loadCompanyData(db: SupabaseClient, companyId: string): Pr
 }
 
 const ORDER_SELECT =
-  "id,order_date,customer_id,status,customer:ordermoa_customers(name),items:ordermoa_order_items(product_id,raw_name,quantity,unit,unit_price,amount)";
+  "id,order_date,customer_id,status,customer:ordermoa_customers(name),items:ordermoa_order_items(id,product_id,raw_name,quantity,unit,unit_price,amount)";
 
 /** 확정 주문 목록(최신순). 거래처별/기간 합계는 이 데이터(order_date·customer_id·amount)로 산출 가능. */
 /** 발주 원문(order_imports)을 주문에 병합 — order_id 기준. 순수 함수(테스트 대상). */
@@ -452,8 +524,13 @@ export async function loadOrders(
 }
 
 /**
- * 주문 확정 저장: orders insert → items insert(스냅샷 단가, amount 미포함).
- * items 실패 시 주문을 status='cancelled'로 보상(soft) 후 throw.
+ * 주문 저장: orders insert(quantity_confirmed) → items insert → 목표가 confirmed면 status 승격.
+ *
+ * 왜 항상 quantity_confirmed로 생성하나: 0011 가드가 **confirmed 주문에 order_items INSERT를 차단**하므로,
+ * 경로 A(가격 포함 바로 확정)도 라인을 먼저 넣을 수 있는 quantity_confirmed에서 삽입하고,
+ * 삽입이 끝난 뒤 quantity_confirmed→confirmed(허용 전이)로 승격한다. 사용자 관점 동작은 동일.
+ * items 실패 시 status='cancelled'로 보상(soft). 승격 실패 시 주문은 quantity_confirmed로 남아
+ * '가격 마감'으로 재확정 가능(스냅샷 유실 없음).
  */
 export async function saveOrder(
   db: SupabaseClient,
@@ -467,7 +544,7 @@ export async function saveOrder(
 ): Promise<ConfirmedOrder> {
   const orderRes = await db
     .from("ordermoa_orders")
-    .insert(toOrderInsert(companyId, customerId, orderDate, status))
+    .insert(toOrderInsert(companyId, customerId, orderDate, "quantity_confirmed"))
     .select("id,order_date,customer_id,status,customer:ordermoa_customers(name)")
     .single();
   if (orderRes.error) throw orderRes.error;
@@ -476,18 +553,35 @@ export async function saveOrder(
   const itemsRes = await db
     .from("ordermoa_order_items")
     .insert(toItemInserts(companyId, orderId, lines))
-    .select("product_id,raw_name,quantity,unit,unit_price,amount");
+    .select("id,product_id,raw_name,quantity,unit,unit_price,amount");
   if (itemsRes.error) {
     // 보상: orders delete 정책 없음 → cancelled 처리로 목록에서 숨김
     await db.from("ordermoa_orders").update({ status: "cancelled" }).eq("id", orderId);
     throw itemsRes.error;
   }
 
+  // 목표가 confirmed면 승격(qc→confirmed는 0010/0011 전이 규칙상 허용). qc면 그대로 둔다.
+  let finalStatus: OrderStatus = "quantity_confirmed";
+  if (status === "confirmed") {
+    const flip = await db
+      .from("ordermoa_orders")
+      .update({ status: "confirmed" })
+      .eq("company_id", companyId)
+      .eq("id", orderId)
+      .eq("status", "quantity_confirmed")
+      .select("id");
+    if (flip.error) throw flip.error; // 라인은 이미 저장됨(qc) → 재시도(가격 마감) 가능, 스냅샷 유실 없음
+    if (!flip.data || flip.data.length !== 1) {
+      throw new Error("주문 확정 전환에 실패했습니다. 주문 목록에서 가격 대기 상태를 확인해주세요.");
+    }
+    finalStatus = "confirmed";
+  }
+
   const row: DbOrderRow = {
     id: orderId,
     order_date: orderRes.data.order_date as string,
     customer_id: orderRes.data.customer_id as string,
-    status: (orderRes.data as { status?: string }).status ?? status,
+    status: finalStatus,
     customer: (orderRes.data as unknown as DbOrderRow).customer,
     items: itemsRes.data as unknown as DbItemRow[],
   };
@@ -516,6 +610,110 @@ export async function saveOrder(
     } catch {
       // 원문 저장 실패는 주문 확정을 막지 않는다.
     }
+  }
+  return order;
+}
+
+/**
+ * 가격 마감(R3): 가격 대기(quantity_confirmed) 주문의 라인별 단가를 확정하고 최종 확정으로 전환한다.
+ *
+ * 순서(불변 — 실패 복구 전략):
+ *   ① 주문이 quantity_confirmed인지 + 실제 order_items.id 목록 재조회 (드리프트 방지).
+ *   ② planCloseOrderPrices로 입력 전량 검증 — 실패면 아무것도 UPDATE하지 않고 throw.
+ *   ③ 라인별 unit_price UPDATE (company_id+order_id+id 3중 조건 → 정확히 한 줄, amount 자동 재계산).
+ *   ④ orders.status='confirmed' UPDATE (…AND status='quantity_confirmed' 조건 → 동시 마감 경합 차단).
+ *
+ * 부분 실패 복구: ③ 도중/직후 실패해도 주문은 quantity_confirmed로 남아(0010 가드는 confirmed에서만 라인
+ *   잠금 → qc 재-UPDATE는 멱등) 재시도가 안전하다. ④가 0행이면 이미 확정/취소된 것 → 새로고침 안내.
+ */
+export async function closeOrderPrices(
+  db: SupabaseClient,
+  companyId: string,
+  orderId: string,
+  inputs: PriceCloseInput[],
+  products: Product[],
+): Promise<ConfirmedOrder> {
+  // ① 상태 + 실제 라인 재조회
+  const ord = await db
+    .from("ordermoa_orders")
+    .select("status")
+    .eq("company_id", companyId)
+    .eq("id", orderId)
+    .single();
+  if (ord.error) throw ord.error;
+  if ((ord.data as { status: string }).status !== "quantity_confirmed") {
+    throw new Error("가격 대기 상태의 주문만 가격 마감할 수 있습니다. 목록을 새로고침해주세요.");
+  }
+  const itemRes = await db
+    .from("ordermoa_order_items")
+    .select("id")
+    .eq("company_id", companyId)
+    .eq("order_id", orderId);
+  if (itemRes.error) throw itemRes.error;
+
+  // ② 전량 검증 (실제 DB 라인 기준 — 로드 이후 라인이 추가/삭제됐으면 여기서 걸린다)
+  const plan = planCloseOrderPrices((itemRes.data ?? []) as Array<{ id: string }>, inputs);
+  if (!plan.ok) throw new Error(plan.error);
+
+  // ③ 라인별 단가 UPDATE — 정확한 한 줄만. .select("id")로 영향 행을 확인해 0행/2행 이상이면
+  //    status 승격(④) 전에 중단 → 주문은 qc로 남아 재시도 안전(부분 실패 복구 전략 유지).
+  for (const u of plan.updates) {
+    const r = await db
+      .from("ordermoa_order_items")
+      .update({ unit_price: u.unitPrice })
+      .eq("company_id", companyId)
+      .eq("order_id", orderId)
+      .eq("id", u.lineId)
+      .select("id");
+    if (r.error) throw r.error; // 주문은 아직 qc → 재시도 안전
+    if (!r.data || r.data.length !== 1) {
+      // 0행=라인이 사라졌거나 조건 불일치, 2행 이상=비정상(pk라 발생 불가하나 방어). 승격하지 않는다.
+      throw new Error("가격 마감 중 일부 품목을 정확히 찾지 못했습니다(변경 0건). 목록을 새로고침 후 다시 시도해주세요.");
+    }
+  }
+
+  // ④ 최종 확정 전환 (경합 차단 조건)
+  const flip = await db
+    .from("ordermoa_orders")
+    .update({ status: "confirmed" })
+    .eq("company_id", companyId)
+    .eq("id", orderId)
+    .eq("status", "quantity_confirmed")
+    .select("id");
+  if (flip.error) throw flip.error;
+  if (!flip.data || flip.data.length === 0) {
+    throw new Error("이미 처리된 주문입니다. 목록을 새로고침해주세요.");
+  }
+
+  // 확정된 주문 재조회 → 화면 모델
+  const res = await db
+    .from("ordermoa_orders")
+    .select(ORDER_SELECT)
+    .eq("company_id", companyId)
+    .eq("id", orderId)
+    .single();
+  if (res.error) throw res.error;
+  const order = mapDbOrder(res.data as unknown as DbOrderRow, products);
+  return await attachRawTextFromDb(db, companyId, order);
+}
+
+/** loadOrders의 원문 병합 로직을 단건에 재사용(best-effort). */
+async function attachRawTextFromDb(
+  db: SupabaseClient,
+  companyId: string,
+  order: ConfirmedOrder,
+): Promise<ConfirmedOrder> {
+  try {
+    const imp = await db
+      .from("ordermoa_order_imports")
+      .select("order_id,raw_text")
+      .eq("company_id", companyId)
+      .eq("order_id", order.id);
+    if (!imp.error && imp.data) {
+      return attachRawText([order], imp.data as Array<{ order_id: string | null; raw_text: string | null }>)[0];
+    }
+  } catch {
+    // 원문 병합 실패는 마감 결과를 막지 않는다.
   }
   return order;
 }

@@ -5,7 +5,7 @@
     "updated": "2026-07-11",
     "branch": "codex/integrate-mvp-docs-web",
     "charter": "docs/order-moa-system-meta-prompt.md (헌장 — 차수·범위의 기준. 이 진행판과 어긋나면 헌장이 우선)",
-    "currentFocus": "W23-R3 준비 — 수량 확인(가격 대기) 경로는 구현·smoke 완료. 다음은 '가격 마감' 화면: 매입처 명세서를 보고 품목별 매입가 1회 입력 → 거래처별 판매가 제안(거래처 단가 > 기본 출고단가) 확인·수정 → 최종 확정 스냅샷(items UPDATE→orders confirmed 순). 마진 자동화·자동 저장 금지 원칙 유지.",
+    "currentFocus": "W23-R5a 준비 — 가격 마감(R3) + 검수 보강 완료, 0011 가드 SQL 적용 및 로그인 DB 앱 경로 smoke(가격 마감→최종 확정→거래명세서) 확인. 다음은 마이그레이션 없는 운영 UX 팩: 가격 입력 전체선택/Enter, 단가 관리 적용 단가 표시, 매입처 발주 문장 편집·날짜, 이번 발주만 매입처 변경.",
     "recentCommits": [
       "f563f50 docs: plan dual confirmation workflow redesign",
       "c3dc098 fix: exclude base sale price fallback lines from bulk price save",
@@ -418,6 +418,22 @@
       "prereq": "0010 적용 완료(R1). 다음 = R3 가격 마감(매입가 입력→판매가 제안→최종 확정 스냅샷) — 그 전까지 가격 대기 주문의 마감 수단 없음(의도된 분리).",
       "verify": "web 152/152(신규 3) · root 5/5 · build 성공 · audit 0 · diff-check clean. 데모 smoke(:3210): 수량만 확정→[가격 대기] 뱃지·금액 미정·명세서 잠금 ✅ 합산표 포함 ✅ 월합계 제외(확정분 17,500원만) ✅ 경로 A 명세서 회귀 ✅ 콘솔 0.",
       "docs": [
+        "docs/order-moa-w23-r1-state-model-decision.md",
+        "docs/agent-worklog.md"
+      ]
+    },
+    {
+      "id": "W23-R3",
+      "name": "가격 마감 — 매입가 입력→판매가 확정→최종 확정",
+      "status": "완료",
+      "phase": "2차 보강",
+      "plain": "가격 대기 주문의 [가격 마감] 버튼을 누르면, 품목별 오늘 매입가를 한 번 입력하고 라인별 판매단가를 확정하는 화면이 열립니다. 거래처 단가·기본 출고단가·최근 확정가를 참고로 보여주고 예상 마진은 표시만(저장 안 함) 하며, 값을 확정하면 최종 확정(스냅샷)되어 거래명세서를 발행할 수 있습니다. 매입가·판매가의 '기본값에도 저장'은 각각 체크했을 때만 반영됩니다.",
+      "why": "W23 두 경로의 마지막 조각. 가격 대기 주문을 실제로 마감할 수단을 제공하고, 확정 시점 스냅샷을 DB 가드로 잠가 무결성을 지킨다. 자동 마진·자동 저장을 배제해 사장님이 값을 통제한다.",
+      "prereq": "R1(0010)·R2 완료. 0011 가드 보강 SQL은 사용자 SQL Editor에서 적용 완료. 로그인 DB 앱 경로(수량/가격 대기→가격 마감→최종 확정→거래명세서) smoke 완료. H1~H7b raw-DB 가드 실험은 SQL Editor 임시 테이블 세션 제약으로 보류하며, 가이드는 향후 관리자 검증용으로 유지한다.",
+      "verify": "web 173/173(planCloseOrderPrices 11 + planCustomerPriceSaves 4 + closeOrderPrices/saveOrder mock 6) · root 5/5 · build 성공 · audit 0 · tsc 통과 · diff-check clean. 검수 보강 5종: 0011 INSERT 가드(confirmed/cancelled 라인 주입 차단, saveOrder를 qc삽입→confirmed 승격으로 재구성) · closeOrderPrices 영향행 1행 검증 · 기준정보 저장 실패 메시지 분리 · 동일 품목 다줄 거래처단가 조용한 덮어쓰기 금지(제외+경고) · confirmed_at 의미 문서화. 데모 smoke: 같은 품목 2줄 8,000/8,500 라인 id 정확 매핑(41,500)·단가 누락 마감 차단·충돌 경고·덮어쓰기 방지·콘솔 0. 미커밋 — Codex 검수 대기.",
+      "docs": [
+        "web/supabase/migrations/0011_order_pricing_guard_hardening.sql",
+        "docs/guide-apply-0011-order-pricing-guard.md",
         "docs/order-moa-w23-r1-state-model-decision.md",
         "docs/agent-worklog.md"
       ]

@@ -2,14 +2,19 @@ import { expect, test } from "vitest";
 import {
   attachRawText,
   buildSeedRows,
+  closeOrderPrices,
   diffSeedRows,
   mapDbOrder,
+  planCloseOrderPrices,
+  planCustomerPriceSaves,
+  saveOrder,
   toItemInserts,
   toOrderInsert,
   withRawTextCleared,
   type ConfirmedOrder,
   type DbOrderRow,
 } from "./order-store";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   sampleCustomerPrices,
   sampleCustomers,
@@ -61,12 +66,14 @@ test("mapDbOrder: total=Σ라인 amount, 마진은 basePurchasePrice로 표시 �
     customer_id: "c1",
     customer: { name: "가람식당" },
     items: [
-      { product_id: "p1", raw_name: "콩나물 2박스", quantity: "2", unit: "박스", unit_price: 8000, amount: 16000 },
-      { product_id: "p2", raw_name: null, quantity: 3, unit: null, unit_price: 2500, amount: 7500 },
+      { id: "it1", product_id: "p1", raw_name: "콩나물 2박스", quantity: "2", unit: "박스", unit_price: 8000, amount: 16000 },
+      { id: "it2", product_id: "p2", raw_name: null, quantity: 3, unit: null, unit_price: 2500, amount: 7500 },
     ],
   };
   const order = mapDbOrder(row, products);
   expect(order.total).toBe(23500);
+  expect(order.lines[0].id).toBe("it1"); // R3: 라인 id 전파(정확한 라인 단가 마감용)
+  expect(order.lines[1].id).toBe("it2");
   expect(order.lines[0].quantity).toBe(2); // numeric 문자열 방어
   expect(order.lines[1].unit).toBe("판"); // unit null → baseUnit 폴백
   expect(order.margin).toBe((8000 - 6500) * 2); // p2는 매입단가 없음 → 제외
@@ -93,7 +100,7 @@ const orderWithLines = (id: string): ConfirmedOrder => ({
   customerId: "c1",
   customerName: "가람식당",
   lines: [
-    { productId: "p1", productName: "콩나물", quantity: 2, unit: "박스", unitPrice: 8000, amount: 16000, basePurchasePrice: 6500 },
+    { id: `${id}_it1`, productId: "p1", productName: "콩나물", quantity: 2, unit: "박스", unitPrice: 8000, amount: 16000, basePurchasePrice: 6500 },
   ],
   total: 16000,
   margin: 3000,
@@ -129,7 +136,7 @@ test("mapDbOrder: 품목이 로드 목록에 없으면 raw_name 폴백", () => {
     order_date: "2026-07-06",
     customer_id: "c1",
     customer: null,
-    items: [{ product_id: "missing", raw_name: "옛품목 1개", quantity: 1, unit: "개", unit_price: 100, amount: 100 }],
+    items: [{ id: "itX", product_id: "missing", raw_name: "옛품목 1개", quantity: 1, unit: "개", unit_price: 100, amount: 100 }],
   };
   const order = mapDbOrder(row, []);
   expect(order.lines[0].productName).toBe("옛품목 1개");
@@ -259,4 +266,264 @@ test("부분 시드 보정: 매입처만 없으면 기존 품목에 매입처 id
   for (const patch of rows.productSupplierUpdates) {
     expect(insertedSupplierIds.has(patch.purchase_supplier_id)).toBe(true);
   }
+});
+
+// ── W23-R3 가격 마감: 순수 계획 함수 planCloseOrderPrices ──
+// DB에서 읽은 실제 라인(id 기준)과 사용자 입력 단가를 대조해, 확정 전에 전부 검증한다.
+// 검증 실패면 {ok:false} — DB 실행 함수는 이걸 받고 아무것도 UPDATE하지 않는다.
+
+const line = (id: string) => ({ id });
+
+test("planCloseOrderPrices: 모든 라인 입력 정상 → id 기준 updates(라인 순서 유지)", () => {
+  const plan = planCloseOrderPrices([line("a"), line("b")], [
+    { lineId: "b", unitPrice: 2500 },
+    { lineId: "a", unitPrice: 8000 },
+  ]);
+  expect(plan).toEqual({
+    ok: true,
+    updates: [
+      { lineId: "a", unitPrice: 8000 },
+      { lineId: "b", unitPrice: 2500 },
+    ],
+  });
+});
+
+test("planCloseOrderPrices: 소수 단가는 원 단위 정수로 반올림", () => {
+  const plan = planCloseOrderPrices([line("a")], [{ lineId: "a", unitPrice: 1234.6 }]);
+  expect(plan).toEqual({ ok: true, updates: [{ lineId: "a", unitPrice: 1235 }] });
+});
+
+test("planCloseOrderPrices: 동일 품목 여러 줄이어도 각 라인 id에 정확히 매핑", () => {
+  // 같은 콩나물이 두 줄(수량 분리 주문) — product_id가 아니라 라인 id로 구분되어야 한다
+  const plan = planCloseOrderPrices([line("l1"), line("l2")], [
+    { lineId: "l1", unitPrice: 8000 },
+    { lineId: "l2", unitPrice: 8200 },
+  ]);
+  expect(plan).toEqual({
+    ok: true,
+    updates: [
+      { lineId: "l1", unitPrice: 8000 },
+      { lineId: "l2", unitPrice: 8200 },
+    ],
+  });
+});
+
+test("planCloseOrderPrices: 라인이 없으면 오류(빈 주문 확정 방지)", () => {
+  const plan = planCloseOrderPrices([], [{ lineId: "a", unitPrice: 1 }]);
+  expect(plan.ok).toBe(false);
+});
+
+test("planCloseOrderPrices: 단가 누락(입력 안 된 라인) → 오류, 아무것도 확정 안 함", () => {
+  const plan = planCloseOrderPrices([line("a"), line("b")], [{ lineId: "a", unitPrice: 8000 }]);
+  expect(plan.ok).toBe(false);
+});
+
+test("planCloseOrderPrices: 음수 단가 → 오류", () => {
+  const plan = planCloseOrderPrices([line("a")], [{ lineId: "a", unitPrice: -1 }]);
+  expect(plan.ok).toBe(false);
+});
+
+test("planCloseOrderPrices: NaN 단가 → 오류", () => {
+  const plan = planCloseOrderPrices([line("a")], [{ lineId: "a", unitPrice: Number.NaN }]);
+  expect(plan.ok).toBe(false);
+});
+
+test("planCloseOrderPrices: 무한대 단가 → 오류", () => {
+  const plan = planCloseOrderPrices([line("a")], [{ lineId: "a", unitPrice: Number.POSITIVE_INFINITY }]);
+  expect(plan.ok).toBe(false);
+});
+
+test("planCloseOrderPrices: 중복 라인 id 입력 → 오류", () => {
+  const plan = planCloseOrderPrices([line("a"), line("b")], [
+    { lineId: "a", unitPrice: 100 },
+    { lineId: "a", unitPrice: 200 },
+    { lineId: "b", unitPrice: 300 },
+  ]);
+  expect(plan.ok).toBe(false);
+});
+
+test("planCloseOrderPrices: 다른 주문의 라인 id 입력 → 오류", () => {
+  const plan = planCloseOrderPrices([line("a")], [
+    { lineId: "a", unitPrice: 100 },
+    { lineId: "other-order-line", unitPrice: 200 },
+  ]);
+  expect(plan.ok).toBe(false);
+});
+
+test("planCloseOrderPrices: 입력 수와 실제 라인 수가 다르면(초과) 오류", () => {
+  const plan = planCloseOrderPrices([line("a")], [
+    { lineId: "a", unitPrice: 100 },
+    { lineId: "b", unitPrice: 200 },
+  ]);
+  expect(plan.ok).toBe(false);
+});
+
+// ── W23-R3 검수: 거래처 기본단가 저장 계획(순수) — 동일 품목 다줄 충돌 처리 ──
+
+const clRow = (id: string, productId: string, productName: string) => ({ id, productId, productName });
+
+test("planCustomerPriceSaves: 체크된 라인만 저장, 단일 라인은 그대로", () => {
+  const r = planCustomerPriceSaves(
+    [clRow("l1", "p1", "콩나물"), clRow("l2", "p2", "두부")],
+    { l1: 8000, l2: 2500 },
+    { l1: true, l2: false },
+  );
+  expect(r.saves).toEqual([{ productId: "p1", price: 8000 }]);
+  expect(r.conflicts).toEqual([]);
+});
+
+test("planCustomerPriceSaves: 같은 품목 여러 줄·같은 단가면 1건 저장(충돌 아님)", () => {
+  const r = planCustomerPriceSaves(
+    [clRow("l1", "p1", "콩나물"), clRow("l2", "p1", "콩나물")],
+    { l1: 8000, l2: 8000 },
+    { l1: true, l2: true },
+  );
+  expect(r.saves).toEqual([{ productId: "p1", price: 8000 }]);
+  expect(r.conflicts).toEqual([]);
+});
+
+test("planCustomerPriceSaves: 같은 품목 여러 줄·다른 단가면 저장 제외 + 충돌 경고(조용한 덮어쓰기 금지)", () => {
+  const r = planCustomerPriceSaves(
+    [clRow("l1", "p1", "콩나물"), clRow("l2", "p1", "콩나물"), clRow("l3", "p2", "두부")],
+    { l1: 8000, l2: 8500, l3: 2500 },
+    { l1: true, l2: true, l3: true },
+  );
+  // p1은 충돌 → 저장에서 제외, p2만 저장
+  expect(r.saves).toEqual([{ productId: "p2", price: 2500 }]);
+  expect(r.conflicts).toEqual(["콩나물"]);
+});
+
+test("planCustomerPriceSaves: 충돌은 체크된 라인끼리만 판정(체크 안 된 다른 단가 줄은 무시)", () => {
+  const r = planCustomerPriceSaves(
+    [clRow("l1", "p1", "콩나물"), clRow("l2", "p1", "콩나물")],
+    { l1: 8000, l2: 8500 },
+    { l1: true, l2: false }, // l2는 체크 안 됨 → 충돌 아님
+  );
+  expect(r.saves).toEqual([{ productId: "p1", price: 8000 }]);
+  expect(r.conflicts).toEqual([]);
+});
+
+// ── W23-R3 검수: closeOrderPrices / saveOrder DB 오케스트레이션 (fake supabase mock) ──
+// 체이너블 쿼리 빌더를 흉내내 (table, op, eqs, select, values)를 기록·응답한다.
+// 목적: 영향 행 검증(정확히 1행)·status 승격 순서·부분 실패 시 미승격을 실측.
+
+function makeFakeDb(handler: (call: FakeCall) => { data: unknown; error: unknown } | undefined) {
+  const calls: FakeCall[] = [];
+  const makeBuilder = (table: string) => {
+    const call: FakeCall = { table, op: "select", values: undefined, eqs: [], selectCols: null, single: false };
+    const finalize = () => {
+      calls.push(call);
+      return Promise.resolve(handler(call) ?? { data: null, error: null });
+    };
+    const builder: Record<string, unknown> = {
+      insert(v: unknown) { call.op = "insert"; call.values = v; return builder; },
+      update(v: unknown) { call.op = "update"; call.values = v; return builder; },
+      select(cols: string) { call.selectCols = cols; return builder; },
+      eq(k: string, val: unknown) { call.eqs.push([k, val]); return builder; },
+      is() { return builder; },
+      in() { return builder; },
+      not() { return builder; },
+      order() { return builder; },
+      single() { call.single = true; return finalize(); },
+      maybeSingle() { call.single = true; return finalize(); },
+      then(res: (v: unknown) => unknown, rej: (e: unknown) => unknown) { return finalize().then(res, rej); },
+    };
+    return builder;
+  };
+  const db = {
+    from: (t: string) => makeBuilder(t),
+    auth: { getUser: async () => ({ data: { user: { id: "user-1" } } }) },
+  } as unknown as SupabaseClient;
+  return { db, calls };
+}
+
+interface FakeCall {
+  table: string;
+  op: "select" | "insert" | "update";
+  values: unknown;
+  eqs: Array<[string, unknown]>;
+  selectCols: string | null;
+  single: boolean;
+}
+
+const isOrdersUpdateToConfirmed = (c: FakeCall) =>
+  c.table === "ordermoa_orders" && c.op === "update" && (c.values as { status?: string })?.status === "confirmed";
+
+test("closeOrderPrices: 정상 — 라인별 1행 UPDATE 후 confirmed 승격", async () => {
+  const { db, calls } = makeFakeDb((c) => {
+    if (c.table === "ordermoa_orders" && c.op === "select" && c.selectCols === "status") return { data: { status: "quantity_confirmed" }, error: null };
+    if (c.table === "ordermoa_order_items" && c.op === "select" && c.selectCols === "id") return { data: [{ id: "a" }, { id: "b" }], error: null };
+    if (c.table === "ordermoa_order_items" && c.op === "update") {
+      const id = c.eqs.find((e) => e[0] === "id")?.[1];
+      return { data: [{ id }], error: null }; // 정확히 1행
+    }
+    if (isOrdersUpdateToConfirmed(c)) return { data: [{ id: "o1" }], error: null }; // flip 1행
+    if (c.table === "ordermoa_orders" && c.op === "select" && c.single) {
+      return { data: { id: "o1", order_date: "2026-07-11", customer_id: "c1", status: "confirmed", customer: { name: "가람식당" }, items: [{ id: "a", product_id: "p1", raw_name: null, quantity: 2, unit: "박스", unit_price: 8000, amount: 16000 }, { id: "b", product_id: "p2", raw_name: null, quantity: 3, unit: "판", unit_price: 2500, amount: 7500 }] }, error: null };
+    }
+    if (c.table === "ordermoa_order_imports") return { data: [], error: null };
+    return undefined;
+  });
+  const order = await closeOrderPrices(db, "comp1", "o1", [{ lineId: "a", unitPrice: 8000 }, { lineId: "b", unitPrice: 2500 }], []);
+  expect(order.status).toBe("confirmed");
+  expect(order.total).toBe(23500);
+  expect(calls.some(isOrdersUpdateToConfirmed)).toBe(true);
+});
+
+test("closeOrderPrices: 라인 UPDATE가 0행이면 오류 + confirmed 승격 안 함(qc 유지)", async () => {
+  const { db, calls } = makeFakeDb((c) => {
+    if (c.table === "ordermoa_orders" && c.op === "select" && c.selectCols === "status") return { data: { status: "quantity_confirmed" }, error: null };
+    if (c.table === "ordermoa_order_items" && c.op === "select" && c.selectCols === "id") return { data: [{ id: "a" }], error: null };
+    if (c.table === "ordermoa_order_items" && c.op === "update") return { data: [], error: null }; // 0행!
+    return undefined;
+  });
+  await expect(closeOrderPrices(db, "comp1", "o1", [{ lineId: "a", unitPrice: 8000 }], [])).rejects.toThrow();
+  expect(calls.some(isOrdersUpdateToConfirmed)).toBe(false); // 승격 시도 없음
+});
+
+test("closeOrderPrices: 승격(flip)이 0행이면 오류(이미 처리됨)", async () => {
+  const { db } = makeFakeDb((c) => {
+    if (c.table === "ordermoa_orders" && c.op === "select" && c.selectCols === "status") return { data: { status: "quantity_confirmed" }, error: null };
+    if (c.table === "ordermoa_order_items" && c.op === "select" && c.selectCols === "id") return { data: [{ id: "a" }], error: null };
+    if (c.table === "ordermoa_order_items" && c.op === "update") return { data: [{ id: "a" }], error: null };
+    if (isOrdersUpdateToConfirmed(c)) return { data: [], error: null }; // flip 0행
+    return undefined;
+  });
+  await expect(closeOrderPrices(db, "comp1", "o1", [{ lineId: "a", unitPrice: 8000 }], [])).rejects.toThrow();
+});
+
+test("closeOrderPrices: 가격 대기가 아니면 오류 + 어떤 UPDATE도 안 함", async () => {
+  const { db, calls } = makeFakeDb((c) => {
+    if (c.table === "ordermoa_orders" && c.op === "select" && c.selectCols === "status") return { data: { status: "confirmed" }, error: null };
+    return undefined;
+  });
+  await expect(closeOrderPrices(db, "comp1", "o1", [{ lineId: "a", unitPrice: 1 }], [])).rejects.toThrow();
+  expect(calls.some((c) => c.op === "update")).toBe(false);
+});
+
+test("saveOrder(경로 A): quantity_confirmed로 라인 삽입 후 confirmed로 승격", async () => {
+  const { db, calls } = makeFakeDb((c) => {
+    if (c.table === "ordermoa_orders" && c.op === "insert") return { data: { id: "o1", order_date: "2026-07-11", customer_id: "c1", status: "quantity_confirmed", customer: { name: "가람식당" } }, error: null };
+    if (c.table === "ordermoa_order_items" && c.op === "insert") return { data: [{ id: "a", product_id: "p1", raw_name: null, quantity: 2, unit: "박스", unit_price: 8000, amount: 16000 }], error: null };
+    if (isOrdersUpdateToConfirmed(c)) return { data: [{ id: "o1" }], error: null };
+    return undefined;
+  });
+  const order = await saveOrder(db, "comp1", "c1", "2026-07-11", [{ productId: "p1", rawName: null, quantity: 2, unit: "박스", unitPrice: 8000 }], [], null, "confirmed");
+  // INSERT 가드(0011)와 공존: 주문 행은 quantity_confirmed로 생성됨
+  const orderInsert = calls.find((c) => c.table === "ordermoa_orders" && c.op === "insert");
+  expect((orderInsert?.values as { status: string }).status).toBe("quantity_confirmed");
+  // 이후 confirmed로 승격
+  expect(calls.some(isOrdersUpdateToConfirmed)).toBe(true);
+  expect(order.status).toBe("confirmed");
+});
+
+test("saveOrder(경로 B): 수량만 확정은 quantity_confirmed로 남고 승격 안 함", async () => {
+  const { db, calls } = makeFakeDb((c) => {
+    if (c.table === "ordermoa_orders" && c.op === "insert") return { data: { id: "o2", order_date: "2026-07-11", customer_id: "c1", status: "quantity_confirmed", customer: { name: "가람식당" } }, error: null };
+    if (c.table === "ordermoa_order_items" && c.op === "insert") return { data: [{ id: "a", product_id: "p1", raw_name: null, quantity: 2, unit: "박스", unit_price: 0, amount: 0 }], error: null };
+    return undefined;
+  });
+  const order = await saveOrder(db, "comp1", "c1", "2026-07-11", [{ productId: "p1", rawName: null, quantity: 2, unit: "박스", unitPrice: 0 }], [], null, "quantity_confirmed");
+  expect(order.status).toBe("quantity_confirmed");
+  expect(calls.some(isOrdersUpdateToConfirmed)).toBe(false); // 승격 없음
 });

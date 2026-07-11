@@ -168,7 +168,7 @@
 | source | text | | 'kakao' | 원문 출처 |
 | raw_text | text | | null | **기본 저장 ON, 삭제 가능(→null)(C3)**. 민감정보 가능 |
 | parsed_at | timestamptz | | null | |
-| confirmed_at | timestamptz | | null | 확정 시각 |
+| confirmed_at | timestamptz | | null | **발주 원문을 주문으로 등록(확정)한 시각** — saveOrder 실행 시점. 경로 A(바로 확정)는 최종 확정 시각과 같지만, **W23 경로 B(수량만 확정)에서는 "수량 확인 시각"이며 가격 마감 시각이 아니다**. 가격 마감(closeOrderPrices)은 이 값을 갱신하지 않는다. imports는 원문↔주문 링크 이벤트를 남기는 테이블이므로 이 의미가 맞다. 가격 마감 시각을 별도로 남기려면 신규 컬럼(승인 후 별도 마이그레이션) — 현재 미착수·불필요 |
 | order_id | uuid | | null | **(0006 적용됨, W09)** 확정 주문 링크 — FK `ordermoa_orders(id) on delete cascade` + 교차회사 트리거 검증. 구버전 원문 호환 위해 null 허용 |
 | created_by | uuid | ✅ | | FK auth.users(id) |
 | created_at | timestamptz | ✅ | now() | |

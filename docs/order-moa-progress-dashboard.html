@@ -56,11 +56,11 @@
   </div>
 </header>
 <div class="wrap">
-  <div class="focus">📌 <strong>지금 하는 일:</strong> W23-R3 준비 — 수량 확인(가격 대기) 경로는 구현·smoke 완료. 다음은 &#x27;가격 마감&#x27; 화면: 매입처 명세서를 보고 품목별 매입가 1회 입력 → 거래처별 판매가 제안(거래처 단가 &gt; 기본 출고단가) 확인·수정 → 최종 확정 스냅샷(items UPDATE→orders confirmed 순). 마진 자동화·자동 저장 금지 원칙 유지.</div>
+  <div class="focus">📌 <strong>지금 하는 일:</strong> W23-R5a 준비 — 가격 마감(R3) + 검수 보강 완료, 0011 가드 SQL 적용 및 로그인 DB 앱 경로 smoke(가격 마감→최종 확정→거래명세서) 확인. 다음은 마이그레이션 없는 운영 UX 팩: 가격 입력 전체선택/Enter, 단가 관리 적용 단가 표시, 매입처 발주 문장 편집·날짜, 이번 발주만 매입처 변경.</div>
 
-  <h2>전체 진행률 (작업 보드 25개 기준)</h2>
+  <h2>전체 진행률 (작업 보드 26개 기준)</h2>
   <div class="progressbar"><div style="width:88%"></div></div>
-  <p class="counts">완료 22 · 다음 0 · 보류 2 — 1차 트랙(보류 제외) 22/23 완료</p>
+  <p class="counts">완료 23 · 다음 0 · 보류 2 — 1차 트랙(보류 제외) 23/24 완료</p>
   <div class="legend"><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span><span class="badge" style="background:#fef7e0;color:#946200">다음</span><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span><span class="badge" style="background:#fde8e8;color:#b02a2a">제외</span></div>
 
   <h2>핵심 흐름 (이 순서가 제품의 전부)</h2>
@@ -310,6 +310,16 @@
     <dt>확인 방법</dt><dd>web 152/152(신규 3) · root 5/5 · build 성공 · audit 0 · diff-check clean. 데모 smoke(:3210): 수량만 확정→[가격 대기] 뱃지·금액 미정·명세서 잠금 ✅ 합산표 포함 ✅ 월합계 제외(확정분 17,500원만) ✅ 경로 A 명세서 회귀 ✅ 콘솔 0.</dd>
   </dl>
   <details><summary>관련 문서/파일</summary><ul><li><code>docs/order-moa-w23-r1-state-model-decision.md</code></li><li><code>docs/agent-worklog.md</code></li></ul></details>
+</div>
+<div class="card s-done">
+  <div class="card-head"><span class="wid">W23-R3</span><strong>가격 마감 — 매입가 입력→판매가 확정→최종 확정</strong><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span></div>
+  <p class="plain">가격 대기 주문의 [가격 마감] 버튼을 누르면, 품목별 오늘 매입가를 한 번 입력하고 라인별 판매단가를 확정하는 화면이 열립니다. 거래처 단가·기본 출고단가·최근 확정가를 참고로 보여주고 예상 마진은 표시만(저장 안 함) 하며, 값을 확정하면 최종 확정(스냅샷)되어 거래명세서를 발행할 수 있습니다. 매입가·판매가의 &#x27;기본값에도 저장&#x27;은 각각 체크했을 때만 반영됩니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>W23 두 경로의 마지막 조각. 가격 대기 주문을 실제로 마감할 수단을 제공하고, 확정 시점 스냅샷을 DB 가드로 잠가 무결성을 지킨다. 자동 마진·자동 저장을 배제해 사장님이 값을 통제한다.</dd>
+    <dt>선행 조건</dt><dd>R1(0010)·R2 완료. 0011 가드 보강 SQL은 사용자 SQL Editor에서 적용 완료. 로그인 DB 앱 경로(수량/가격 대기→가격 마감→최종 확정→거래명세서) smoke 완료. H1~H7b raw-DB 가드 실험은 SQL Editor 임시 테이블 세션 제약으로 보류하며, 가이드는 향후 관리자 검증용으로 유지한다.</dd>
+    <dt>확인 방법</dt><dd>web 173/173(planCloseOrderPrices 11 + planCustomerPriceSaves 4 + closeOrderPrices/saveOrder mock 6) · root 5/5 · build 성공 · audit 0 · tsc 통과 · diff-check clean. 검수 보강 5종: 0011 INSERT 가드(confirmed/cancelled 라인 주입 차단, saveOrder를 qc삽입→confirmed 승격으로 재구성) · closeOrderPrices 영향행 1행 검증 · 기준정보 저장 실패 메시지 분리 · 동일 품목 다줄 거래처단가 조용한 덮어쓰기 금지(제외+경고) · confirmed_at 의미 문서화. 데모 smoke: 같은 품목 2줄 8,000/8,500 라인 id 정확 매핑(41,500)·단가 누락 마감 차단·충돌 경고·덮어쓰기 방지·콘솔 0. 미커밋 — Codex 검수 대기.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>web/supabase/migrations/0011_order_pricing_guard_hardening.sql</code></li><li><code>docs/guide-apply-0011-order-pricing-guard.md</code></li><li><code>docs/order-moa-w23-r1-state-model-decision.md</code></li><li><code>docs/agent-worklog.md</code></li></ul></details>
 </div></div><h2 class="phase">2차</h2><div class="grid">
 <div class="card s-hold">
   <div class="card-head"><span class="wid">W16</span><strong>2차 보류: 미수금·세금계산서 근거·원가/재고</strong><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span></div>
