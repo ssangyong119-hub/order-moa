@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import {
+  aggregateRowKey,
   buildAggregateRows,
   buildContributionText,
   buildPurchaseChecklistSummary,
@@ -110,38 +111,76 @@ test("buildSupplierPurchaseSections: 체크된 품목이 없으면 매입처 발
   expect(buildSupplierPurchaseSections(rows, productsWithSuppliers, new Set())).toEqual([]);
 });
 
-test("formatSupplierPurchaseText: 전체 복사 — 매입처 헤더 + 인사말 + 번호 목록", () => {
+test("formatSupplierPurchaseText: 전체 복사 — 매입처 헤더 + 인사말(한 줄) + 번호 목록", () => {
   const rows = buildAggregateRows(orders, productOrder);
   const sections = buildSupplierPurchaseSections(rows, productsWithSuppliers, new Set(["p01", "p05"]));
   expect(formatSupplierPurchaseText(sections, { companyName: "오더모아유통" })).toBe(
     [
       "[두부콩나물매입처]",
-      "오더모아유통입니다",
-      "발주 품목입니다",
+      "오더모아유통입니다 발주 품목입니다",
+      "",
       "1. 콩나물 7박스",
       "",
       "[야채매입처]",
-      "오더모아유통입니다",
-      "발주 품목입니다",
+      "오더모아유통입니다 발주 품목입니다",
+      "",
       "1. 양파 3망",
     ].join("\n"),
   );
 });
 
-test("formatSupplierPurchaseText: 개별 복사 — 매입처 헤더 없이 인사말부터", () => {
+test("formatSupplierPurchaseText: 날짜를 첫 줄에 넣는다(R5a)", () => {
+  const rows = buildAggregateRows(orders, productOrder);
+  const [section] = buildSupplierPurchaseSections(rows, productsWithSuppliers, new Set(["p01"]));
+  expect(
+    formatSupplierPurchaseText([section], {
+      companyName: "오더모아유통",
+      withSupplierHeader: false,
+      date: "2026-07-11",
+    }),
+  ).toBe("2026-07-11\n오더모아유통입니다 발주 품목입니다\n\n1. 콩나물 7박스");
+});
+
+test("formatSupplierPurchaseText: 개별 복사 — 매입처 헤더 없이 인사말부터(날짜 없음)", () => {
   const rows = buildAggregateRows(orders, productOrder);
   const [section] = buildSupplierPurchaseSections(rows, productsWithSuppliers, new Set(["p01"]));
   expect(
     formatSupplierPurchaseText([section], { companyName: "오더모아유통", withSupplierHeader: false }),
-  ).toBe("오더모아유통입니다\n발주 품목입니다\n1. 콩나물 7박스");
+  ).toBe("오더모아유통입니다 발주 품목입니다\n\n1. 콩나물 7박스");
 });
 
 test("formatSupplierPurchaseText: 회사명 없으면 인사말 줄 생략", () => {
   const rows = buildAggregateRows(orders, productOrder);
   const [section] = buildSupplierPurchaseSections(rows, productsWithSuppliers, new Set(["p01"]));
   expect(formatSupplierPurchaseText([section], { withSupplierHeader: false })).toBe(
-    "발주 품목입니다\n1. 콩나물 7박스",
+    "발주 품목입니다\n\n1. 콩나물 7박스",
   );
+});
+
+test("buildSupplierPurchaseSections: 이번 발주만 매입처 override(productId+unit) 적용 후 재그룹핑", () => {
+  const rows = buildAggregateRows(orders, productOrder);
+  // 콩나물(p01|박스)을 두부콩나물매입처 → 야채매입처로 이번만 재배정
+  const override = new Map([[aggregateRowKey({ productId: "p01", unit: "박스" }), "야채매입처"]]);
+  const sections = buildSupplierPurchaseSections(
+    rows,
+    productsWithSuppliers,
+    new Set(["p01", "p05"]),
+    override,
+  );
+  expect(sections.map((s) => [s.supplierName, s.rows.map((r) => r.name)])).toEqual([
+    ["야채매입처", ["콩나물", "양파"]],
+  ]);
+});
+
+test("buildPurchaseChecklistSummary: override로 미지정 품목을 배정하면 미지정 카운트 감소", () => {
+  const rows = buildAggregateRows(orders, productOrder);
+  const withUnassigned = [
+    { id: "p01", purchaseSupplierName: "두부콩나물매입처" },
+    { id: "p05", purchaseSupplierName: null }, // 미지정
+  ];
+  const override = new Map([[aggregateRowKey({ productId: "p05", unit: "망" }), "야채매입처"]]);
+  const summary = buildPurchaseChecklistSummary(rows, new Set(["p01", "p05"]), withUnassigned, override);
+  expect(summary.unassigned).toBe(0);
 });
 
 test("buildPurchaseChecklistSummary: 전체/담음/안담음/미지정 카운트", () => {

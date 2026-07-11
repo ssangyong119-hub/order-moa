@@ -5,6 +5,7 @@
 import { useMemo, useState } from "react";
 import type { Customer, CustomerPrice, Product } from "@/lib/domain/types";
 import { buildPriceRows, validatePriceValue } from "@/lib/price-store";
+import { normalizePriceInput } from "@/lib/price-input";
 import { formatKRW } from "@/lib/calculations";
 
 interface PriceManagementViewProps {
@@ -30,7 +31,10 @@ export function PriceManagementView({ customers, products, prices, onSave }: Pri
     () => buildPriceRows(products, prices, customerId),
     [products, prices, customerId],
   );
-  const missingCount = allRows.filter((r) => r.price === null).length;
+  // 미등록 = 거래처별 단가도 기본 출고단가도 없는(none) 품목만 (R5a)
+  const noneCount = allRows.filter((r) => r.effectiveSource === "none").length;
+  const customerCount = allRows.filter((r) => r.effectiveSource === "customer").length;
+  const baseCount = allRows.filter((r) => r.effectiveSource === "base").length;
 
   function switchCustomer(id: string) {
     setCustomerId(id);
@@ -94,11 +98,15 @@ export function PriceManagementView({ customers, products, prices, onSave }: Pri
       </div>
 
       <p className="purchase-counter">
-        품목 <strong>{allRows.length}</strong>개 · 단가 등록{" "}
-        <strong>{allRows.length - missingCount}</strong>개 ·{" "}
-        <span className={missingCount > 0 ? "count-warn" : ""}>
-          미등록 <strong>{missingCount}</strong>개
+        품목 <strong>{allRows.length}</strong>개 · 거래처별 단가{" "}
+        <strong>{customerCount}</strong>개 · 기본 단가 적용 <strong>{baseCount}</strong>개 ·{" "}
+        <span className={noneCount > 0 ? "count-warn" : ""}>
+          미등록 <strong>{noneCount}</strong>개
         </span>
+      </p>
+      <p className="muted" style={{ marginTop: -4, marginBottom: 8, fontSize: ".85rem" }}>
+        이 화면은 <strong>거래처별 예외 단가</strong>만 편집합니다. 기본 출고단가는 <strong>품목·별칭 관리</strong>에서 바꿉니다.
+        적용 단가 = 거래처별 단가 &gt; 기본 출고단가 순으로 발주 붙여넣기에 자동 적용됩니다.
       </p>
 
       {error ? <div className="notice warn" style={{ marginBottom: 8 }}>{error}</div> : null}
@@ -117,8 +125,10 @@ export function PriceManagementView({ customers, products, prices, onSave }: Pri
               <tr>
                 <th>품목</th>
                 <th>단위</th>
-                <th className="num">현재 단가</th>
-                <th>새 단가</th>
+                <th className="num">거래처별 단가</th>
+                <th className="num">기본 출고단가</th>
+                <th className="num">적용 단가</th>
+                <th>새 거래처별 단가</th>
                 <th></th>
               </tr>
             </thead>
@@ -129,9 +139,21 @@ export function PriceManagementView({ customers, products, prices, onSave }: Pri
                   <td className="muted">{row.baseUnit}</td>
                   <td className="num">
                     {row.price === null ? (
-                      <span className="badge amber">미등록</span>
+                      <span className="muted">거래처별 미등록</span>
                     ) : (
                       <strong>{formatKRW(row.price)}</strong>
+                    )}
+                  </td>
+                  <td className="num muted">
+                    {row.baseSalePrice === null ? "없음" : formatKRW(row.baseSalePrice)}
+                  </td>
+                  <td className="num">
+                    {row.effectiveSource === "customer" ? (
+                      <strong>{formatKRW(row.effectivePrice as number)}</strong>
+                    ) : row.effectiveSource === "base" ? (
+                      <span className="badge">기본 단가 적용 중 · {formatKRW(row.effectivePrice as number)}</span>
+                    ) : (
+                      <span className="badge amber">미등록</span>
                     )}
                   </td>
                   <td>
@@ -139,8 +161,12 @@ export function PriceManagementView({ customers, products, prices, onSave }: Pri
                       type="number"
                       min={0}
                       value={drafts[row.productId] ?? ""}
+                      onFocus={(e) => e.currentTarget.select()}
                       onChange={(e) =>
                         setDrafts((prev) => ({ ...prev, [row.productId]: e.target.value }))
+                      }
+                      onBlur={(e) =>
+                        setDrafts((prev) => ({ ...prev, [row.productId]: normalizePriceInput(e.target.value) }))
                       }
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
@@ -150,7 +176,7 @@ export function PriceManagementView({ customers, products, prices, onSave }: Pri
                       }}
                       placeholder={row.price === null ? "원 단위 입력" : String(row.price)}
                       style={{ maxWidth: 140 }}
-                      aria-label={`${row.name} 새 단가`}
+                      aria-label={`${row.name} 새 거래처별 단가`}
                     />
                   </td>
                   <td>

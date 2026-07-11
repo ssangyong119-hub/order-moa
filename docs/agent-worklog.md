@@ -2202,3 +2202,44 @@ SQL 자체 점검(0011):
 
 - **0011 미적용** — 사용자가 가이드대로 본문 적용 + H1~H7b 전부 PASS 확인 후 로그인 DB smoke. 그 전엔 DB smoke 미완.
 - Codex 검수: 가이드 + 0011 실험 주석 + (기존) R3 코드/가드.
+
+## 2026-07-11 Claude (W23-R5a — 운영 UX 팩, 마이그레이션 없음)
+
+상태:
+
+- **완료(구현·TDD·데모 smoke).** 커밋/푸시 안 함 · Supabase 직접 적용 안 함 · 스키마/마이그레이션 0 · R3/0010/0011·closeOrderPrices·saveOrder·스냅샷 무변경.
+- 진입 게이트: R3/0011이 Codex 커밋(`c31ec1f`)으로 워킹트리 clean 확인 후 시작.
+
+작업 목표:
+
+- 실사용 4종 UX(마이그레이션 없이): ①가격 입력 전체선택·Enter 이동 ②단가 관리 기본/적용 단가 표시 ③매입처 발주 문장 날짜·직접 편집·명시 재생성 ④합산표 이번 발주만 매입처 변경.
+
+구현(파일별):
+
+- **`web/src/lib/price-input.ts`(신규)**: `normalizePriceInput`(선행 0 제거·정수 정규화, 음수/NaN/무한대는 원본 유지=상위 검증이 차단) + `focusNextPriceInput`(같은 표 selector 다음 칸으로 focus+select, 마지막이면 blur).
+- **`web/src/lib/aggregate.ts`**: `aggregateRowKey(productId|unit)` 신규. `buildSupplierPurchaseSections`·`buildPurchaseChecklistSummary`에 `supplierOverride`(key→매입처명) 인자 — 이번 발주만 재배정(products 무변경). `formatSupplierPurchaseText`에 `date` 옵션(첫 줄 날짜) + 인사말을 "{회사명}입니다 발주 품목입니다" 한 줄 + 인사말↔목록 사이 빈 줄로 형식 갱신.
+- **`web/src/lib/price-store.ts`**: `PriceRow`에 `baseSalePrice`·`effectivePrice`·`effectiveSource`(customer|base|none) 추가. `onlyMissing`을 "적용 단가 none"으로 재정의(기본 출고단가 있으면 미등록 아님).
+- **`web/src/app/page.tsx`**: 세 금액 입력(파싱·가격마감)에 focus select·blur normalize·Enter 이동(공용 helper). 합산표: `supplierOverride`/`sectionDrafts` 상태, 매입처 override select(활성 매입처만, 보관 제외), 편집 가능한 매입처별 발주 문장 textarea(sectionDrafts, "수정됨" 표시), 발주일(purchaseDate=단일날짜||오늘) 첫 줄, `문장 다시 만들기`(편집분 있으면 확인 후 재생성), 전체 미리보기/복사(combinedPurchaseText, 헤더 포함, 편집 반영). override/편집분은 DB·localStorage 저장 안 함.
+- **Codex 검수 보강**: 합산표의 거래처·날짜 필터가 바뀌면 `supplierOverride`·`sectionDrafts`를 즉시 비운다. 따라서 "이번 발주만" 재지정과 문장 편집본이 다른 날짜/거래처의 발주에 섞이지 않는다(`purchase-draft-scope` 테스트 추가).
+- **`web/src/app/price-management-view.tsx`**: 열을 거래처별 단가/기본 출고단가/적용 단가로 확장, "기본 단가 적용 중"(노란 미등록 대신), 카운터를 거래처별/기본적용/미등록으로. 새 단가 입력에 focus select·blur normalize. 기본 출고단가는 이 화면에서 편집 안 함(품목·별칭 관리 안내).
+- **`web/src/app/globals.css`**: `.supplier-section-text`(편집 textarea)·`.supplier-pick`·`.supplier-override-select` 스타일.
+
+의도적 편차(Codex 판단 요청):
+
+- **단가 관리의 Enter는 "저장" 유지**(파싱·가격마감은 Enter=다음 칸 이동). 단가 관리는 행별 저장 모델이고 일괄 저장이 없어, Enter=이동으로 바꾸면 유일한 키보드 저장 경로가 사라진다 → "기존 저장/흐름을 깨지 말 것"을 우선. 전체선택(focus)·정규화(blur)는 세 화면 모두 적용.
+- 파싱 화면 판매가 input은 number-controlled라 값이 같으면(5 vs "05") React가 DOM을 안 고쳐, blur에서 DOM 값을 직접 정리(문자열 상태인 가격마감·단가관리는 상태 정규화로 충분).
+- D의 `앞으로 기본 매입처로도 저장`은 이번엔 미구현(지시대로 임시 override만) — products.purchase_supplier_id 갱신 명령은 R5b/후속에서.
+
+테스트(TDD, 시작 시 173 → 184):
+
+- 신규 11 — aggregate: 발주 문장 날짜·override 그룹핑·override 미지정 카운트 감소(+형식 변경으로 기존 3개 갱신). price-store: 기본단가만 있는 effective=base·거래처 우선·미등록(none) 정의(+shape). price-input: normalizePriceInput 5케이스.
+
+검증:
+
+- root `npm test` 5/5 · web `npm test` **184/184** · `npm run build` 성공 · `tsc --noEmit` 통과 · `npm audit` 0 · `git diff --check` clean(미커밋).
+- 데모 smoke(임시 :3221 — 3210은 사용자 로그인 모드 서버가 점유, 미접촉·사용 후 launch.json 원복): ①파싱 Enter→다음 칸 이동 ✓ ②단가 관리 신규 base-only 품목 "기본 단가 적용 중 · 1,500원"·카운터 반영 ✓ ③합산표 계란(미지정)→야채 이번만 재배정→미지정 0·섹션 재그룹·문장 재생성 ✓ ④발주 문장 날짜(2026-07-11)·직접 편집 지속(체크 토글에도 유지)·문장 다시 만들기 확인 후 재생성·전체 복사에 편집 반영 ✓ ⑤회귀: 주문 확정·수량만 확정→가격 마감(09000→9000 정규화)→명세서 15,000 ✓ ⑥모바일 390px 본문 가로 오버플로 없음(표는 wrap 내부 스크롤)·콘솔 0.
+
+남은 이슈/다음:
+
+- R5b(확정 주문 정정) · W24(품목코드 app_code·과세구분) = **각각 별도 마이그레이션·별도 Codex 승인** — 이번 범위 아님.
+- Codex 검수: override/편집분 비저장 원칙, formatSupplierPurchaseText 형식 변경(기존 테스트 갱신), 단가 관리 Enter=저장 유지 판단, source_code·스냅샷 무변경.

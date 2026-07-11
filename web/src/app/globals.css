@@ -245,6 +245,15 @@ td input.qty,td input.price{max-width:96px}
   margin:8px 0 0;white-space:pre-wrap;font-family:inherit;
   color:var(--ink);font-size:.88rem;line-height:1.55;
 }
+/* R5a: 편집 가능한 매입처 발주 문장 */
+.supplier-section-text{
+  width:100%;margin:8px 0 0;font-family:inherit;font-size:.88rem;line-height:1.55;
+  color:var(--ink);border:1px solid var(--line);border-radius:var(--radius);
+  padding:8px;resize:vertical;background:#fff;box-sizing:border-box;
+}
+/* R5a: 합산표 이번 발주만 매입처 변경 */
+.supplier-pick{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.supplier-override-select{max-width:150px;font-size:.8rem;padding:2px 4px}
 .empty-state{
   border:1px dashed var(--line);border-radius:var(--radius);
   background:#fbfcfd;padding:18px;text-align:left;

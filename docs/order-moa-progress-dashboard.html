@@ -56,11 +56,11 @@
   </div>
 </header>
 <div class="wrap">
-  <div class="focus">📌 <strong>지금 하는 일:</strong> W23-R5a 준비 — 가격 마감(R3) + 검수 보강 완료, 0011 가드 SQL 적용 및 로그인 DB 앱 경로 smoke(가격 마감→최종 확정→거래명세서) 확인. 다음은 마이그레이션 없는 운영 UX 팩: 가격 입력 전체선택/Enter, 단가 관리 적용 단가 표시, 매입처 발주 문장 편집·날짜, 이번 발주만 매입처 변경.</div>
+  <div class="focus">📌 <strong>지금 하는 일:</strong> W23-R5a 운영 UX 팩 구현·검수 완료(마이그레이션 0, web 186/186). 가격 입력 전체선택/Enter·단가 관리 적용 단가 표시·매입처 발주 문장 날짜·편집·이번 발주만 매입처 변경, 거래처·날짜 필터 변경 시 임시 재지정·편집본 초기화까지 됨. 다음 후보: W23-R5b 확정 주문 정정(취소→복사→재확정) / W23-R4 대시보드 오늘 업무 큐 / W24 품목코드·과세구분 — R5b·W24는 각각 별도 마이그레이션·Codex 승인.</div>
 
-  <h2>전체 진행률 (작업 보드 26개 기준)</h2>
-  <div class="progressbar"><div style="width:88%"></div></div>
-  <p class="counts">완료 23 · 다음 0 · 보류 2 — 1차 트랙(보류 제외) 23/24 완료</p>
+  <h2>전체 진행률 (작업 보드 27개 기준)</h2>
+  <div class="progressbar"><div style="width:89%"></div></div>
+  <p class="counts">완료 24 · 다음 0 · 보류 2 — 1차 트랙(보류 제외) 24/25 완료</p>
   <div class="legend"><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span><span class="badge" style="background:#fef7e0;color:#946200">다음</span><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span><span class="badge" style="background:#fde8e8;color:#b02a2a">제외</span></div>
 
   <h2>핵심 흐름 (이 순서가 제품의 전부)</h2>
@@ -320,6 +320,16 @@
     <dt>확인 방법</dt><dd>web 173/173(planCloseOrderPrices 11 + planCustomerPriceSaves 4 + closeOrderPrices/saveOrder mock 6) · root 5/5 · build 성공 · audit 0 · tsc 통과 · diff-check clean. 검수 보강 5종: 0011 INSERT 가드(confirmed/cancelled 라인 주입 차단, saveOrder를 qc삽입→confirmed 승격으로 재구성) · closeOrderPrices 영향행 1행 검증 · 기준정보 저장 실패 메시지 분리 · 동일 품목 다줄 거래처단가 조용한 덮어쓰기 금지(제외+경고) · confirmed_at 의미 문서화. 데모 smoke: 같은 품목 2줄 8,000/8,500 라인 id 정확 매핑(41,500)·단가 누락 마감 차단·충돌 경고·덮어쓰기 방지·콘솔 0. 미커밋 — Codex 검수 대기.</dd>
   </dl>
   <details><summary>관련 문서/파일</summary><ul><li><code>web/supabase/migrations/0011_order_pricing_guard_hardening.sql</code></li><li><code>docs/guide-apply-0011-order-pricing-guard.md</code></li><li><code>docs/order-moa-w23-r1-state-model-decision.md</code></li><li><code>docs/agent-worklog.md</code></li></ul></details>
+</div>
+<div class="card s-done">
+  <div class="card-head"><span class="wid">W23-R5a</span><strong>운영 UX 팩 — 단가 입력·적용단가 표시·발주 문장·이번 발주만 매입처</strong><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span></div>
+  <p class="plain">매일 만지는 곳 네 군데를 손봤습니다. ①금액 칸을 누르면 숫자가 전체 선택되고 Enter로 다음 칸으로 넘어갑니다(선행 0 자동 정리). ②단가 관리에서 거래처별 단가·품목 기본 출고단가·실제 적용 단가를 나란히 보여주고, 기본 단가가 있으면 &#x27;미등록&#x27; 대신 &#x27;기본 단가 적용 중&#x27;으로 표시합니다. ③매입처 발주 문장 첫 줄에 발주일이 들어가고, 문장을 직접 고칠 수 있으며, 품목을 바꿔도 고친 문장은 유지되고 &#x27;문장 다시 만들기&#x27;를 눌러야 새로 만들어집니다. ④합산표에서 이번 발주만 다른 매입처로 바꿀 수 있습니다(품목 기본 매입처는 그대로).</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>완벽한 단가표를 먼저 만드는 ERP가 아니라, 오늘 발주를 빠르게 처리하는 도구라는 원칙. 확정 스냅샷·상태 모델·테이블을 건드리지 않고 체감 불편만 없앤다. R4 대시보드보다 앞서 넣을 수 있는 안전 팩.</dd>
+    <dt>선행 조건</dt><dd>R3/0011 커밋(c31ec1f) 후 진행. 마이그레이션·스키마 0. 매입처 override·문장 편집분은 화면 상태 전용(DB·localStorage 저장 안 함).</dd>
+    <dt>확인 방법</dt><dd>web 184/184(신규 11: aggregate 날짜·override, price-store effective, price-input 정규화) · root 5/5 · build 성공 · tsc 통과 · audit 0 · diff-check clean. 데모 smoke: 파싱 Enter→다음 칸 · 단가 관리 base-only &#x27;기본 단가 적용 중&#x27; · 계란(미지정)→야채 이번만 재배정→미지정 0·문장 재그룹 · 발주 문장 날짜/편집 유지/다시 만들기 · 회귀(주문 확정·가격 마감 09000→9000·명세서) · 모바일 390px 오버플로 없음 · 콘솔 0. 미커밋 — Codex 검수 대기. 의도적 편차: 단가 관리 Enter=저장 유지(일괄 저장 없어 키보드 저장 경로 보존).</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/price-input.ts</code></li><li><code>docs/superpowers/specs/2026-07-11-order-moa-operations-ux-tax-design.md</code></li><li><code>docs/task-prompt-W23-R5a-operational-ux-pack.md</code></li><li><code>docs/agent-worklog.md</code></li></ul></details>
 </div></div><h2 class="phase">2차</h2><div class="grid">
 <div class="card s-hold">
   <div class="card-head"><span class="wid">W16</span><strong>2차 보류: 미수금·세금계산서 근거·원가/재고</strong><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span></div>

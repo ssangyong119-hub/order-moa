@@ -7,11 +7,19 @@ export interface PriceRow {
   productId: string;
   name: string;
   baseUnit: string;
-  /** null = 이 거래처에 단가 미등록 */
+  /** 거래처별 단가. null = 이 거래처에 단가 미등록 */
   price: number | null;
+  /** 품목 기본 출고단가(base_sale_price). null = 없음 (R5a) */
+  baseSalePrice: number | null;
+  /** 적용 단가 = 거래처별 단가 > 기본 출고단가 > 없음(null) (R5a) */
+  effectivePrice: number | null;
+  effectiveSource: "customer" | "base" | "none";
 }
 
-/** 선택 거래처의 품목별 단가 목록. query는 품목명+별칭 검색, onlyMissing이면 미등록만. */
+/**
+ * 선택 거래처의 품목별 단가 목록. query는 품목명+별칭 검색.
+ * onlyMissing이면 **적용 단가가 아예 없는(none)** 품목만 — 기본 출고단가가 있으면 미등록이 아니다(R5a).
+ */
 export function buildPriceRows(
   products: Product[],
   prices: CustomerPrice[],
@@ -29,13 +37,15 @@ export function buildPriceRows(
         !q ||
         [p.name, ...(p.aliases ?? [])].some((v) => v.toLowerCase().includes(q)),
     )
-    .map((p) => ({
-      productId: p.id,
-      name: p.name,
-      baseUnit: p.baseUnit,
-      price: priceByProduct.get(p.id) ?? null,
-    }))
-    .filter((row) => !onlyMissing || row.price === null);
+    .map((p) => {
+      const price = priceByProduct.get(p.id) ?? null;
+      const baseSalePrice = p.baseSalePrice ?? null;
+      // 우선순위: 거래처별 > 기본 출고단가 > 없음 (resolveSalePrice와 동일 규칙)
+      const effectiveSource = price !== null ? "customer" : baseSalePrice !== null ? "base" : "none";
+      const effectivePrice = price !== null ? price : baseSalePrice;
+      return { productId: p.id, name: p.name, baseUnit: p.baseUnit, price, baseSalePrice, effectivePrice, effectiveSource } as PriceRow;
+    })
+    .filter((row) => !onlyMissing || row.effectiveSource === "none");
 }
 
 export function validatePriceValue(raw: string): string | null {

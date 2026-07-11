@@ -3,7 +3,7 @@
 // 오더모아 웹 MVP 메인 — 관리자형 셸(사이드바+헤더) + 핵심 흐름(붙여넣기→파싱→합산표→명세서).
 // 인증/회사는 Supabase 게이트(8a)로 동작하며, env 미설정 시 데모 모드로 폴백.
 // 주문/샘플 데이터는 Supabase 설정 시 DB 저장·조회(8b), 미설정 시 데모 메모리 모드. PDF 없음(브라우저 인쇄).
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Customer, CustomerPrice, Product, Supplier } from "@/lib/domain/types";
 import {
   canConfirm,
@@ -56,6 +56,8 @@ import {
   supplierColorIndex,
 } from "@/lib/aggregate";
 import { searchProductsForOrder } from "@/lib/product-search";
+import { focusNextPriceInput, normalizePriceInput } from "@/lib/price-input";
+import { purchaseDraftScopeKey } from "@/lib/purchase-draft-scope";
 import { CustomerManagementView } from "./customer-management-view";
 import { SupplierManagementView } from "./supplier-management-view";
 import { ProductManagementView } from "./product-management-view";
@@ -262,6 +264,11 @@ export default function HomePage() {
   const [aggCustomer, setAggCustomer] = useState<string>("all");
   const [aggDate, setAggDate] = useState<string>(""); // "" = 전체 날짜
   const [purchaseSelectedIds, setPurchaseSelectedIds] = useState<string[]>([]);
+  // R5a: 이번 발주만 매입처 override(key=productId|unit → 매입처명) · 매입처 발주 문장 직접 편집분(매입처명 → 텍스트)
+  const [supplierOverride, setSupplierOverride] = useState<Record<string, string>>({});
+  const [sectionDrafts, setSectionDrafts] = useState<Record<string, string>>({});
+  const purchaseDraftScope = purchaseDraftScopeKey(aggCustomer, aggDate);
+  const purchaseDraftScopeRef = useRef(purchaseDraftScope);
   const [orderListDate, setOrderListDate] = useState<string>(todayKst()); // 주문 목록 날짜 필터("" = 전체)
   const [dbError, setDbError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -274,6 +281,13 @@ export default function HomePage() {
   function flash(text: string) {
     setMessage(text);
   }
+
+  useEffect(() => {
+    if (purchaseDraftScopeRef.current === purchaseDraftScope) return;
+    purchaseDraftScopeRef.current = purchaseDraftScope;
+    setSupplierOverride({});
+    setSectionDrafts({});
+  }, [purchaseDraftScope]);
 
   useEffect(() => {
     if (!db || !companyId) return;
@@ -1105,23 +1119,56 @@ export default function HomePage() {
   // 발주 문장 인사말용 회사명 (DB=로그인 회사명, 데모=샘플 회사명)
   const companyName =
     session.status === "ready" ? (session.companyName ?? "") : (data?.company.name ?? "");
+  // R5a: 발주 문장 날짜 — 합산표가 단일 날짜면 그 날짜, 전체 보기면 오늘 제안
+  const purchaseDate = aggDate !== "" ? aggDate : today();
+  const overrideMap = useMemo(() => new Map(Object.entries(supplierOverride)), [supplierOverride]);
   const supplierPurchaseSections = useMemo(
-    () => buildSupplierPurchaseSections(aggregate, products, purchaseSelectedSet),
-    [aggregate, products, purchaseSelectedSet],
+    () => buildSupplierPurchaseSections(aggregate, products, purchaseSelectedSet, overrideMap),
+    [aggregate, products, purchaseSelectedSet, overrideMap],
   );
-  const supplierPurchaseText = useMemo(
-    () => formatSupplierPurchaseText(supplierPurchaseSections, { companyName, withSupplierHeader: true }),
-    [supplierPurchaseSections, companyName],
+  // 섹션별 생성 문장(헤더 없음) — 편집본(sectionDrafts)이 있으면 그것을 우선.
+  const generatedSection = (section: (typeof supplierPurchaseSections)[number]) =>
+    formatSupplierPurchaseText([section], { companyName, withSupplierHeader: false, date: purchaseDate });
+  const displayedSection = (section: (typeof supplierPurchaseSections)[number]) =>
+    sectionDrafts[section.supplierName] ?? generatedSection(section);
+  // 전체 문장(복사/미리보기) = 각 섹션에 [매입처명] 헤더를 붙여 합침. 편집본을 반영한다.
+  const combinedPurchaseText = useMemo(
+    () =>
+      supplierPurchaseSections
+        .map((s) => `[${s.supplierName}]\n${sectionDrafts[s.supplierName] ?? generatedSection(s)}`)
+        .join("\n\n"),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [supplierPurchaseSections, sectionDrafts, companyName, purchaseDate],
   );
+  const hasSectionEdits = Object.keys(sectionDrafts).length > 0;
   const purchaseSummary = useMemo(
-    () => buildPurchaseChecklistSummary(aggregate, purchaseSelectedSet, products),
-    [aggregate, purchaseSelectedSet, products],
+    () => buildPurchaseChecklistSummary(aggregate, purchaseSelectedSet, products, overrideMap),
+    [aggregate, purchaseSelectedSet, products, overrideMap],
   );
 
   function togglePurchaseRow(productId: string) {
     setPurchaseSelectedIds((prev) =>
       prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId],
     );
+  }
+
+  // R5a: 이번 발주만 매입처 재배정(화면 상태 override, products.purchase_supplier_id 미변경)
+  function setRowSupplier(key: string, supplierName: string) {
+    setSupplierOverride((prev) => {
+      const next = { ...prev };
+      if (!supplierName) delete next[key];
+      else next[key] = supplierName;
+      return next;
+    });
+  }
+
+  // R5a: 발주 문장 다시 만들기 — 편집본을 버리고 현재 목록으로 재생성(편집 이력 있으면 확인)
+  function regeneratePurchaseText() {
+    if (hasSectionEdits && !window.confirm("직접 수정한 발주 문장이 있습니다. 다시 만들면 수정 내용이 사라집니다. 계속할까요?")) {
+      return;
+    }
+    setSectionDrafts({});
+    flash("발주 문장을 현재 목록으로 다시 만들었습니다.");
   }
 
   async function copyTextToClipboard(text: string, successMessage: string) {
@@ -1143,7 +1190,7 @@ export default function HomePage() {
   }
 
   async function copyPurchaseText() {
-    if (!supplierPurchaseText.trim()) {
+    if (!combinedPurchaseText.trim()) {
       flash("매입처에 보낼 품목을 먼저 체크해주세요.");
       return;
     }
@@ -1153,7 +1200,7 @@ export default function HomePage() {
       );
       if (!ok) return;
     }
-    await copyTextToClipboard(supplierPurchaseText, "매입처별 발주 문장을 복사했습니다.");
+    await copyTextToClipboard(combinedPurchaseText, "매입처별 발주 문장을 복사했습니다.");
   }
 
   function exportCsv() {
@@ -1674,11 +1721,32 @@ export default function HomePage() {
                         </td>
                         <td>
                           {(() => {
-                            const sup = products.find((p) => p.id === a.productId)?.purchaseSupplierName;
-                            return sup ? (
-                              <span className={`sup-tag sup-c${supplierColorIndex(sup)}`}>{sup}</span>
-                            ) : (
-                              <span className="badge amber">미지정</span>
+                            const key = `${a.productId}|${a.unit}`;
+                            const defaultName = products.find((p) => p.id === a.productId)?.purchaseSupplierName ?? "";
+                            const overridden = supplierOverride[key];
+                            const effective = overridden ?? defaultName;
+                            return (
+                              <div className="supplier-pick">
+                                {effective ? (
+                                  <span className={`sup-tag sup-c${supplierColorIndex(effective)}`}>{effective}</span>
+                                ) : (
+                                  <span className="badge amber">미지정</span>
+                                )}
+                                {overridden ? <span className="muted" style={{ fontSize: ".72rem" }}>이번만</span> : null}
+                                <select
+                                  className="supplier-override-select"
+                                  value={overridden ?? ""}
+                                  onChange={(e) => setRowSupplier(key, e.target.value)}
+                                  aria-label={`${a.name} 매입처 이번 발주만 변경`}
+                                >
+                                  <option value="">기본{defaultName ? ` · ${defaultName}` : " · 미지정"}</option>
+                                  {suppliers.map((s) => (
+                                    <option key={s.id} value={s.name}>
+                                      {s.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
                             );
                           })()}
                         </td>
@@ -1699,9 +1767,15 @@ export default function HomePage() {
               </div>
 
               <div style={{ borderTop: "1px solid var(--line)", marginTop: 16, paddingTop: 14 }}>
-                <h3 style={{ marginTop: 0 }}>매입처별로 보낼 발주 문장</h3>
+                <div className="supplier-section-head" style={{ marginBottom: 4 }}>
+                  <h3 style={{ margin: 0 }}>매입처별로 보낼 발주 문장</h3>
+                  <button className="link" onClick={regeneratePurchaseText} disabled={supplierPurchaseSections.length === 0}>
+                    문장 다시 만들기
+                  </button>
+                </div>
                 <p className="muted" style={{ marginTop: 0 }}>
-                  처음에는 비워져 있습니다. 매입처에 보낼 품목만 체크하면 아래 발주 문장에 들어갑니다.
+                  매입처에 보낼 품목을 체크하면 문장이 만들어집니다. 문장은 <strong>직접 수정</strong>할 수 있고, 첫 줄에 발주일({purchaseDate})이 들어갑니다.
+                  체크·매입처를 바꿔도 수정한 문장은 그대로 두며, <strong>문장 다시 만들기</strong>를 눌러야 새 목록으로 재생성됩니다.
                 </p>
                 <p className="purchase-counter">
                   발주 대상 <strong>{purchaseSummary.total}</strong>개 · 문장에 담음{" "}
@@ -1722,11 +1796,9 @@ export default function HomePage() {
                     </div>
                   ) : (
                     supplierPurchaseSections.map((section) => {
-                      const sectionText = formatSupplierPurchaseText([section], {
-                        companyName,
-                        withSupplierHeader: false,
-                      });
+                      const sectionText = displayedSection(section);
                       const assigned = section.supplierName !== "매입처 미지정";
+                      const edited = section.supplierName in sectionDrafts;
                       return (
                         <div
                           className={`supplier-section${assigned ? ` sup-c${supplierColorIndex(section.supplierName)}` : " sup-unassigned"}`}
@@ -1736,12 +1808,13 @@ export default function HomePage() {
                             <strong>
                               {section.supplierName}{" "}
                               <span className="muted">(품목 {section.rows.length}개)</span>
+                              {edited ? <span className="muted"> · 수정됨</span> : null}
                             </strong>
                             <button
                               className="link"
                               onClick={() =>
                                 copyTextToClipboard(
-                                  sectionText,
+                                  displayedSection(section),
                                   `${section.supplierName} 발주 문장을 복사했습니다.`,
                                 )
                               }
@@ -1749,7 +1822,15 @@ export default function HomePage() {
                               이 매입처만 복사
                             </button>
                           </div>
-                          <pre>{sectionText}</pre>
+                          <textarea
+                            className="supplier-section-text"
+                            value={sectionText}
+                            rows={Math.min(Math.max(sectionText.split("\n").length + 1, 4), 16)}
+                            onChange={(e) =>
+                              setSectionDrafts((prev) => ({ ...prev, [section.supplierName]: e.target.value }))
+                            }
+                            aria-label={`${section.supplierName} 발주 문장`}
+                          />
                         </div>
                       );
                     })
@@ -1758,13 +1839,13 @@ export default function HomePage() {
                 <textarea
                   id="purchase-text"
                   readOnly
-                  value={supplierPurchaseText}
-                  rows={Math.min(Math.max(supplierPurchaseText.split("\n").length + 1, 4), 14)}
+                  value={combinedPurchaseText}
+                  rows={Math.min(Math.max(combinedPurchaseText.split("\n").length + 1, 4), 14)}
                   onFocus={(e) => e.currentTarget.select()}
                 />
                 <div className="row-actions no-print" style={{ marginTop: 8 }}>
-                  <button className="primary" onClick={copyPurchaseText} disabled={!supplierPurchaseText.trim()}>
-                    발주 문장 복사
+                  <button className="primary" onClick={copyPurchaseText} disabled={!combinedPurchaseText.trim()}>
+                    발주 문장 복사(전체)
                   </button>
                 </div>
               </div>
@@ -1999,16 +2080,11 @@ function ReviewView(props: {
   onBack: () => void;
 }) {
   const { lines, products, customerName } = props;
-  // 단가 input에서 Enter → 다음 단가 칸으로 포커스 이동(저장은 '변경 단가 전체 저장'으로)
+  // 단가 input에서 Enter → 다음 단가 칸으로 포커스 이동+전체선택(저장은 '변경 단가 전체 저장'으로)
   function focusNextPrice(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key !== "Enter") return;
     e.preventDefault();
-    const inputs = Array.from(
-      e.currentTarget.closest("table")?.querySelectorAll<HTMLInputElement>("input.price") ?? [],
-    );
-    const i = inputs.indexOf(e.currentTarget);
-    if (i >= 0 && i < inputs.length - 1) inputs[i + 1].focus();
-    else e.currentTarget.blur();
+    focusNextPriceInput(e.currentTarget, "input.price");
   }
   const pendingPriceChanges = collectPriceChanges(lines, props.prices, props.customerId).changes.length;
   const [productQueries, setProductQueries] = useState<Record<string, string>>({});
@@ -2258,7 +2334,14 @@ function ReviewView(props: {
                       type="number"
                       min={0}
                       value={line.unitPrice}
+                      onFocus={(e) => e.currentTarget.select()}
                       onChange={(e) => props.onPrice(line, e.target.value)}
+                      onBlur={(e) => {
+                        // number-controlled input은 값이 같으면(5 vs "05") React가 DOM을 갱신하지 않으므로 직접 표기 정리
+                        const norm = normalizePriceInput(e.target.value);
+                        e.currentTarget.value = norm;
+                        props.onPrice(line, norm);
+                      }}
                       onKeyDown={focusNextPrice}
                     />
                     {line.productId && line.unitPrice === 0 && (
@@ -2402,12 +2485,7 @@ function PriceCloseView(props: {
   function focusNextSale(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key !== "Enter") return;
     e.preventDefault();
-    const all = Array.from(
-      e.currentTarget.closest("table")?.querySelectorAll<HTMLInputElement>("input.close-sale") ?? [],
-    );
-    const i = all.indexOf(e.currentTarget);
-    if (i >= 0 && i < all.length - 1) all[i + 1].focus();
-    else e.currentTarget.blur();
+    focusNextPriceInput(e.currentTarget, "input.close-sale");
   }
 
   function submit() {
@@ -2527,10 +2605,14 @@ function PriceCloseView(props: {
                       min={0}
                       value={sale[l.id] ?? ""}
                       placeholder="입력"
+                      onFocus={(e) => e.currentTarget.select()}
                       onChange={(e) => {
                         setSale((prev) => ({ ...prev, [l.id]: e.target.value }));
                         setSaleTouched((prev) => ({ ...prev, [l.id]: true }));
                       }}
+                      onBlur={(e) =>
+                        setSale((prev) => ({ ...prev, [l.id]: normalizePriceInput(e.target.value) }))
+                      }
                       onKeyDown={focusNextSale}
                     />
                     {suggested && <div><span className="badge">제안값</span></div>}

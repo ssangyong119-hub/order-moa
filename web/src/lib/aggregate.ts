@@ -39,6 +39,11 @@ export interface SupplierPurchaseSection {
   rows: AggregateRow[];
 }
 
+/** 합산표 행 키 — 이번 발주만 매입처 override(productId+unit) 단위 식별자(R5a). */
+export function aggregateRowKey(row: { productId: string; unit: string }): string {
+  return `${row.productId}|${row.unit}`;
+}
+
 /**
  * 주문들을 품목별로 합산한다.
  * - qty: 품목 총수량
@@ -103,10 +108,16 @@ export function formatPurchaseOrderText(rows: AggregateRow[], title = "발주 �
   return `${title}\n${body}`;
 }
 
+/**
+ * 체크된 품목을 매입처별로 묶는다.
+ * supplierOverride(key=productId|unit → 매입처명)가 있으면 그 행의 매입처를 이번 발주만 재배정(R5a).
+ * override는 화면 상태 전용 — products.purchase_supplier_id를 바꾸지 않는다.
+ */
 export function buildSupplierPurchaseSections(
   rows: AggregateRow[],
   products: PurchaseSupplierProduct[],
   selectedProductIds: Set<string> = new Set(rows.map((row) => row.productId)),
+  supplierOverride: Map<string, string> = new Map(),
 ): SupplierPurchaseSection[] {
   const supplierByProduct = new Map(
     products.map((product) => [product.id, product.purchaseSupplierName || "매입처 미지정"]),
@@ -114,7 +125,8 @@ export function buildSupplierPurchaseSections(
   const sections = new Map<string, AggregateRow[]>();
   for (const row of rows) {
     if (!selectedProductIds.has(row.productId)) continue;
-    const supplierName = supplierByProduct.get(row.productId) ?? "매입처 미지정";
+    const supplierName =
+      supplierOverride.get(aggregateRowKey(row)) ?? supplierByProduct.get(row.productId) ?? "매입처 미지정";
     sections.set(supplierName, [...(sections.get(supplierName) ?? []), row]);
   }
   return [...sections.entries()].map(([supplierName, sectionRows]) => ({
@@ -124,32 +136,37 @@ export function buildSupplierPurchaseSections(
 }
 
 export interface SupplierPurchaseTextOptions {
-  /** DB=회사명(ordermoa_companies.name), 데모=회사명. 비어 있으면 인사말 줄 생략 */
+  /** DB=회사명(ordermoa_companies.name), 데모=회사명. 비어 있으면 인사말에 회사명 생략 */
   companyName?: string | null;
   /** 여러 매입처 구분용 [매입처명] 헤더. 전체 복사=true, 개별 복사=false (기본 true) */
   withSupplierHeader?: boolean;
+  /** 발주일(YYYY-MM-DD). 있으면 첫 줄에 날짜를 넣는다(R5a). */
+  date?: string | null;
 }
 
 /**
- * 매입처 발주 문장.
- * 형식) "{회사명}입니다\n발주 품목입니다\n1. 콩나물 3박스\n2. 두부 8판"
- * - 회사명 없으면 첫 줄 생략, 품목은 1부터 번호
- * - withSupplierHeader=true면 섹션마다 [매입처명] 헤더, 섹션 사이 빈 줄
+ * 매입처 발주 문장(R5a 형식).
+ * 형식) "[매입처명]\n2026-07-11\n{회사명}입니다 발주 품목입니다\n\n1. 콩나물 3박스\n2. 두부 8판"
+ * - 날짜 있으면 헤더(있으면) 다음 줄, 인사말은 "{회사명}입니다 발주 품목입니다"(회사명 없으면 "발주 품목입니다") 한 줄.
+ * - 인사말과 번호 목록 사이에 빈 줄. withSupplierHeader=true면 섹션마다 [매입처명] 헤더, 섹션 사이 빈 줄.
  */
 export function formatSupplierPurchaseText(
   sections: SupplierPurchaseSection[],
   options: SupplierPurchaseTextOptions = {},
 ): string {
-  const { companyName, withSupplierHeader = true } = options;
-  const greeting = companyName?.trim() ? `${companyName.trim()}입니다` : null;
+  const { companyName, withSupplierHeader = true, date } = options;
+  const greeting = companyName?.trim()
+    ? `${companyName.trim()}입니다 발주 품목입니다`
+    : "발주 품목입니다";
   return sections
     .map((section) => {
       const items = section.rows.map(
         (row, i) => `${i + 1}. ${row.name} ${formatQtyUnit(row.qty, row.unit)}`,
       );
-      const lines = [greeting, "발주 품목입니다", ...items].filter(Boolean) as string[];
-      if (withSupplierHeader) lines.unshift(`[${section.supplierName}]`);
-      return lines.join("\n");
+      const head: string[] = [];
+      if (withSupplierHeader) head.push(`[${section.supplierName}]`);
+      if (date && date.trim()) head.push(date.trim());
+      return [...head, greeting, "", ...items].join("\n");
     })
     .join("\n\n");
 }
@@ -164,13 +181,16 @@ export function buildPurchaseChecklistSummary(
   rows: AggregateRow[],
   selectedProductIds: Set<string>,
   products: PurchaseSupplierProduct[],
+  supplierOverride: Map<string, string> = new Map(),
 ): { total: number; included: number; excluded: number; unassigned: number } {
   const supplierByProduct = new Map(products.map((p) => [p.id, p.purchaseSupplierName || ""]));
   let included = 0;
   let unassigned = 0;
   for (const row of rows) {
     if (selectedProductIds.has(row.productId)) included += 1;
-    if (!supplierByProduct.get(row.productId)) unassigned += 1;
+    const effective =
+      supplierOverride.get(aggregateRowKey(row)) ?? supplierByProduct.get(row.productId) ?? "";
+    if (!effective || effective === "매입처 미지정") unassigned += 1;
   }
   return { total: rows.length, included, excluded: rows.length - included, unassigned };
 }

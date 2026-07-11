@@ -12,13 +12,43 @@ const prices: CustomerPrice[] = [
   { customerId: "c2", productId: "p2", price: 9999 }, // 다른 거래처 단가는 안 섞여야 함
 ];
 
-test("buildPriceRows: 선택 거래처의 품목별 단가(미등록은 null)", () => {
+test("buildPriceRows: 선택 거래처의 품목별 단가(미등록은 null) + 기본/적용 단가(R5a)", () => {
   const rows = buildPriceRows(products, prices, "c1");
   expect(rows).toEqual([
-    { productId: "p1", name: "콩나물", baseUnit: "박스", price: 4500 },
-    { productId: "p2", name: "두부", baseUnit: "판", price: null },
-    { productId: "p3", name: "숙주", baseUnit: "봉", price: null },
+    { productId: "p1", name: "콩나물", baseUnit: "박스", price: 4500, baseSalePrice: null, effectivePrice: 4500, effectiveSource: "customer" },
+    { productId: "p2", name: "두부", baseUnit: "판", price: null, baseSalePrice: null, effectivePrice: null, effectiveSource: "none" },
+    { productId: "p3", name: "숙주", baseUnit: "봉", price: null, baseSalePrice: null, effectivePrice: null, effectiveSource: "none" },
   ]);
+});
+
+test("buildPriceRows(R5a): 거래처별 단가 없고 기본 출고단가만 있으면 적용=기본, source=base", () => {
+  const withBase: Product[] = [{ id: "p9", name: "양파", baseUnit: "망", baseSalePrice: 3000 }];
+  const [row] = buildPriceRows(withBase, [], "c1");
+  expect(row).toEqual({
+    productId: "p9",
+    name: "양파",
+    baseUnit: "망",
+    price: null,
+    baseSalePrice: 3000,
+    effectivePrice: 3000,
+    effectiveSource: "base",
+  });
+});
+
+test("buildPriceRows(R5a): 거래처별 단가가 있으면 기본 출고단가보다 우선(effective=거래처)", () => {
+  const withBoth: Product[] = [{ id: "p9", name: "양파", baseUnit: "망", baseSalePrice: 3000 }];
+  const cp: CustomerPrice[] = [{ customerId: "c1", productId: "p9", price: 3500 }];
+  const [row] = buildPriceRows(withBoth, cp, "c1");
+  expect(row.effectivePrice).toBe(3500);
+  expect(row.effectiveSource).toBe("customer");
+});
+
+test("buildPriceRows(R5a): 미등록만 보기 = 적용 단가가 아예 없는(none) 품목만", () => {
+  const mixed: Product[] = [
+    { id: "a", name: "가", baseUnit: "개", baseSalePrice: 100 }, // base 있음 → 미등록 아님
+    { id: "b", name: "나", baseUnit: "개" }, // 둘 다 없음 → 미등록
+  ];
+  expect(buildPriceRows(mixed, [], "c1", "", true).map((r) => r.name)).toEqual(["나"]);
 });
 
 test("buildPriceRows: 품목명/별칭 검색", () => {
