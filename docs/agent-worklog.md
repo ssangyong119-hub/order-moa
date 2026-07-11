@@ -2006,4 +2006,5 @@ W20 초안(`docs/order-moa-catalog-real-draft.json`, 1590품목)을 앱에서 �
 - **진행판 재생성**: Codex가 JSON을 현행화(수정 4)한 뒤 재생성을 못 한 상태 → `py -3 scripts/generate-progress.py` 실행, HTML에 W23 카드·새 currentFocus(W23-R1 준비) 반영 확인. (meta.feedbackBacklog는 생성기 렌더 범위 밖 — 설계상 정상)
 - **기계적 재검사 3종(Codex 예고분) 전부 통과**: ① 잘못된 FK 문장 잔존 0(무관한 RLS 실측 기록 1건만) ② 매입가 자동 덮어쓰기 문구 0 ③ 완료 작업의 진행 중/적용 대기 표기 0.
 - 검증: root 5/5 · web 150/150 · build 성공 · audit 0 · `git diff --check` clean. 앱 코드·SQL 무변경 유지. **커밋/푸시 안 함 — 보고 후 중단.**
+- **(사용자 지시 추가분)** 이번 회차는 사용자 지시로 **Claude가 직접 커밋**한다(코덱스에게는 보고로 갈음, 푸시는 보류). 다음 세션용 **W23-R1 작업 프롬프트** `docs/task-prompt-W23-R1-state-model-design.md` 작성 — 핵심 검증 쟁점(status CHECK에 draft 이미 존재, unit_price NOT NULL×generated amount 충돌, loadOrders의 confirmed 필터)을 옵션 1a/1b/1b-i/1b-ii/2로 구조화, NEXT-SESSION 0번에 링크.
 - 수정 6: 현재 CHECK에 이미 존재하는 `draft`를 R1 비교 대상에 추가했다. 권장 방향은 orders 단일 소스 유지까지만 확정하고, `draft 재사용 vs 신규 상태`와 `unit_price nullable vs 별도 가격 상태/시각`은 구현 전 비교하도록 보정했다.
