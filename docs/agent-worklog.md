@@ -1933,3 +1933,13 @@ W20 초안(`docs/order-moa-catalog-real-draft.json`, 1590품목)을 앱에서 �
   - 수정: `price-store.ts` `collectPriceChanges`에서 `priceSource === "base"` 라인 제외(+`PriceChangeLine.priceSource` 필드). 사용자가 그 값을 **직접 고치면** priceSource가 지워져 저장 대상이 되고, **개별 '이 단가 저장'**(savePrice)은 별도 경로라 그대로 동작. 테스트 1건 추가.
 - 검증(수정 후): root `npm test` 5/5 · web `npm test` **150/150** · `npm run build` 성공 · `npm audit --audit-level=low` 0 · `git diff --check` clean. 진행판 3종 재생성(W22 verify에 디버깅검사 메모).
 - 변경 파일(미커밋): `web/src/lib/price-store.ts`, `web/src/lib/price-store.test.ts`, `docs/agent-worklog.md`, 진행판 3종(json/html/xlsx). **Claude 커밋/푸시 안 함 — Codex 검수 후 반영.**
+
+## 2026-07-11 Codex (W23 전체 시스템 재설계 준비 — 문서/프롬프트만)
+
+- 실사용 인터뷰에서 확인된 두 설계 공백을 정리했다: (1) 단위가 생략된 카톡 발주는 거래처별 관습과 사람 판단이 필요함, (2) 판매단가는 매입처 거래명세서를 받은 뒤 품목별로 그때그때 정할 수 있음.
+- 한 사용자 방식에 과적합하지 않도록 기존 `가격 포함 바로 최종 확정`을 유지하면서 `수량 확인→합산·매입처 발주→가격 입력→최종 확정` 경로를 선택형으로 추가하는 방향을 사용자와 합의했다.
+- 플랫폼은 기존 Next.js 반응형 웹을 유지한다. 네이티브 앱/PWA/플레이스토어는 현재 범위에서 제외한다.
+- UI 방향은 기존 사이드바·화면을 유지하고 대시보드만 `오늘 업무/새 발주/매입처 발주/가격 대기/명세서 준비` 업무 큐로 바꾸는 안을 사용자 선택으로 확정했다. 기존 화면은 인라인 수정·검색·일괄변경·모바일 넘침 개선 등 사용성 보강만 설계한다.
+- 기준 설계 문서: `docs/superpowers/specs/2026-07-11-order-moa-dual-confirmation-workflow-design.md`.
+- Claude 기획·설계 전수 개편 프롬프트: `docs/task-prompt-W23-system-redesign-planning.md`.
+- 이번 준비 단계에서는 앱 코드·테스트·SQL·마이그레이션을 수정하지 않았다. W23 Claude 세션도 문서 전수 감사와 설계까지만 수행하고 커밋/푸시하지 않도록 제한했다.
