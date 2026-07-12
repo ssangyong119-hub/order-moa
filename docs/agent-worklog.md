@@ -2309,3 +2309,21 @@ SQL 자체 점검(0011):
 
 - "새 발주" 카드는 카운트 없는 진입점(설계 §16.1의 '수치 조작 금지' 해석) — 목업의 "새 발주 N"은 저장 전 상태라 계산 불가, Codex 확인 요청.
 - 가격 대기 날짜 범위(전체) 판단은 위 기준 참조 — 오늘로 한정하려면 1줄 수정.
+
+## 2026-07-12 Claude (W23-R4 P1 보정 — 가격 대기 진입이 confirmed를 섞어 보여주던 문제)
+
+상태:
+
+- **완료.** 같은 브랜치 `claude/w23-r4-dashboard-queue`(worktree 전용). 기준 브랜치·R5b 문서·order-store·마이그레이션 무접촉. root package-lock.json 미접촉.
+
+수정:
+
+- **문제**: 대시보드 [가격 대기] 카드가 날짜만 비운 전체 주문 목록을 열어 confirmed까지 섞여 보였음.
+- `web/src/app/order-list-filter.ts`(신규): `filterOrdersForList(orders, date, status)` 순수 함수 + `OrderListStatusFilter`("all"|"quantity_confirmed"|"confirmed"). ※ page.tsx에서 export하면 Next.js App Router 타입 검사가 페이지 추가 export를 거부(TS2344) → 전용 모듈로 분리(허용 목록의 최소 예외, dashboard-queue와 동일 사유). cancelled는 loadOrders에서 이미 제외 — 새로 포함하지 않음.
+- `web/src/app/page.tsx`: `orderListStatus` 상태 + 주문 목록에 상태 select(전체/가격 대기/최종 확정) — 날짜 필터와 함께 적용. 현재 필터를 요약 문구("전체 날짜 · 가격 대기만 · N건")와 [가격 대기 목록] 뱃지로 표시, [전체 보기]가 날짜+상태 모두 초기화. **[가격 대기] 카드 = 날짜 전체+상태 qc로 진입.** stale 필터 방지: 주문 확정(DB/데모)·명세서 준비 카드·큐의 주문 목록 버튼은 상태를 "전체"로 리셋. "지금 먼저 할 일"의 [가격 마감]은 기존대로 해당 주문 priceClose 직행(무변경). CSV·명세서·가격 마감 동작 무변경.
+- `web/src/app/order-list-filter.test.ts`(신규 4건): qc만/confirmed만/날짜+상태 결합/전체.
+
+검증:
+
+- root 5/5 · web **195/195**(+4) · build 성공 · build 후 `tsc --noEmit` 단독 통과 · audit 0 · diff-check clean.
+- 데모 smoke(worktree 임시 :3224, 원복 완료): qc+confirmed 생성 → [가격 대기] 카드 → **qc만 1건 표시**(confirmed 제외)·뱃지·요약 확인 → 행 [가격 마감]→priceClose 직행 → 상태 select "최종 확정"→confirmed만 → [전체 보기]→둘 다 초기화·2건 → 확정 직후 상태 리셋으로 방금 주문 노출 확인 → 390px 겹침/오버플로 없음 → 콘솔 0.

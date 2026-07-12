@@ -58,6 +58,7 @@ import { searchProductsForOrder } from "@/lib/product-search";
 import { focusNextPriceInput, normalizePriceInput } from "@/lib/price-input";
 import { purchaseDraftScopeKey } from "@/lib/purchase-draft-scope";
 import { buildTodayWorkQueue } from "@/lib/dashboard-queue";
+import { filterOrdersForList, type OrderListStatusFilter } from "./order-list-filter";
 import { CustomerManagementView } from "./customer-management-view";
 import { SupplierManagementView } from "./supplier-management-view";
 import { ProductManagementView } from "./product-management-view";
@@ -126,6 +127,7 @@ interface AppData {
 function today(): string {
   return todayKst();
 }
+
 
 // ── 사이드바 메뉴 (오더모아 범위만 — 마감/세무 등 2차 기능은 넣지 않음. 예정 화면은 "준비 중") ──
 const NAV_GROUPS: Array<{
@@ -270,6 +272,7 @@ export default function HomePage() {
   const purchaseDraftScope = purchaseDraftScopeKey(aggCustomer, aggDate);
   const purchaseDraftScopeRef = useRef(purchaseDraftScope);
   const [orderListDate, setOrderListDate] = useState<string>(todayKst()); // 주문 목록 날짜 필터("" = 전체)
+  const [orderListStatus, setOrderListStatus] = useState<OrderListStatusFilter>("all"); // 주문 목록 상태 필터
   const [dbError, setDbError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [priceSaving, setPriceSaving] = useState(false);
@@ -876,6 +879,7 @@ export default function HomePage() {
         setRawText("");
         setConfirmDate(todayKst());
         setOrderListDate(saved.date); // 방금 확정한 주문 날짜로 목록을 맞춰 바로 보이게
+        setOrderListStatus("all"); // 상태 필터가 남아 방금 주문이 안 보이는 일 방지
         setCurrentOrderId(saved.id);
         setView("orders");
         flash(doneMsg);
@@ -920,6 +924,7 @@ export default function HomePage() {
     setRawText("");
     setConfirmDate(todayKst());
     setOrderListDate(order.date); // 방금 확정한 주문 날짜로 목록을 맞춰 바로 보이게
+    setOrderListStatus("all"); // 상태 필터가 남아 방금 주문이 안 보이는 일 방지
     setCurrentOrderId(order.id);
     setView("orders");
     flash(`${doneMsg} (데모 모드 — 새로고침 시 초기화)`);
@@ -1333,8 +1338,8 @@ export default function HomePage() {
   }
 
   const currentOrder = orders.find((o) => o.id === currentOrderId) ?? null;
-  // 주문 목록 전용 날짜 필터(""=전체). 전역 orders는 그대로 → 합산표(W10)·월합계(W12) 무영향.
-  const ordersForList = orderListDate ? orders.filter((o) => o.date === orderListDate) : orders;
+  // 주문 목록 전용 날짜·상태 필터. 전역 orders는 그대로 → 합산표(W10)·월합계(W12) 무영향.
+  const ordersForList = filterOrdersForList(orders, orderListDate, orderListStatus);
 
   return (
     <Shell
@@ -1394,10 +1399,10 @@ export default function HomePage() {
                   : "오늘 주문이 아직 없습니다 · 합산표 열기"}
               </span>
             </button>
-            {/* 가격 대기 — quantity_confirmed만(날짜 무관) */}
+            {/* 가격 대기 — quantity_confirmed만(날짜 무관) → 가격 대기만 보이는 목록으로 진입 */}
             <button
               className="stat-card clickable"
-              onClick={() => { setOrderListDate(""); setView("orders"); }}
+              onClick={() => { setOrderListDate(""); setOrderListStatus("quantity_confirmed"); setView("orders"); }}
             >
               <span className="stat-label">가격 대기</span>
               <span className={todayQueue.pricePendingCount > 0 ? "stat count-warn" : "stat"}>
@@ -1410,7 +1415,7 @@ export default function HomePage() {
             {/* 명세서 준비 — 오늘 confirmed만 */}
             <button
               className="stat-card clickable"
-              onClick={() => { setOrderListDate(today()); setView("orders"); }}
+              onClick={() => { setOrderListDate(today()); setOrderListStatus("all"); setView("orders"); }}
             >
               <span className="stat-label">명세서 준비</span>
               <span className="stat">{todayQueue.todayConfirmedCount}건</span>
@@ -1456,7 +1461,7 @@ export default function HomePage() {
                 {todayQueue.todayConfirmedCount > 0 && (
                   <li>
                     <span>오늘 명세서 발행 가능 {todayQueue.todayConfirmedCount}건</span>
-                    <button className="link" onClick={() => { setOrderListDate(today()); setView("orders"); }}>
+                    <button className="link" onClick={() => { setOrderListDate(today()); setOrderListStatus("all"); setView("orders"); }}>
                       주문 목록
                     </button>
                   </li>
@@ -1890,19 +1895,37 @@ export default function HomePage() {
                   aria-label="주문 목록 날짜 필터"
                 />
                 <button onClick={() => setOrderListDate(today())}>오늘</button>
-                <button onClick={() => setOrderListDate("")} disabled={orderListDate === ""}>
+                <select
+                  value={orderListStatus}
+                  onChange={(e) => setOrderListStatus(e.target.value as OrderListStatusFilter)}
+                  style={{ maxWidth: 150 }}
+                  aria-label="주문 목록 상태 필터"
+                >
+                  <option value="all">상태: 전체</option>
+                  <option value="quantity_confirmed">가격 대기</option>
+                  <option value="confirmed">최종 확정</option>
+                </select>
+                <button
+                  onClick={() => { setOrderListDate(""); setOrderListStatus("all"); }}
+                  disabled={orderListDate === "" && orderListStatus === "all"}
+                >
                   전체 보기
                 </button>
                 <button onClick={exportOrdersCsv} disabled={orders.length === 0}>CSV 내보내기</button>
                 <span className="muted">
-                  {orderListDate ? `${orderListDate} · ${ordersForList.length}건` : `전체 · ${orders.length}건`}
+                  {orderListDate ? orderListDate : "전체 날짜"}
+                  {orderListStatus === "quantity_confirmed" ? " · 가격 대기만" : orderListStatus === "confirmed" ? " · 최종 확정만" : ""}
+                  {` · ${ordersForList.length}건`}
                 </span>
+                {orderListStatus === "quantity_confirmed" && (
+                  <span className="badge amber">가격 대기 목록</span>
+                )}
               </div>
               {ordersForList.length === 0 ? (
                 <div className="empty-state">
-                  <strong>이 날짜의 주문이 없습니다.</strong>
-                  <p className="muted">다른 날짜를 선택하거나 [전체 보기]를 눌러보세요.</p>
-                  <button onClick={() => setOrderListDate("")}>전체 보기</button>
+                  <strong>이 조건의 주문이 없습니다.</strong>
+                  <p className="muted">날짜·상태 필터를 바꾸거나 [전체 보기]를 눌러보세요.</p>
+                  <button onClick={() => { setOrderListDate(""); setOrderListStatus("all"); }}>전체 보기</button>
                 </div>
               ) : (
                 <div className="table-wrap">
