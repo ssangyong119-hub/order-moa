@@ -57,6 +57,7 @@ import {
 import { searchProductsForOrder } from "@/lib/product-search";
 import { focusNextPriceInput, normalizePriceInput } from "@/lib/price-input";
 import { purchaseDraftScopeKey } from "@/lib/purchase-draft-scope";
+import { buildTodayWorkQueue } from "@/lib/dashboard-queue";
 import { CustomerManagementView } from "./customer-management-view";
 import { SupplierManagementView } from "./supplier-management-view";
 import { ProductManagementView } from "./product-management-view";
@@ -1104,6 +1105,9 @@ export default function HomePage() {
     };
   }, [view, db, companyId]);
 
+  // W23-R4: 오늘 업무 큐 — 실제 주문 상태의 읽기 전용 집계(저장값 없음, cancelled 비포함)
+  const todayQueue = useMemo(() => buildTodayWorkQueue(orders, products, todayKst()), [orders, products]);
+
   const purchaseSelectedSet = useMemo(() => new Set(purchaseSelectedIds), [purchaseSelectedIds]);
   // 발주 문장 인사말용 회사명 (DB=로그인 회사명, 데모=샘플 회사명)
   const companyName =
@@ -1352,14 +1356,18 @@ export default function HomePage() {
         <section>
           <div className="workbench-head">
             <div>
-              <p className="eyebrow">오늘 업무</p>
+              <p className="eyebrow">
+                {Number(todayQueue.today.slice(5, 7))}월 {Number(todayQueue.today.slice(8, 10))}일 오늘 업무
+              </p>
               <h2>
                 {(session.status === "ready" ? session.companyName : data.company.name) ?? "사장님"}님,
-                안녕하세요
+                {todayQueue.unhandledCount > 0
+                  ? ` 미처리 ${todayQueue.unhandledCount}건이 있습니다`
+                  : " 안녕하세요"}
               </h2>
               <p className="muted">
-                카톡/문자 발주를 붙여넣고, 거래처별 단가로 확정한 뒤 품목별 합산표와 거래명세서를
-                확인합니다.
+                실제 주문 상태를 그대로 집계한 오늘 업무 큐입니다. 발주 붙여넣기 → 합산·매입처 발주 →
+                가격 마감 → 거래명세서 순서로 처리합니다.
               </p>
             </div>
             <button className="primary big cta-main" onClick={() => setView("paste")}>
@@ -1368,76 +1376,93 @@ export default function HomePage() {
           </div>
 
           <div className="ops-grid" style={{ marginBottom: 14 }}>
-            <button className="stat-card clickable" onClick={() => setView("orders")}>
-              <span className="stat-label">{session.status === "ready" ? "저장된 주문" : "확정한 주문"}</span>
-              <span className="stat">{orders.length}건</span>
-              <span className="stat-note">
-                {session.status === "ready" ? "새로고침해도 유지 · 목록 열기" : "주문 목록으로 이동"}
-              </span>
+            {/* 새 발주 — 진입점(저장된 상태가 아니므로 건수화하지 않음) */}
+            <button className="stat-card clickable" onClick={() => setView("paste")}>
+              <span className="stat-label">새 발주</span>
+              <span className="stat">＋</span>
+              <span className="stat-note">카톡/문자 발주 붙여넣기</span>
             </button>
-            <button className="stat-card clickable" onClick={() => setView("aggregate")}>
-              <span className="stat-label">합산 품목 종류</span>
-              <span className="stat">{aggregate.length}종</span>
-              <span className="stat-note">매입처 발주 문장 확인</span>
-            </button>
-            <div className="stat-card">
-              <span className="stat-label">저장 상태</span>
-              <span className={session.status === "ready" ? "status-text ok" : "status-text warn"}>
-                {session.status === "ready" ? "DB 저장 모드" : "데모 모드"}
+            {/* 매입처 발주 — 오늘 주문에서 파생 */}
+            <button className="stat-card clickable" onClick={() => { setAggDate(today()); setView("aggregate"); }}>
+              <span className="stat-label">매입처 발주</span>
+              <span className="stat">
+                {todayQueue.todayOrderCount > 0 ? `${todayQueue.todayItemKinds}종` : "-"}
               </span>
               <span className="stat-note">
-                {session.status === "ready" ? "새로고침 후에도 유지" : "새로고침 시 초기화"}
+                {todayQueue.todayOrderCount > 0
+                  ? `오늘 주문 ${todayQueue.todayOrderCount}건 · 매입처 ${todayQueue.todaySupplierGroups}곳 · 합산표 열기`
+                  : "오늘 주문이 아직 없습니다 · 합산표 열기"}
               </span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-label">다음 단계</span>
-              <span className="status-text">저장 주문 활용</span>
-              <span className="stat-note">날짜별 합산표 재조회 · 명세서 재출력 준비</span>
-            </div>
+            </button>
+            {/* 가격 대기 — quantity_confirmed만(날짜 무관) */}
+            <button
+              className="stat-card clickable"
+              onClick={() => { setOrderListDate(""); setView("orders"); }}
+            >
+              <span className="stat-label">가격 대기</span>
+              <span className={todayQueue.pricePendingCount > 0 ? "stat count-warn" : "stat"}>
+                {todayQueue.pricePendingCount}건
+              </span>
+              <span className="stat-note">
+                {todayQueue.pricePendingCount > 0 ? "가격 마감이 필요합니다" : "마감 대기 주문 없음"}
+              </span>
+            </button>
+            {/* 명세서 준비 — 오늘 confirmed만 */}
+            <button
+              className="stat-card clickable"
+              onClick={() => { setOrderListDate(today()); setView("orders"); }}
+            >
+              <span className="stat-label">명세서 준비</span>
+              <span className="stat">{todayQueue.todayConfirmedCount}건</span>
+              <span className="stat-note">오늘 최종 확정 주문 · 주문 목록 열기</span>
+            </button>
           </div>
 
-          <div className="dashboard-grid">
-            <div className="panel">
-              <h3>현재 가능한 업무</h3>
-              <div className="table-wrap compact">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>흐름</th>
-                      <th>상태</th>
-                      <th>바로가기</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>발주 원문 붙여넣기</td>
-                      <td><span className="badge ok">사용 가능</span></td>
-                      <td><button className="link" onClick={() => setView("paste")}>열기</button></td>
-                    </tr>
-                    <tr>
-                      <td>품목별 합산표</td>
-                      <td><span className="badge ok">사용 가능</span></td>
-                      <td><button className="link" onClick={() => setView("aggregate")}>열기</button></td>
-                    </tr>
-                    <tr>
-                      <td>주문 목록/거래명세서</td>
-                      <td><span className="badge ok">사용 가능</span></td>
-                      <td><button className="link" onClick={() => setView("orders")}>열기</button></td>
-                    </tr>
-                  </tbody>
-                </table>
+          <div className="panel">
+            <h3>지금 먼저 할 일</h3>
+            {todayQueue.pricePendingCount === 0 && todayQueue.todayOrderCount === 0 ? (
+              <div className="empty-state compact">
+                <strong>지금 처리할 일이 없습니다.</strong>
+                <p className="muted">새 발주가 오면 붙여넣기로 시작하세요.</p>
+                <button className="primary" onClick={() => setView("paste")}>발주 붙여넣기</button>
               </div>
-            </div>
-            <div className="panel">
-              <h3>진행 상태</h3>
-              <ul className="ready-list">
-                <li><span>기준정보 4종 (거래처·매입처·품목·단가)</span><span className="badge ok">완료</span></li>
-                <li><span>발주 원문 저장·삭제</span><span className="badge ok">완료</span></li>
-                <li><span>저장 주문 합산표 (날짜·거래처별)</span><span className="badge ok">완료</span></li>
-                <li><span>거래명세서 재출력 · 거래처별 월 합계</span><span className="badge ok">완료</span></li>
-                <li><span>미수금·세금 근거</span><span className="badge err">2차</span></li>
+            ) : (
+              <ul className="queue-list">
+                {todayQueue.pricePendingOrders.map((o) => (
+                  <li key={o.id}>
+                    <span>
+                      {o.customerName} · {o.date} · 품목 {o.lineCount}개 ·{" "}
+                      <span className="badge amber">가격 대기</span>
+                    </span>
+                    <button
+                      className="link"
+                      onClick={() => { setCurrentOrderId(o.id); setView("priceClose"); }}
+                    >
+                      가격 마감
+                    </button>
+                  </li>
+                ))}
+                {todayQueue.todayOrderCount > 0 && (
+                  <li>
+                    <span>
+                      오늘 주문 {todayQueue.todayOrderCount}건 · 품목 {todayQueue.todayItemKinds}종 ·
+                      매입처 {todayQueue.todaySupplierGroups}곳 발주 준비
+                    </span>
+                    <button className="link" onClick={() => { setAggDate(today()); setView("aggregate"); }}>
+                      합산표
+                    </button>
+                  </li>
+                )}
+                {todayQueue.todayConfirmedCount > 0 && (
+                  <li>
+                    <span>오늘 명세서 발행 가능 {todayQueue.todayConfirmedCount}건</span>
+                    <button className="link" onClick={() => { setOrderListDate(today()); setView("orders"); }}>
+                      주문 목록
+                    </button>
+                  </li>
+                )}
               </ul>
-            </div>
+            )}
           </div>
         </section>
       )}

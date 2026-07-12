@@ -235,6 +235,13 @@ td input.qty,td input.price{max-width:96px}
   padding:9px 0;border-bottom:1px solid var(--line-soft);font-size:.88rem;
 }
 .ready-list li:last-child{border-bottom:none}
+/* W23-R4 오늘 업무 큐 — ready-list와 같은 결, 행 단위 행동 버튼 */
+.queue-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.queue-list li{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  padding:10px 0;border-bottom:1px solid var(--line-soft);font-size:.9rem;
+}
+.queue-list li:last-child{border-bottom:none}
 .supplier-sections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:10px 0}
 .supplier-section{
   border:1px solid var(--line);border-radius:var(--radius);
