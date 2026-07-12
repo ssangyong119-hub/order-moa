@@ -5,7 +5,7 @@
 
 ## 확정된 설계 결정 (설계서 §12 요약 — 구현 시 그대로 반영)
 
-- **D1 채택**: `corrected_from_order_id` + **정정 시작 표식 `correction_started_at`** + 자기참조 CHECK + 활성 정정본 부분 유니크 + 별도 가드 트리거(0012). 표식 쓰기 규칙: INSERT는 null만, null→값 설정은 confirmed→cancelled 전이에서만, 기록 후 수정·삭제 불가(설계서 §5.1·§5.4-⑤).
+- **D1 채택**: `corrected_from_order_id` + **정정 시작 표식 `correction_started_at`** + 자기참조 CHECK + 활성 정정본 부분 유니크 + 별도 가드 트리거(0012). 표식 쓰기 규칙: INSERT는 null만, null→값 설정은 confirmed→cancelled 전이에서만, 기록 후 수정·삭제 불가. **정정본 INSERT의 원본 검사 = cancelled AND 표식 not null(④')** — 표식 없는 보상 취소를 원본으로 쓰는 우회를 DB에서도 차단(설계서 §5.1·§5.4).
 - **D2 채택**: DB 쓰기는 정정 진입 시가 아니라 **[정정 확정] 클릭 시에만** 시작(취소→생성 일괄). 원주문 조건부 취소와 표식 기록은 **하나의 UPDATE**.
 - **D3 채택(복구 한정 — DB 표식으로 강제)**: cancelled 주문 재발행은 **세 조건 전부** 충족 시에만 — ⓐ cancelled ⓑ `correction_started_at` not null ⓒ 활성 정정본 없음. 표식 없는 cancelled(일반 저장 실패 보상 취소 등)는 이력에 보이되 재발행 버튼 절대 미노출. 일반 취소→재발행 기능이 아니다.
 - **D4 채택**: 정정 중 거래처 변경 불허(거래처 select 비활성).
@@ -45,10 +45,10 @@ confirmed 주문의 `취소 확인 → 검수표로 복사 → 수정 → 새 �
 ## 구현 순서 (설계서 §10 — 테스트 먼저)
 
 1. `web/supabase/migrations/0012_order_correction_link.sql` — 설계서 §5.4 초안 기반 작성만(링크 컬럼 + `correction_started_at` 표식 + CHECK + 부분 유니크 + 가드 트리거 ④⑤). **파일 작성만 — Codex 검수와 사용자 SQL Editor 적용 전에는 절대 실행 금지.**
-2. `docs/guide-apply-0012-order-correction-link.md` — 적용 절차 + G1~G11 실측 스크립트(설계서 §9.3, guide-apply-0011 형식·begin…rollback 래핑).
+2. `docs/guide-apply-0012-order-correction-link.md` — 적용 절차 + G1~G12 실측 스크립트(설계서 §9.3, guide-apply-0011 형식·begin…rollback 래핑).
 3. `web/src/lib/order-correction.ts` + 테스트 — 순수 헬퍼(설계서 §9.1: orderToParsedLines·canCorrectOrder·컨텍스트 초기화·orders 교체).
 4. `web/src/lib/order-store.ts` + 테스트 — `OrderStatus`에 "cancelled"·`correctedFromOrderId`·`correctionStartedAt`·**`loadOrders` 반환을 `Promise<{ orders: ConfirmedOrder[]; correctionSchemaReady: boolean }>`로 변경**(설계서 §6.3: 정상 조회=true, 0012 컬럼 누락 폴백=false)·ORDER_SELECT 폴백(0012 컬럼 2종, `isMissingColumnError`)·`toOrderInsert/saveOrder` opts·`correctConfirmedOrder`(**원주문 조건부 취소+표식 기록을 단일 UPDATE로** 수행하는 내부 단계 + 재조회 분기: 표식 null인 cancelled는 throw)·`loadCancelledOrders`(설계서 §6.2~6.3, mock/반환계약 테스트 §9.2 — 기존 fake 빌더 재사용). **단독 `cancelOrder`는 export하지 않는다(D6 제외).**
-5. `web/src/app/page.tsx` — **`loadOrders` 호출부(298행) 구조 분해 + `correctionSchemaReady` 상태 신설**(false면 정정 UI 전부 숨김)·[정정] 버튼(confirmed 행)·[정정본] 뱃지·검수표 정정 모드(배너·거래처 잠금·버튼 라벨)·이력 토글(재발행 버튼은 **D3 세 조건 행에만**, 표식 없는 취소 행은 표시만)·데모 동등 동작(표식 메모리 재현 포함)·문구(설계서 §6.4·§11). status 소비처 전수 재점검(설계서 §6.3 목록). **단독 [취소] 버튼은 만들지 않는다(D6 제외).**
+5. `web/src/app/page.tsx` — **`loadOrders` 호출부(단 1곳 — ab94b2a 기준 302행 부근, 심볼로 재탐색) 구조 분해 + `correctionSchemaReady` 상태 신설**(false면 정정 UI 전부 숨김)·[정정] 버튼(confirmed 행)·[정정본] 뱃지·검수표 정정 모드(배너·거래처 잠금·버튼 라벨)·이력 토글(재발행 버튼은 **D3 세 조건 행에만**, 표식 없는 취소 행은 표시만)·데모 동등 동작(표식 메모리 재현 포함)·문구(설계서 §6.4·§11). status 소비처 전수 재점검(설계서 §6.3 목록 — R4의 `dashboard-queue.ts`·`order-list-filter.ts` 포함). **R4 상태 필터(`OrderListStatusFilter`)에 "cancelled"를 추가하지 말 것**(이력은 별도 조회+별도 배열 — 설계서 §6.4). **단독 [취소] 버튼은 만들지 않는다(D6 제외).**
 6. 검증: root/web `npm test` · `npm run build` · `npm audit --audit-level=low` · `git diff --check`. 시작 시 기존 테스트 수 기록(기준선 web 186/186 + R4 증가분).
 
 ## 브라우저 smoke (데모 모드)
@@ -57,7 +57,7 @@ confirmed 주문의 `취소 확인 → 검수표로 복사 → 수정 → 새 �
 
 ## DB 적용·실측 (게이트 — Claude가 하지 않음)
 
-- Codex 승인 → 사용자 SQL Editor에서 0012 적용(`Success. No rows returned`) → G1~G11 실측 → 로그인 DB 모드에서 정정 1건 + F5 유지 + 0012 미적용 폴백은 적용 전에 미리 확인.
+- Codex 승인 → 사용자 SQL Editor에서 0012 적용(`Success. No rows returned`) → G1~G12 실측 → 로그인 DB 모드에서 정정 1건 + F5 유지 + 0012 미적용 폴백은 적용 전에 미리 확인.
 - 적용 전에는 DB smoke를 "완료"로 보고하지 말 것(0011 관례).
 
 ## 문서와 최종 보고
