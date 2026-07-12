@@ -53,7 +53,8 @@
 | DB 쓰기 시점 | **"정정 확정" 클릭 시 일괄**: ① 원주문 조건부 취소 → ② saveOrder(정정본, confirmed). 진입 시 다이얼로그는 의도 고지만 하고 아무것도 쓰지 않는다 |
 | 취소·생성 순서 | **취소 선행 고정**(DB 트리거도 이 순서를 강제) — 이중 집계(초과 발주·매출 중복)가 구조적으로 불가능 |
 | 원주문 연결 | `ordermoa_orders.corrected_from_order_id uuid null self-FK` + 자기참조 CHECK + **활성 정정본 부분 유니크** + 교차회사·원본상태·불변 트리거(0012 초안 §5.4) |
-| 정정 버튼 노출 | confirmed만. qc는 기존 [가격 마감]으로(정정 아님). cancelled는 이력 보기에서만 — **정정 실패 복구용 재발행**만 노출(D3 복구 한정) |
+| 정정 시작 표식 | `ordermoa_orders.correction_started_at timestamptz null` — **정정 확정이 원주문을 confirmed→cancelled로 바꾸는 그 조건부 UPDATE에서만 기록**(같은 문장). 일반 주문·일반 취소(보상 포함)는 항상 null. INSERT 주입·사후 설정·수정·삭제 전부 트리거 차단(§5.4-⑤) |
+| 정정 버튼 노출 | confirmed만. qc는 기존 [가격 마감]으로(정정 아님). cancelled는 이력 보기에서만 — **`correction_started_at`이 있는 행(=정정 절차가 취소까지 갔던 원주문)** 중 활성 정정본이 없는 행에만 재발행 노출(D3 복구 한정을 DB 표식으로 강제) |
 | 이력 추적 | 주문 목록 "취소 이력 보기" 토글 + 별도 조회 `loadCancelledOrders` — **전역 orders 배열에 cancelled를 섞지 않는다** |
 | 명세서 | 새 주문 = 기존 note 뷰 그대로 발행. 원주문 명세서는 재출력 비제공(1차), 내역·원문은 이력에서 열람 |
 
@@ -64,7 +65,8 @@
 | `confirmed` | **허용** — 본 절차의 유일한 정식 대상 | 기준서 §3 R5b. 스냅샷은 가드로 동결이므로 취소+재발행만 가능 |
 | `quantity_confirmed` | **거절(버튼 미노출)** — 기존 [가격 마감]으로 안내 | qc는 라인이 아직 동결 전(C2)이라 정정 절차가 필요 없다. 혼용 금지 원칙(§0). qc 라인 편집 UX 자체는 R5 범위(재설계 §13)로 별개 |
 | `cancelled` + 활성 정정본 있음 | **거절** — "이미 정정된 주문" | 같은 원주문의 이중 정정 = 이중 집계. 부분 유니크 인덱스가 DB에서도 차단(§5.4-③) |
-| `cancelled` + 활성 정정본 없음 | **D3 채택(복구 한정)** — 이력 보기의 "정정본 만들기(재발행)". **정정 절차가 취소 후 생성 실패한 경우의 복구 용도로만** 노출하며 일반적 취소→재발행 기능이 아니다 | 부분 실패(F3·F4)로 취소만 남은 원주문을 완결하는 유일한 경로. 취소 종결(C1)이라 un-cancel은 불가 |
+| `cancelled` + `correction_started_at` **null** | **거절(버튼 절대 미노출)** — 이력에는 [취소됨]로 보이기만 한다 | 정정 절차가 시작된 적 없는 취소(예: saveOrder 저장 실패 보상 취소). 여기에 재발행을 허용하면 사실상 일반 취소→재발행 = **D6 거절 원칙 위반**. 표식이 없으므로 구분이 DB에서 강제된다 |
+| `cancelled` + `correction_started_at` **있음** + 활성 정정본 없음 | **D3 채택(복구 한정)** — 이력 보기의 "정정본 만들기(재발행)" | **정정 확정이 취소까지 갔다가 생성에 실패(F3·F4)한 원주문**만 해당. 취소된 정정본 자식(F4 잔여)은 표식이 null이라 자동 제외. 취소 종결(C1)이라 un-cancel은 불가 — 재발행이 유일한 완결 경로 |
 | 데모 모드 | DB 모드와 동일 규칙(메모리) | smoke 검증 가능해야 함 |
 
 거절 시 동작: 버튼 미노출이 기본. 경합으로 뚫린 경우(두 탭)는 DB가 막고(조건부 취소 0행·유니크 위반) 앱은 "이미 처리된 주문입니다. 목록을 새로고침해주세요." 계열 메시지로 안내한다(closeOrderPrices의 기존 문구 패턴).
@@ -98,6 +100,7 @@
 | 회사 경계 | 트리거로 `원주문.company_id = NEW.company_id` 강제 | FK는 RLS 우회(C8) → 교차회사 방어는 트리거가 담당(0001/0006 하우스 패턴) |
 | 원본 상태 | 트리거로 **원주문 status='cancelled'일 때만 링크 insert 허용** | "취소 선행" 순서를 DB가 강제 → 이중 집계 창이 원천 봉쇄. 재발행(D3)도 대상이 cancelled라 동일 규칙 통과 |
 | 순환 방지 | ① 링크는 **insert 시에만 설정, 이후 UPDATE로 변경 금지**(트리거) ② `check (corrected_from_order_id <> id)` | insert 전용 링크는 기존 행만 가리킬 수 있어 그래프가 구조적으로 비순환(DAG). CHECK는 1줄 방어 |
+| 정정 시작 표식 | `correction_started_at timestamptz null`. **쓰기 규칙(트리거 강제)**: ⓐ INSERT는 null만 허용(주입 차단) ⓑ UPDATE의 null→값 설정은 **OLD.status='confirmed' AND NEW.status='cancelled'인 같은 전이에서만** 허용 ⓒ 한 번 기록되면 수정·삭제(null화) 불가 | 링크는 정정본→원주문 단방향이라 **F3(취소 후 생성 실패)에서는 원주문에 아무 흔적이 없다**. 표식이 "이 취소는 정정 절차의 취소"임을 원주문 쪽에 남겨 D3 재발행을 그 경우로만 한정(D6 위반 차단). 일반 취소·보상 취소는 표식을 건드리지 않아 null 유지 |
 | 멱등성 | `add column if not exists` · `drop constraint/trigger if exists → add/create` · `create unique index if not exists` · `create or replace function` | 0006/0010/0011과 동일한 재적용 안전 패턴. 데이터 무접촉·backfill 0건·RLS 무변경 |
 
 ### 5.2 RLS·기존 가드와의 공존
@@ -110,11 +113,11 @@
 
 | 단계 | DB 조작 | 0010/0011 판정 |
 |---|---|---|
-| ① 원주문 취소 | `orders UPDATE status='cancelled' WHERE id=원주문 AND status='confirmed'` | 허용(`confirmed→cancelled`) · 조건부라 경합 시 0행 |
+| ① 원주문 취소+표식 | `orders UPDATE status='cancelled', correction_started_at=now WHERE id=원주문 AND status='confirmed'` — **취소와 표식 기록은 이 한 UPDATE** | 허용(`confirmed→cancelled`) · 조건부라 경합 시 0행. 0012 트리거 ⓑ(confirmed→cancelled 전이에서의 null→값)와 정확히 일치 |
 | ② 정정본 insert | `orders INSERT (status='quantity_confirmed', corrected_from_order_id=원주문)` | 상태 가드는 UPDATE 전용이라 무관. 0012 트리거: 동일회사·원본 cancelled 검사 통과 |
 | ③ 라인 insert | `order_items INSERT (order=정정본)` | 허용(대상이 qc — 0011 ② INSERT 가드 통과, saveOrder 기존 경로 그대로) |
 | ④ 승격 | `orders UPDATE status='confirmed' WHERE id=정정본 AND status='quantity_confirmed'` | 허용(`qc→confirmed`) |
-| (실패 보상) | `orders UPDATE status='cancelled' WHERE id=정정본` | 허용(`qc→cancelled`) — saveOrder 기존 보상. 0012 트리거의 UPDATE 분기는 링크 불변만 검사하므로 통과 |
+| (실패 보상) | `orders UPDATE status='cancelled' WHERE id=정정본` | 허용(`qc→cancelled`) — saveOrder 기존 보상. **표식 무접촉(null 유지)** → 0012 트리거 통과, 취소된 정정본 자식은 재발행 대상이 아니게 됨(§3) |
 
 ### 5.4 0012 SQL 초안 (참고용 — 이 세션은 마이그레이션 파일을 만들지 않는다)
 
@@ -123,6 +126,11 @@
 -- ① 링크 컬럼 (null = 일반 주문)
 alter table public.ordermoa_orders
   add column if not exists corrected_from_order_id uuid references public.ordermoa_orders(id);
+
+-- ①' 정정 시작 표식 (null = 정정 절차가 취소까지 간 적 없음 — D3 복구 식별용.
+--    정정 확정의 "원주문 confirmed→cancelled 조건부 UPDATE"에서만 같은 문장으로 기록된다.)
+alter table public.ordermoa_orders
+  add column if not exists correction_started_at timestamptz;
 
 -- ② 자기 참조 금지 (insert 전용 링크라 구조상 불가하지만 1줄 방어)
 alter table public.ordermoa_orders
@@ -136,27 +144,45 @@ create unique index if not exists ordermoa_uq_orders_active_correction
   on public.ordermoa_orders(corrected_from_order_id)
   where corrected_from_order_id is not null and status <> 'cancelled';
 
--- ④ 정정 링크 가드: 교차회사 차단 + 원주문은 cancelled만 + 링크는 insert 시에만(불변 → 순환 구조 차단)
+-- ④⑤ 정정 링크·표식 가드: 교차회사 차단 + 원주문은 cancelled만 + 링크는 insert 시에만(불변 → 순환 구조 차단)
+--    + correction_started_at 쓰기 규칙(ⓐ insert 주입 차단 ⓑ confirmed→cancelled 전이에서만 설정 ⓒ 기록 후 불변)
 create or replace function public.ordermoa_check_orders_correction()
 returns trigger language plpgsql as $$
 declare src_company uuid; src_status text;
 begin
-  if TG_OP = 'UPDATE' then
-    if NEW.corrected_from_order_id is distinct from OLD.corrected_from_order_id then
-      raise exception 'ordermoa: 정정 링크는 생성 후 변경할 수 없습니다 (order %)', NEW.id;
+  if TG_OP = 'INSERT' then
+    -- ⑤ⓐ 표식 주입 차단: 정정 시작 표식은 INSERT로 만들 수 없다(정정의 원주문 취소 UPDATE에서만 생김)
+    if NEW.correction_started_at is not null then
+      raise exception 'ordermoa: correction_started_at은 insert로 설정할 수 없습니다 (order %)', NEW.id;
+    end if;
+    if NEW.corrected_from_order_id is null then
+      return NEW;
+    end if;
+    select company_id, status into src_company, src_status
+      from public.ordermoa_orders where id = NEW.corrected_from_order_id;
+    if src_company is null or src_company <> NEW.company_id then
+      raise exception 'cross-company reference (ordermoa_orders.corrected_from_order_id)';
+    end if;
+    if src_status <> 'cancelled' then
+      raise exception 'ordermoa: 취소된 주문만 정정 원본이 될 수 있습니다 (원주문 %, 상태 %)', NEW.corrected_from_order_id, src_status;
     end if;
     return NEW;
   end if;
-  if NEW.corrected_from_order_id is null then
-    return NEW;
+
+  -- UPDATE
+  -- ④ 링크 불변
+  if NEW.corrected_from_order_id is distinct from OLD.corrected_from_order_id then
+    raise exception 'ordermoa: 정정 링크는 생성 후 변경할 수 없습니다 (order %)', NEW.id;
   end if;
-  select company_id, status into src_company, src_status
-    from public.ordermoa_orders where id = NEW.corrected_from_order_id;
-  if src_company is null or src_company <> NEW.company_id then
-    raise exception 'cross-company reference (ordermoa_orders.corrected_from_order_id)';
+  -- ⑤ⓒ 표식 불변: 한 번 기록한 correction_started_at은 수정·삭제(null화) 불가
+  if OLD.correction_started_at is not null
+     and NEW.correction_started_at is distinct from OLD.correction_started_at then
+    raise exception 'ordermoa: correction_started_at은 기록 후 수정·삭제할 수 없습니다 (order %)', NEW.id;
   end if;
-  if src_status <> 'cancelled' then
-    raise exception 'ordermoa: 취소된 주문만 정정 원본이 될 수 있습니다 (원주문 %, 상태 %)', NEW.corrected_from_order_id, src_status;
+  -- ⑤ⓑ 표식 설정(null→값)은 정정의 원주문 취소(confirmed→cancelled) 전이에서만
+  if OLD.correction_started_at is null and NEW.correction_started_at is not null
+     and not (OLD.status = 'confirmed' and NEW.status = 'cancelled') then
+    raise exception 'ordermoa: correction_started_at은 confirmed→cancelled 전이에서만 기록할 수 있습니다 (order %)', NEW.id;
   end if;
   return NEW;
 end;
@@ -185,22 +211,22 @@ create trigger ordermoa_trg_orders_correction
 |---|---|
 | `toOrderInsert(..., opts?)` 확장 | `opts.correctedFromOrderId` 있을 때만 `corrected_from_order_id` 키 포함(0012 미적용 DB에서 일반 주문 insert 불변), `opts.source`로 `'correction'` 지정 가능 |
 | `saveOrder(..., opts?)` 확장 | opts를 toOrderInsert로 전달. qc insert→items→승격·보상 로직 무변경(C3) |
-| (내부) 원주문 조건부 취소 | `correctConfirmedOrder` **내부 전용** 단계 — 별도 export도, 단독 [취소] 버튼도 없다(D6 거절). `UPDATE status='cancelled' WHERE company_id AND id AND status='confirmed'` + `.select("id")`. 1행=지금 취소됨, 0행=현재 status 재조회로 분기(아래) |
-| `correctConfirmedOrder(db, companyId, original, orderDate, lines, products)` 신규 | ① 원주문 조건부 취소(위) → 0행이면 재조회: **cancelled + 활성 정정본 없음이면 진행**(F2 경합과 D3 재발행을 한 분기로 흡수), 활성 정정본 있으면 throw "이미 정정된 주문", confirmed/qc 등 그 외 throw ② `saveOrder(..., status:"confirmed", {correctedFromOrderId: original.id, source:"correction"})` ③ 반환: 정정본 ConfirmedOrder |
+| (내부) 원주문 조건부 취소+표식 | `correctConfirmedOrder` **내부 전용** 단계 — 별도 export도, 단독 [취소] 버튼도 없다(D6 거절). **취소와 정정 시작 표식은 하나의 UPDATE**: `UPDATE {status:'cancelled', correction_started_at:<now ISO>} WHERE company_id AND id AND status='confirmed'` + `.select("id")`. 1행=지금 취소됨(표식 기록됨), 0행=현재 상태 재조회로 분기(아래). 트리거 ⑤ⓑ가 이 전이 외의 표식 설정을 차단 |
+| `correctConfirmedOrder(db, companyId, original, orderDate, lines, products)` 신규 | ① 원주문 조건부 취소+표식(위) → 0행이면 재조회: **cancelled + `correction_started_at` not null + 활성 정정본 없음이면 진행**(F2 경합 재시도와 D3 복구 재발행을 한 분기로 흡수), 활성 정정본 있으면 throw "이미 정정된 주문", **표식 null인 cancelled**(일반 취소·보상 취소)면 throw "정정 절차의 취소가 아님"(D6 위반 차단), confirmed/qc 등 그 외 throw ② `saveOrder(..., status:"confirmed", {correctedFromOrderId: original.id, source:"correction"})` ③ 반환: 정정본 ConfirmedOrder |
 | `loadCancelledOrders(db, companyId, products)` 신규 | `ORDER_SELECT` + `.eq("status","cancelled")` 정렬 동일. **전역 orders와 절대 병합 금지** — 이력 화면 전용 상태로만 사용 |
 
 ### 6.3 타입·조회 폴백
 
-- `OrderStatus`에 `"cancelled"` 추가 + `mapDbOrder` 정규화 확장(`cancelled → "cancelled"`, 나머지 기존 규칙). `ConfirmedOrder`에 `correctedFromOrderId?: string | null` 추가.
+- `OrderStatus`에 `"cancelled"` 추가 + `mapDbOrder` 정규화 확장(`cancelled → "cancelled"`, 나머지 기존 규칙). `ConfirmedOrder`에 `correctedFromOrderId?: string | null` · `correctionStartedAt?: string | null` 추가(후자는 이력 화면의 D3 재발행 버튼 판정용).
 - **status 소비처 전수 확인 목록**(cancelled 유입 지점은 이력 상태뿐이지만 타입 확장 시 컴파일·의미 재점검): page.tsx 849(문구)·1209·1211(CSV)·1901~1936(목록 뱃지/버튼)·1950·1963(가격 마감 가드)·1975·1989(명세서 가드)·1488(월합계 필터). 월합계는 `=== "confirmed"` 필터라 안전, 합산표는 전역 orders에 cancelled가 없어 안전.
-- `ORDER_SELECT`에 `corrected_from_order_id` 추가 + **0012 미적용 폴백**: `isMissingColumnError(error, "corrected_from_order_id")`면 기존 컬럼 목록으로 재시도(C9 패턴).
+- `ORDER_SELECT`에 0012 컬럼 2종(`corrected_from_order_id`, `correction_started_at`)을 함께 추가 + **0012 미적용 폴백**: 둘 중 어느 컬럼이든 `isMissingColumnError`면 두 컬럼 모두 뺀 기존 목록으로 재시도(C9 패턴 — 두 컬럼은 같은 0012에서 생기므로 폴백 단계는 1개).
 
 #### `loadOrders` 반환 계약 (정확히 명시 — 구현자가 추측하지 않도록)
 
 현재 `loadOrders`는 **주문 배열만** 반환한다(`Promise<ConfirmedOrder[]>`). 폴백 성공 여부를 화면이 알아야 정정 UI를 조건부로 숨길 수 있으므로 반환을 객체로 바꾼다.
 
 - **변경 후 시그니처: `Promise<{ orders: ConfirmedOrder[]; correctionSchemaReady: boolean }>`**.
-- `corrected_from_order_id`를 포함한 조회가 성공하면 `correctionSchemaReady = true`.
+- 0012 컬럼(`corrected_from_order_id`·`correction_started_at`)을 포함한 조회가 성공하면 `correctionSchemaReady = true`.
 - 누락 컬럼 오류로 **기존 컬럼 폴백 조회가 성공하면 `correctionSchemaReady = false`**.
 - 원문 병합(`attachRawText`)·정렬 등 내부 로직은 그대로 두고 반환만 객체로 감싼다.
 - **호출부는 단 1곳**(`web/src/app/page.tsx:298` `const ords = await loadOrders(...)`; 2026-07-12 grep으로 다른 호출부·기존 테스트 없음 확인). 페이지 초기 로더를 `const { orders, correctionSchemaReady } = await loadOrders(...)`로 **구조 분해**해 `setOrders(orders)`와 신규 상태 `setCorrectionSchemaReady(correctionSchemaReady)`를 **각각 갱신**한다. 반환 타입 변경의 파급은 이 한 줄 + 신규 상태뿐.
@@ -210,8 +236,8 @@ create trigger ordermoa_trg_orders_correction
 
 - confirmed 행: [보기] 옆에 [정정] 추가. `correctedFromOrderId`가 있는 행에는 `[정정본]` 뱃지.
 - "취소 이력 보기" 토글(주문 목록 안, 새 사이드바 메뉴 금지): `loadCancelledOrders` 결과를 **별도 상태 배열**로 렌더 — 읽기 전용 행(날짜·거래처·품목 요약·참고 금액·[취소됨] 뱃지). 활성 정정본이 가리키는 원주문은 `[정정됨]` + "새 주문 보기" 링크(역조회는 로드된 활성 orders에서 클라이언트 매칭). 원문 보기/삭제는 이력 행에서도 유지(C11).
-- **정정 실패 복구(D3, 복구 한정)**: 취소됐지만 활성 정정본이 없는 행(=취소 후 생성 실패·이탈로 남은 잔여)에만 "정정본 만들기(재발행)" 버튼을 노출한다. `correctConfirmedOrder`와 같은 코드 경로(이미 cancelled인 원주문을 재조회 분기로 흡수)이며, 정상 confirmed 주문을 취소했다가 되살리는 일반 기능이 아니다.
-- 데모 모드 동등 동작: 전역 orders에서 원주문 제거 + `demoCancelledOrders` 배열로 이동 + 정정본을 confirmed로 추가. DB와 같은 규칙(혼용 금지·뱃지·이력 토글).
+- **정정 실패 복구(D3, 복구 한정 — 세 조건 전부 충족 시에만)**: ⓐ `status='cancelled'` ⓑ `correctionStartedAt`이 null 아님(=정정 절차가 취소까지 갔던 원주문) ⓒ 활성 정정본 없음 — 이때만 "정정본 만들기(재발행)" 버튼을 노출한다. **표식 없는 cancelled 행(일반 저장 실패 보상 취소 등)은 이력에 [취소됨]로 보이되 재발행 버튼을 절대 노출하지 않는다**(허용하면 일반 취소→재발행 = D6 위반). 취소된 정정본 자식(F4 잔여)은 표식이 null이라 자동 제외. `correctConfirmedOrder`와 같은 코드 경로(이미 cancelled+표식 있는 원주문을 재조회 분기로 흡수)다.
+- 데모 모드 동등 동작: 전역 orders에서 원주문 제거 + `demoCancelledOrders` 배열로 이동(이때 `correctionStartedAt` 기록을 메모리로 동일 재현) + 정정본을 confirmed로 추가. DB와 같은 규칙(혼용 금지·뱃지·이력 토글·재발행 세 조건).
 - 완료 후 상태 반영(DB/데모 공통): `setOrders(prev => [정정본, ...prev.filter(o => o.id !== 원주문.id)])` + `setOrderListDate(정정본.date)` + note 뷰 이동(confirmOrder 성공 패턴과 동일).
 
 ## 7. 원자성 · 부분 실패 · 재시도 (Supabase 클라이언트는 다중 문장 트랜잭션이 없다)
@@ -223,9 +249,9 @@ RPC(단일 트랜잭션 함수)로 묶는 대안이 있으나, 저장소 전체�
 | # | 실패 지점 | DB 상태 | 복구 |
 |---|---|---|---|
 | F1 | 취소 UPDATE 실패(네트워크) | 무변경 | 에러 표시, 화면 초안 유지 → 재시도(같은 버튼) |
-| F2 | 취소 0행(경합: 다른 탭이 먼저 취소/정정) | 원주문 cancelled | 재조회 판별 — 활성 정정본 없으면 이어서 진행(멱등 재시도), 있으면 "이미 정정된 주문" 중단 |
-| F3 | 취소 성공 → 정정본 orders insert 실패 | 원주문 cancelled, 정정본 없음 | 화면 초안 유지 → 재시도 시 F2 경로로 이어짐. 이탈해 버리면 이력에 [취소됨]로 남고 D3(재발행)로 복구 |
-| F4 | items insert 실패 | 원주문 cancelled + **정정본 cancelled(saveOrder 보상)** — corrected_from을 가진 취소 잔여 | 재시도 가능: 부분 유니크가 cancelled를 제외하므로 새 정정본 insert 통과(§5.1). 잔여는 이력에 [취소됨]로 표시(정정 실패 흔적 — 허용) |
+| F2 | 취소 0행(경합: 다른 탭이 먼저 취소/정정) | 원주문 cancelled(+먼저 간 쪽이 표식 기록) | 재조회 판별 — **표식 있음+활성 정정본 없음**이면 이어서 진행(멱등 재시도), 활성 정정본 있으면 "이미 정정된 주문" 중단, **표식 null이면 중단**(정정 절차의 취소가 아님) |
+| F3 | 취소+표식 성공 → 정정본 orders insert 실패 | 원주문 cancelled + **`correction_started_at` 기록됨**, 정정본 없음 | 화면 초안 유지 → 재시도 시 F2 경로로 이어짐. 이탈해 버리면 이력에서 **표식 덕분에 재발행 가능 행으로 식별**(D3 세 조건 충족) |
+| F4 | items insert 실패 | 원주문 cancelled+표식 + **정정본 cancelled(saveOrder 보상, 표식 null)** — corrected_from을 가진 취소 잔여 | 재시도 가능: 부분 유니크가 cancelled를 제외하므로 새 정정본 insert 통과(§5.1). **원주문은 표식+활성 정정본 없음이라 재발행 가능**, 취소된 정정본 자식은 표식 null이라 재발행 대상 아님. 잔여는 이력에 [취소됨]로 표시(정정 실패 흔적 — 허용) |
 | F5 | 승격(qc→confirmed) 실패 | 원주문 cancelled + 정정본 **qc**(라인·링크 보존) | 주문 목록에 [가격 대기]+[정정본]으로 노출 → 기존 [가격 마감](R3)으로 완결. 별도 코드 불필요 — 기존 복구 경로에 자연 합류 |
 | F6 | 완료 후 새로고침/이탈 | 정상 완료 상태 | loadOrders가 진실 반영(정정본 confirmed, 원주문 미조회) |
 
@@ -250,20 +276,21 @@ RPC(단일 트랜잭션 함수)로 묶는 대안이 있으나, 저장소 전체�
 
 1. `orderToParsedLines`: 라인 복사(qty/unit/price/rawName), `status:"matched"`, 기본단가 뱃지 미발생(priceSource undefined), 라인 id 신규 부여.
 2. `toOrderInsert` opts: correctedFromOrderId 지정 시에만 `corrected_from_order_id` 키 존재(미지정 시 키 자체 부재 — 0012 미적용 호환), `source:'correction'` 반영.
-3. `canCorrectOrder`: confirmed=true / qc=false / cancelled+활성정정본없음=재발행가능(D3 복구) / cancelled+활성정정본있음=false.
+3. `canCorrectOrder`: confirmed=true / qc=false / cancelled는 **세 조건(§6.4: 표식 있음+활성 정정본 없음)** 충족 시에만 재발행 가능 — cancelled+표식null=false(일반 취소), cancelled+표식있음+활성정정본있음=false, cancelled+표식있음+활성정정본없음=true.
 4. `correctionSource` 초기화 헬퍼: 새 파싱·화면 이탈 시 정정 컨텍스트가 남지 않는 것(엉뚱한 주문 취소 방지 — §6.1).
 5. 전역 orders 교체 헬퍼: 원주문 제거+정정본 삽입, 다른 주문 불변.
 
 ### 9.2 통합(mock — order-store.test.ts의 fake 빌더 재사용, C13)
 
-6. `correctConfirmedOrder` 정상: 취소(1행) → insert(corrected_from·qc) → items → 승격 순서와 payload 검증, 반환값에 `correctedFromOrderId`.
-7. 취소 0행 + 재조회 cancelled + 활성 정정본 없음 → 진행(재시도 멱등).
+6. `correctConfirmedOrder` 정상: 취소+표식(1행 — **update payload에 `status:'cancelled'`와 `correction_started_at`이 한 문장으로 함께 포함**) → insert(corrected_from·qc) → items → 승격 순서와 payload 검증, 반환값에 `correctedFromOrderId`.
+7. 취소 0행 + 재조회 cancelled + **표식 있음** + 활성 정정본 없음 → 진행(F2 재시도·D3 재발행 멱등).
 8. 취소 0행 + 활성 정정본 있음 → throw, **orders insert 미발생** 검증.
-9. items 실패 → 정정본 보상 취소 호출 확인(F4) + throw.
-10. 승격 실패 → qc 잔여 안내 메시지(F5, saveOrder 기존 동작 회귀).
-11. 원주문이 qc → throw(정정 대상 아님).
-12. `loadOrders` 반환 계약: (a) 정상 조회 → `{ orders, correctionSchemaReady: true }`, (b) `corrected_from_order_id` 누락 에러 → 기존 컬럼 폴백 조회 성공 시 `{ orders, correctionSchemaReady: false }`. 반환이 **객체(배열 아님)** 임을 검증.
-13. `loadCancelledOrders`: status=cancelled 필터·mapDbOrder cancelled 정규화.
+9. 취소 0행 + 재조회 cancelled + **표식 null**(일반 취소·보상 취소) → throw, **orders insert 미발생**(D6 위반 차단).
+10. items 실패 → 정정본 보상 취소 호출 확인(F4 — 보상 update는 **표식 무접촉**) + throw.
+11. 승격 실패 → qc 잔여 안내 메시지(F5, saveOrder 기존 동작 회귀).
+12. 원주문이 qc → throw(정정 대상 아님).
+13. `loadOrders` 반환 계약: (a) 정상 조회 → `{ orders, correctionSchemaReady: true }`, (b) 0012 컬럼 누락 에러 → 기존 컬럼 폴백 조회 성공 시 `{ orders, correctionSchemaReady: false }`. 반환이 **객체(배열 아님)** 임을 검증.
+14. `loadCancelledOrders`: status=cancelled 필터·mapDbOrder cancelled 정규화·`correctionStartedAt` 매핑.
 
 ### 9.3 DB 가드 실측 (0012 적용 후 사용자 SQL Editor — 0011 H시리즈 형식, begin…rollback 래핑)
 
@@ -276,13 +303,17 @@ RPC(단일 트랜잭션 함수)로 묶는 대안이 있으나, 저장소 전체�
 | G5 | 같은 원주문에 활성 정정본 2건째 insert | 유니크 위반 |
 | G6 | 취소된 정정본 존재 상태에서 새 정정본 insert | **성공**(부분 유니크 술어 확인) |
 | G7 | 0012 재실행 | 에러 없음(멱등) + 기존 행 무변경 |
+| G8 | `correction_started_at`을 채운 orders INSERT | 트리거 예외(⑤ⓐ 주입 차단) |
+| G9 | confirmed→cancelled 외 시점의 표식 설정 UPDATE(예: confirmed 유지 상태, 이미 cancelled인 행) | 트리거 예외(⑤ⓑ) |
+| G10 | 기록된 표식의 값 변경·null화 UPDATE | 트리거 예외(⑤ⓒ 불변) |
+| G11 | `status='cancelled'`+표식 기록을 한 문장으로 하는 confirmed 주문 UPDATE(정정의 원주문 취소 경로) | **성공** |
 
 ### 9.4 브라우저 smoke (데모 모드 별도 포트 → DB 모드는 0012 적용 후 사용자)
 
 1. 확정 주문 → [정정] → 수량 수정 → [정정 확정] → 목록: 원주문 사라짐, 새 주문 [정정본]+명세서 [보기] 가능.
 2. 합산표: 정정 전후 해당 품목 수량이 정정본 기준으로만 집계(이중 집계 없음).
 3. 월합계: 정정 전후 해당 월 합계 = 정정본 금액만(원주문 금액 소멸).
-4. 이력 토글: 원주문 [취소됨·정정됨] + 새 주문 보기 링크. (DB 모드) 원문 열람·삭제 동작.
+4. 이력 토글: 원주문 [취소됨·정정됨] + 새 주문 보기 링크. 재발행 버튼은 **D3 세 조건 행에만** 노출(표식 없는 [취소됨] 행에는 절대 없음 — 데모에서 재현이 어려우면 단위 테스트 §9.1-3과 DB 실측으로 대체). (DB 모드) 원문 열람·삭제 동작.
 5. qc 주문 행에 [정정] 없음([가격 마감]만).
 6. 정정 진입 후 다른 화면 이동→복귀: 정정 컨텍스트 초기화 확인. [수량만 확정] 버튼이 정정 모드에서 숨김.
 7. 기존 회귀: 일반 붙여넣기→확정→명세서, 수량만 확정→가격 마감 경로 불변. 390px 넘침 0·콘솔 앱 오류 0.
@@ -299,9 +330,9 @@ root `npm test` · web `npm test` · web `npm run build` · web `npm audit --aud
 | 순서 | 파일 | 내용 |
 |---|---|---|
 | 1 | `web/supabase/migrations/0012_order_correction_link.sql` 신설 | §5.4 초안 기반. **적용 금지(Codex 승인+사용자 실행 게이트)** |
-| 2 | `docs/guide-apply-0012-order-correction-link.md` 신설 | 적용 절차 + G1~G7 실측 스크립트(guide-apply-0011 형식) |
+| 2 | `docs/guide-apply-0012-order-correction-link.md` 신설 | 적용 절차 + G1~G11 실측 스크립트(guide-apply-0011 형식) |
 | 3 | `web/src/lib/order-correction.ts` + `order-correction.test.ts` 신설 | 순수 헬퍼(§9.1) — 실패 테스트 먼저 |
-| 4 | `web/src/lib/order-store.ts` + `order-store.test.ts` 수정 | 타입(OrderStatus+cancelled·correctedFromOrderId)·**loadOrders 반환 `{orders, correctionSchemaReady}`로 변경**·ORDER_SELECT 폴백·toOrderInsert/saveOrder opts·correctConfirmedOrder(내부 조건부 취소 단계 포함)·loadCancelledOrders(§6.2~6.3) + mock/반환계약 테스트(§9.2). **단독 cancelOrder는 export하지 않는다(D6 제외)** |
+| 4 | `web/src/lib/order-store.ts` + `order-store.test.ts` 수정 | 타입(OrderStatus+cancelled·correctedFromOrderId·correctionStartedAt)·**loadOrders 반환 `{orders, correctionSchemaReady}`로 변경**·ORDER_SELECT 폴백(0012 컬럼 2종)·toOrderInsert/saveOrder opts·correctConfirmedOrder(내부 조건부 취소+표식 단일 UPDATE 포함)·loadCancelledOrders(§6.2~6.3) + mock/반환계약 테스트(§9.2). **단독 cancelOrder는 export하지 않는다(D6 제외)** |
 | 5 | `web/src/app/page.tsx` 수정 | **loadOrders 호출부(298행) 구조 분해 + `correctionSchemaReady` 상태 신설**·[정정] 버튼·뱃지·검수표 정정 모드·핸들러·이력 토글(정정 실패 복구 재발행 포함)·데모 동등(§6.1·6.3·6.4). **단독 [취소] 버튼은 만들지 않는다(D6 제외)** |
 | 6 | 검증·smoke | §9.4~9.5. DB smoke는 0012 적용 후 사용자 |
 | 7 | 문서 | `docs/agent-worklog.md`·`docs/NEXT-SESSION.md`·진행판(JSON→`py -3 scripts/generate-progress.py`) — 구현 세션에서 갱신 |
@@ -322,9 +353,9 @@ root `npm test` · web `npm test` · web `npm run build` · web `npm audit --aud
 
 | # | 결정 | Codex 확정 | 근거·구현 함의 |
 |---|---|---|---|
-| D1 | 0012 데이터 모델(§5: 컬럼+자기참조 CHECK+활성 정정본 부분 유니크+별도 가드 트리거) | **채택** | 취소 선행·이중 정정 차단·재시도 허용을 전부 DB가 보증. additive·backfill 0 |
+| D1 | 0012 데이터 모델(§5: 링크 컬럼+**정정 시작 표식 `correction_started_at`**+자기참조 CHECK+활성 정정본 부분 유니크+별도 가드 트리거) | **채택**(표식은 2026-07-12 D3 강제 보정으로 추가) | 취소 선행·이중 정정 차단·재시도 허용·**복구 재발행의 대상 식별**까지 전부 DB가 보증. additive·backfill 0 |
 | D2 | DB 쓰기 시점 | **채택 — [정정 확정] 클릭 시에만 시작**(진입 시 아무것도 쓰지 않음) | 이탈=무해("확정 전 무변경"), 취소 고아 창 최소화. 진입 다이얼로그는 고지 역할만 |
-| D3 | cancelled(활성 정정본 없음) "정정본 만들기(재발행)" | **채택 — 복구 한정** | 정정 절차가 **취소 후 생성 실패**한 경우에만 허용. 일반 취소→재발행 기능 아님. `correctConfirmedOrder` 재조회 분기로 흡수(§6.2·6.4) |
+| D3 | cancelled 주문 "정정본 만들기(재발행)" | **채택 — 복구 한정, `correction_started_at`으로 DB 강제** | 정정 절차가 **취소 후 생성 실패**한 경우에만 허용(세 조건 §6.4: cancelled+표식 있음+활성 정정본 없음). 표식 없는 cancelled(일반 보상 취소)는 재발행 불가 — 링크만으로는 F3에서 원주문에 흔적이 없어 이 구분이 불가능했던 것을 표식이 해결. 일반 취소→재발행 기능 아님. `correctConfirmedOrder` 재조회 분기로 흡수(§6.2·6.4) |
 | D4 | 정정 중 거래처 변경 | **채택 — 1차 불허** | 단가·검증 전제가 거래처 고정. 거래처 select 비활성(§4) |
 | D5 | 정정본 `source='correction'` | **채택** | CHECK 없음(C7)·앱 미소비라 무위험, DB 수준 유래 기록 |
 | D6 | 정정 없는 단독 [취소] 버튼(confirmed·qc 공용) | **거절 — 이번 범위 완전 제외** | confirmed·qc 단독 취소 UI를 만들지 않는다. `cancelOrder`를 독립 export하지 않고 `correctConfirmedOrder` 내부 조건부 취소 단계로만 둔다(§6.2). 잘못 들어간 주문 정리는 후속 과제 |
@@ -340,6 +371,7 @@ root `npm test` · web `npm test` · web `npm run build` · web `npm audit --aud
 - **Codex 결정 D1~D8 반영 완료(§12)**: D1·D2·D4·D5·D7·D8 채택, D3 복구 한정 채택, **D6 거절 → 단독 취소 관련 문구·함수 계약·테스트·UI를 전부 제거**. `cancelOrder`는 `correctConfirmedOrder` 내부 조건부 취소 단계로 좁힘(별도 export·[취소] 버튼 없음, §6.2).
 - **불변 원칙 재대조**: (스냅샷) 원주문·정정본의 `unit_price`는 스냅샷 불변 — 라인 편집은 정정본에서만 일어나고 원주문 라인은 0010/0011로 동결(§4·§5.3). (가격 대기 격리) 정정은 confirmed 전용, qc는 기존 [가격 마감]만 — 두 상태를 섞지 않음(§0·§3). (raw_text) 원문은 원주문 imports에 잔류, 취소 후에도 삭제 가능(§4·C11). 세 원칙이 서로 모순 없음을 확인.
 - **`loadOrders` 반환 계약 확정(§6.3)**: `Promise<{ orders, correctionSchemaReady }>`. 호출부는 page.tsx:298 단 1곳·기존 테스트 없음(grep 확인) → 파급 최소. `correctionSchemaReady=false`면 정정 UI 전부 숨김.
-- 정정 절차의 모든 DB 전이를 0010/0011 허용 목록과 대조(§5.3) — 우회·모순 없음. 실패 F1~F6 전부 복구 경로 존재(§7), F4 잔여가 부분 유니크와 정합(§5.1).
+- **D3 복구 식별 보정(2026-07-12 2차)**: 링크(정정본→원주문)만으로는 F3(취소 후 생성 실패)의 원주문과 일반 보상 취소를 구분할 수 없어 "cancelled+활성 정정본 없음" 조건이 사실상 일반 재발행(D6 위반)이 되는 구멍을 확인 → `correction_started_at` 표식으로 봉합. 표식 쓰기 규칙(ⓐⓑⓒ)·재발행 세 조건·F2~F4·G8~G11·correctConfirmedOrder 분기·데모 재현까지 한 계약으로 정렬했고, 취소된 정정본 자식(표식 null)이 재발행 대상에서 자동 제외됨을 교차 확인.
+- 정정 절차의 모든 DB 전이를 0010/0011 허용 목록과 대조(§5.3) — 우회·모순 없음(취소+표식 단일 UPDATE는 `before update of status` 전이 가드와 0012 트리거 ⑤ⓑ를 모두 통과). 실패 F1~F6 전부 복구 경로 존재(§7), F4 잔여가 부분 유니크와 정합(§5.1).
 - 파일 경로·행 번호는 2026-07-12 `877f948` 워크트리 실측(§1). R4 머지 후 이동할 수 있으므로 구현 세션은 심볼 기준으로 재탐색. SQL은 §5.4 참고 초안이며 이 세션은 마이그레이션 파일을 만들지 않는다.
 - 남은 열린 항목 없음. TODO/미정 표기 없음.
