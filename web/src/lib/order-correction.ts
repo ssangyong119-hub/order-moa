@@ -28,11 +28,18 @@ export function canCorrectOrder(
   return order.status === "confirmed" && !activeOrders.some((candidate) => candidate.correctedFromOrderId === order.id);
 }
 
-/** 원주문이 취소된 자리에 새 정정본만 활성 목록으로 반영한다. */
-export function replaceOrderById<T extends { id: string }>(
+/**
+ * 새 정정본을 활성 목록에 반영한다.
+ * - 원주문이 목록에 있으면(일반 정정: confirmed 원주문) 그 자리에서 교체한다.
+ * - 원주문이 목록에 없으면(복구 재발행: 원주문이 취소 이력에만 있음) 정정본을 맨 앞에 추가한다.
+ *   목록 upsert로 두지 않으면 복구 재발행한 정정본이 활성 목록·월합계·대시보드에서 새로고침 전까지 사라진다.
+ */
+export function upsertCorrectedOrder<T extends { id: string }>(
   orders: T[],
   originalOrderId: string,
-  replacement: T,
+  corrected: T,
 ): T[] {
-  return orders.map((order) => (order.id === originalOrderId ? replacement : order));
+  return orders.some((order) => order.id === originalOrderId)
+    ? orders.map((order) => (order.id === originalOrderId ? corrected : order))
+    : [corrected, ...orders];
 }

@@ -45,7 +45,7 @@ import {
   type OrderLine,
   type PriceCloseInput,
 } from "@/lib/order-store";
-import { canCorrectOrder, orderToParsedLines, replaceOrderById } from "@/lib/order-correction";
+import { canCorrectOrder, orderToParsedLines, upsertCorrectedOrder } from "@/lib/order-correction";
 import { buildNewProductRegistration, type NewProductRegistrationInput } from "@/lib/product-registration";
 import { padDeliveryNoteLines } from "@/lib/delivery-note";
 import {
@@ -920,7 +920,7 @@ export default function HomePage() {
           status: "cancelled",
           correctionStartedAt: correctionOriginal.correctionStartedAt ?? new Date().toISOString(),
         };
-        setOrders((prev) => replaceOrderById(prev, correctionOriginal.id, saved));
+        setOrders((prev) => upsertCorrectedOrder(prev, correctionOriginal.id, saved));
         setCancelledOrders((prev) => [cancelledOriginal, ...prev.filter((order) => order.id !== cancelledOriginal.id)]);
         setCorrectionOriginal(null);
         setLines([]);
