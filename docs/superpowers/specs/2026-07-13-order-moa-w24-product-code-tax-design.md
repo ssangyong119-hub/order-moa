@@ -10,7 +10,7 @@
 ## 0. 고정 원칙 (작업 지시 재확인 — 불변 조건)
 
 - 이미 확정된 주문의 품목·수량·판매단가 스냅샷을 수정하지 않는다(0010/0011 가드 유지).
-- 기존 주문 라인에는 과세구분이 없으므로 backfill 의미를 임의로 추정하지 않는다(order_items는 NULL=미설정으로 두고 과거 명세서 형식 유지).
+- 기존 주문 라인에는 과세구분이 없으므로 backfill 의미를 임의로 추정하지 않는다(**과거 order_items.tax_type_snapshot은 NULL 유지**, backfill 금지, 과거 명세서 형식 유지). 신규 라인만 실제 값(taxable/exempt/unset)을 저장한다(§6.1).
 - raw_text 삭제 가능 원칙 유지 · quantity_confirmed(가격 대기)와 confirmed(최종 확정)를 섞지 않는다.
 - R5b 정정 원주문↔정정본 연결(`corrected_from_order_id`·`correction_started_at`)을 깨지 않는다.
 - 세금계산서 직접 발행은 이번 범위가 아니다(표시 규칙까지만). 다단위·재고·OCR·이카운트 연동을 끼워 넣지 않는다.
@@ -39,11 +39,11 @@
 
 | 결정 | 권장안 |
 |---|---|
-| 내부 품목코드 | `ordermoa_products.app_code text` — **회사별 순번 `OM-000001`**, 카운터 테이블 + SECURITY DEFINER 발급 함수 + BEFORE INSERT 트리거(원자적), backfill 후 NOT NULL + `unique(company_id, app_code)` |
+| 내부 품목코드 | `ordermoa_products.app_code text` — **회사별 순번 `OM-000001`**, 카운터 테이블(next_value=last issued) + SECURITY DEFINER 발급 함수 + BEFORE INSERT OR UPDATE 트리거(자동 채번·**명시 주입 차단**·**UPDATE 변경 차단**, backfill NULL→값만 허용), backfill 후 NOT NULL + `unique(company_id, app_code)` |
 | source_code 관계 | **완전 분리** — app_code(내부·항상 존재·NOT NULL) vs source_code(외부·nullable). 다른 컬럼, 섞지 않음 |
-| 과세구분 저장 | products.tax_type을 **재활용**(3종 `taxable/exempt/unset`으로 확장, 기본 unset) + **휴면 'taxable'→'unset' 1회 backfill**(C2 근거). order_items에 **`tax_type_snapshot` 신규 컬럼**(nullable, NULL=미설정/과거) |
+| 과세구분 저장 | products.tax_type을 **재활용**(3종 `taxable/exempt/unset`으로 확장, 기본 unset) + **휴면 'taxable'→'unset' 표식 가드 1회 backfill**(C2 근거·§4.2). order_items에 **`tax_type_snapshot` 신규 컬럼**(nullable, `taxable/exempt/unset/null`). **과거=NULL, 신규 미설정='unset'**(§6.1) |
 | 스냅샷 시점 | order_items INSERT 시점(qc 저장 시) product.tax_type에서 캡처 → 확정 시 동결. 가격 마감(qc→confirmed)은 unit_price만 갱신, tax 스냅샷 불변 |
-| 과거 주문 | order_items.tax_type_snapshot NULL 유지(backfill 금지). 명세서는 현 "VAT 미적용" 형식 그대로(§8) |
+| 과거 주문 | order_items.tax_type_snapshot **NULL 유지**(backfill 금지). 전부 NULL이면 명세서는 현 "VAT 미적용" 형식 그대로(§8) |
 | 정정본 | 원주문 라인의 tax_type_snapshot **복사**(unit_price 복사와 일관, D5) |
 | 명세서 | 전부 NULL이면 현 형식. 스냅샷 있으면 면세공급가/과세공급가/부가세/합계 + 라인 과세·면세 표시. 미설정 섞이면 세무형 인쇄 차단·안내 |
 | 금액 불변 | 저장 금액(unit_price·amount·order.total)은 **VAT 제외 공급가** 유지. **VAT는 명세서 표시 계산 전용**(저장 안 함) → 월합계·합산표·CSV 무영향 |
@@ -72,13 +72,26 @@
 
 **권장 A의 backfill 정당성**: C2로 tax_type은 **앱이 한 번도 쓴 적 없는 스키마 기본값**임이 실측(web/src 참조 0건). 전 품목의 'taxable'은 사용자가 정한 과세 판단이 아니라 0001 DEFAULT의 부산물이다. 이를 'unset'으로 바꾸는 것은 **정보의 임의 추정이 아니라 무의미한 기본값의 정정**이다(기존 'taxable'을 그대로 두면 오히려 735품목을 사용자 확인 없이 "과세"로 오표기 = 추정 금지 위반). → backfill을 권장하되 **Codex 승인 항목**으로 명시(§12 D2). 보수적으로 가려면 B.
 
-> 주의(구현): 재활용이라도 CHECK 재정의는 `drop constraint if exists → add`로 idempotent. DEFAULT 변경은 기존 행에 영향 없음(신규 insert에만). backfill은 `update ... where tax_type='taxable'`를 1회(재실행해도 'taxable' 잔여가 없으면 0행 → 멱등적). **단 재활용 backfill은 "사용자가 이미 과세/면세를 설정한 뒤 재적용"하면 그 값을 덮을 위험** → backfill은 "앱이 tax_type을 쓰기 시작하기 전(0013/0014 적용 시점) 1회"만 유효. 구현 시 마이그레이션 주석에 "이 backfill은 최초 1회 전제"를 박고, 앱이 값을 쓰기 시작한 이후 재실행 금지를 가이드에 명시.
+### 4.2b backfill 재실행 안전 계약 (표식 가드 — Codex 검수 보정 2026-07-13)
+
+`update ... where tax_type='taxable'`만으로는 재실행 안전하지 않다. 사용자가 나중에 **의도적으로 taxable로 정한** 품목까지 0014 재실행이 unset으로 덮어버린다("legacy 기본값 taxable"과 "사용자가 고른 taxable"을 값만으로 구분 불가). → **1회 완료 표식**으로 backfill을 잠근다.
+
+- 0014 안에 `ordermoa_` 접두사의 **완료 표식 구조**를 둔다(예: `ordermoa_migration_flags(flag text primary key, applied_at timestamptz default now())` 같은 1행 잠금 테이블, 또는 `ordermoa_products` 컬럼 코멘트/전용 flag row).
+- backfill은 **같은 트랜잭션**에서 다음 순서로만 실행한다:
+  1. 표식(`w24_tax_type_backfill` 등)이 **없을 때만** `update ordermoa_products set tax_type='unset' where tax_type='taxable'`.
+  2. 성공하면 같은 트랜잭션에서 표식을 기록(`insert ... on conflict do nothing`).
+- 재실행: 표식이 이미 있으므로 backfill을 **건너뛴다**(사용자가 이후 고른 taxable 보존).
+- 최초 적용이 실패/rollback되면 표식도 함께 rollback → 남지 않아 **재시도 가능**(원자성). 표식과 backfill이 한 트랜잭션이라 "표식만 남고 backfill 누락"이 불가능.
+- 컬럼 구조(CHECK 3종 확장·DEFAULT unset·컬럼 추가)는 표식과 무관하게 idempotent(`drop constraint if exists→add`, `alter default`, `add column if not exists`). 표식 가드는 **데이터 backfill 한 문장에만** 적용된다.
+- 가이드(guide-apply-0014)와 GB3/GB6은 이 계약을 실측한다: 표식 없는 최초 적용=backfill 발생, 표식 있는 재실행=backfill 0행이되 컬럼/CHECK는 그대로.
+
+> 대안(보수적, D2 B안): products.tax_type을 방치하고 신규 `tax_category` 컬럼(default unset, backfill 자체가 없음)을 쓰면 이 표식 구조가 불필요하다. 재활용(A)을 택할 때만 표식 가드가 필요하다.
 
 ### 4.3 품목 기본값과 주문 라인 스냅샷의 관계
 
 - `products.tax_type` = 품목 **기본 과세구분**(마스터 속성, 언제든 수정 가능). category와 같은 성격.
 - `order_items.tax_type_snapshot` = 라인 저장 시점에 품목 기본값을 **복제한 스냅샷**(이후 품목 기본값을 바꿔도 과거 라인 불변). unit_price 스냅샷과 동일 철학.
-- 관계: 라인 생성(qc 저장 또는 경로 A) 시 `tax_type_snapshot := product.tax_type`. 품목이 'unset'이면 스냅샷도 'unset'(또는 NULL — §6.1 인코딩 결정).
+- 관계: 라인 생성(qc 저장 또는 경로 A) 시 `tax_type_snapshot := product.tax_type`. 품목이 'unset'이면 스냅샷도 **'unset'**(신규 라인은 실제 값을 저장 — 과거 NULL과 구분, §6.1 D9).
 
 ### 4.4 스냅샷 시점 (qc / confirmed)
 
@@ -96,19 +109,25 @@
 | 형식 | `OM-` + 6자리 zero-pad 순번 = `'OM-'||lpad(seq::text,6,'0')` (`OM-000001`) | 설계서 §5.2 고정 |
 | 유일성 | **회사 안에서 유일** `unique(company_id, app_code)` | 회사별 독립 순번 |
 | null 여부 | backfill 후 **NOT NULL**(모든 품목이 항상 보유) | 설계서 §5.1 "새 품목도 반드시 받는다" |
-| 발급 | **카운터 테이블 + SECURITY DEFINER 함수 + BEFORE INSERT 트리거**(app_code NULL이면 채번) — 앱 max+1 금지 | 동시성 원자성(C4·C13) |
+| 발급 | **카운터 테이블 + SECURITY DEFINER 함수 + BEFORE INSERT 트리거가 자동 채번** — 앱 max+1 금지 | 동시성 원자성(C4·C13) |
+| 명시 주입 | **일반 INSERT에서 app_code 직접 지정 차단**(트리거: INSERT 시 NEW.app_code가 not null이면 raise) — 트리거만 발급 | 코드 무결성(Codex 보정) |
+| 수정(UPDATE) | **DB에서 app_code 변경 차단**(트리거: OLD.app_code not null이고 값이 바뀌면 raise). 단 **NULL→값 backfill은 허용**(OLD가 null) → 마이그레이션 내부 backfill만 통과 | 발급값 고정, backfill 공존 |
 | 순번 gap | 허용(롤백·삭제로 생길 수 있음) — 코드는 안정 식별자지 연속 보장 아님 | 실무 무해 |
 | 보관/삭제 | archived_at soft만 존재 → app_code는 보관돼도 유지, **재사용 안 함**(카운터는 증가만) | C4, 코드 안정성 |
-| 수정 | 앱 일반 편집으로 app_code 변경 금지(발급값 고정). source_code만 import에서 갱신 | 설계서 §5.2 |
+| source_code | app_code와 별개(외부 import 키). source_code만 import에서 갱신, app_code는 불변 | 설계서 §5.2·§5.3 |
 
 ### 5.2 발급 메커니즘 (0013 초안 방향)
 
-- **카운터 테이블** `ordermoa_product_code_counters(company_id uuid primary key references ordermoa_companies(id) on delete cascade, next_value bigint not null default 1)`.
+**카운터 의미 통일(Codex 보정)**: `next_value` = **마지막으로 발급한 값(last issued)**. 발급 함수는 카운터를 +1 한 뒤 **그 증가된 값을 반환**(= 이번에 쓸 번호). 따라서 backfill 뒤 카운터는 `max(부여번호)`(= 마지막 발급값)로 맞춰야 다음 신규 품목이 `max+1`을 받는다. (max+1로 세팅하면 한 번호를 건너뛴다 — 이전 초안의 버그를 정정.)
+
+- **카운터 테이블** `ordermoa_product_code_counters(company_id uuid primary key references ordermoa_companies(id) on delete cascade, next_value bigint not null default 0)`. `default 0` = 아직 아무것도 발급 안 됨(첫 발급이 1).
 - **발급 함수** `ordermoa_next_product_code(cid uuid) returns text` — `language plpgsql security definer set search_path=public`:
-  - `insert into ordermoa_product_code_counters(company_id,next_value) values(cid,1) on conflict (company_id) do update set next_value = ordermoa_product_code_counters.next_value + 1 returning next_value` → 그 값으로 `'OM-'||lpad((v)::text,6,'0')`. **UPSERT+RETURNING이 카운터 행을 원자적으로 잠가** 동시 insert가 직렬화된다(중복 번호 불가).
-  - SECURITY DEFINER라 카운터 테이블 RLS와 무관하게 함수가 읽고 쓴다(C13 패턴). 함수는 인자 cid만 신뢰하지 않고 트리거가 NEW.company_id를 넘기므로 회사 경계는 트리거가 보장.
-- **트리거** `before insert on ordermoa_products`: `if NEW.app_code is null then NEW.app_code := ordermoa_next_product_code(NEW.company_id); end if;` → 앱은 app_code를 안 보내도 자동 채번. (명시 지정도 허용하되 일반 흐름은 자동.)
-- **backfill**(마이그레이션 내 1회, idempotent): 회사별로 `app_code is null`인 기존 품목을 **안정 순서(created_at, id)** 로 정렬해 순번 부여하고, 카운터를 `max(부여번호)+1`로 세팅. `app_code is null` 조건이라 재실행 시 0행(멱등).
+  - `insert into ordermoa_product_code_counters(company_id,next_value) values(cid,1) on conflict (company_id) do update set next_value = ordermoa_product_code_counters.next_value + 1 returning next_value` → 반환값 v(=이번에 쓸 번호, 첫 회사=1)로 `'OM-'||lpad(v::text,6,'0')`. **UPSERT+RETURNING이 카운터 행을 원자적으로 잠가** 동시 insert가 직렬화(중복 불가). 반환 v = 발급 후의 last issued이자 이번 번호(둘이 같음).
+  - SECURITY DEFINER라 카운터 RLS와 무관하게 함수가 읽고 쓴다(C13). 회사 경계는 트리거가 NEW.company_id를 넘겨 보장.
+- **트리거** `before insert or update on ordermoa_products`(발급+무결성 한 함수):
+  - INSERT: `if NEW.app_code is not null then raise exception '...app_code는 직접 지정할 수 없습니다'; end if; NEW.app_code := ordermoa_next_product_code(NEW.company_id);` → 명시 주입 차단 + 자동 채번.
+  - UPDATE: `if OLD.app_code is not null and NEW.app_code is distinct from OLD.app_code then raise exception '...app_code는 변경할 수 없습니다'; end if;` → 발급값 불변. **OLD가 null인 경우(=backfill의 NULL→값)는 통과**하므로 마이그레이션 backfill과 공존.
+- **backfill**(마이그레이션 내 1회, idempotent): 회사별로 `app_code is null`인 기존 품목을 **안정 순서(created_at, id)** 로 1..N 부여(UPDATE — 위 UPDATE 분기가 OLD null이라 통과). 부여 후 각 회사 카운터를 `next_value = N`(= **max(부여번호), 마지막 발급값**)으로 upsert. `app_code is null` 조건이라 재실행 시 0행(멱등). 앱 채번 경로(트리거)와 backfill이 **같은 last-issued 의미**를 공유 → 다음 신규 품목 = N+1 연속(GA7 검증).
 - backfill 후 `alter column app_code set not null` + `create unique index if not exists ordermoa_uq_products_app_code on ordermoa_products(company_id, app_code)`.
 
 ### 5.3 source_code와의 관계·충돌 방지
@@ -123,22 +142,32 @@
 
 ## 6. 앱 영향·구현 계층
 
-### 6.1 인코딩 결정 (order_items.tax_type_snapshot의 NULL 처리)
+### 6.1 인코딩 결정 (order_items.tax_type_snapshot — 과거 NULL / 신규 미설정 'unset', D9 보정)
 
-- `order_items.tax_type_snapshot text` **nullable**, `CHECK (tax_type_snapshot is null or tax_type_snapshot in ('taxable','exempt'))`.
-- **NULL = 미설정/과거**(과거 주문은 전부 NULL, backfill 금지 §0). 신규 라인도 품목이 'unset'이면 스냅샷을 `NULL`로 저장(‘unset’ 토큰 대신 NULL로 통일 → "미설정=값 없음"이 명세서 분기와 자연 정합).
-  - 대안: 'unset' 토큰을 스냅샷에도 저장. 권장은 **NULL 통일**(CHECK가 unset을 허용 안 해도 됨, 과거 NULL과 신규 미설정이 같은 분기).
+**Codex 검수 보정(2026-07-13)**: 과거 NULL과 신규 미설정을 NULL로 통일하던 이전안을 **취소**한다. 둘을 구분해야 "과거 주문(정보 없음)"과 "신규 주문에서 사람이 아직 과세구분을 안 정함"이 명세서에서 다르게 처리된다.
+
+- `order_items.tax_type_snapshot text` **nullable**, `CHECK (tax_type_snapshot is null or tax_type_snapshot in ('taxable','exempt','unset'))`.
+- **과거 주문 = NULL 유지**(W24 이전 라인, backfill 금지 §0). **신규 주문 = 항상 실제 값 저장** — 라인 생성 시 `tax_type_snapshot := product.tax_type`이며 품목이 미설정이면 **'unset'**을 저장한다(NULL로 내리지 않는다).
+- 세 갈래가 명세서 분기(§8)와 1:1 대응한다:
+
+| 라인 집합 | 의미 | 명세서 |
+|---|---|---|
+| **전부 NULL** | 과거 주문(W24 이전) | 현 "VAT 미적용" 형식 그대로(회귀 100%) |
+| **한 줄이라도 'unset'** | 신규인데 과세구분 미설정 잔여 | **세무형 차단·안내**("과세구분 미설정 품목이 있어 세무형 명세서를 만들 수 없습니다") + 현 형식 |
+| **taxable/exempt만**(unset·NULL 없음) | 과세구분 확정된 신규 | 세무형: 면세공급가/과세공급가/부가세/합계 + 라인 과세·면세 표시 |
+
+- 근거: NULL로 통일하면 "과거 주문"과 "신규 미설정"이 같은 값이 되어, 신규 주문에서 사용자가 과세구분을 채우도록 유도하는 안내(§8·D6)를 발동할 수 없다. 'unset'을 실제 저장해야 신규 주문의 미완료를 명세서·검수에서 식별할 수 있다.
 
 ### 6.2 구현 파일·계약 (구현 세션 작업)
 
 | 파일 | 변경 |
 |---|---|
-| `web/src/lib/domain/types.ts` | `Product`에 `appCode?: string \| null`·`taxType?: 'taxable'\|'exempt'\|'unset'` 추가. `OrderLine`에 `taxTypeSnapshot?: 'taxable'\|'exempt'\|null` 추가 |
+| `web/src/lib/domain/types.ts` | `Product`에 `appCode?: string \| null`·`taxType?: 'taxable'\|'exempt'\|'unset'` 추가. `OrderLine`에 `taxTypeSnapshot?: 'taxable'\|'exempt'\|'unset'\|null` 추가(과거=null, 신규='unset' 포함) |
 | `web/src/lib/product-store.ts` | `PRODUCT_COLS`에 `app_code,tax_type` 추가 + **폴백 확장**(app_code/tax_type 누락 DB 대비 `isMissingColumnError` 단계 추가). `toProductInsert/Update`에 tax_type(app_code는 트리거 발급이라 insert 제외). `mapProduct`에 appCode/taxType. **catalog import insert에 tax_type**(있을 때만, §6.3)·app_code는 자동 |
-| `web/src/lib/order-store.ts` | `toItemInserts`에 `tax_type_snapshot`(product.tax_type 유래) 추가. `ORDER_SELECT*`에 `tax_type_snapshot`. `mapDbOrder`가 taxTypeSnapshot 매핑. **폴백**: tax_type_snapshot 누락 DB면 컬럼 뺀 select 재시도(`correctionSchemaReady`류 `taxSchemaReady` 플래그로 명세서 세무형 표시 게이팅) |
+| `web/src/lib/order-store.ts` | `toItemInserts`에 `tax_type_snapshot`(product.tax_type 유래 — 신규 라인은 'unset'까지 실제 저장, 절대 NULL로 내리지 않음) 추가. `ORDER_SELECT*`에 `tax_type_snapshot`. `mapDbOrder`가 taxTypeSnapshot 매핑(null 그대로). **폴백**: tax_type_snapshot 누락 DB면 컬럼 뺀 select 재시도(`correctionSchemaReady`류 `taxSchemaReady` 플래그로 명세서 세무형 표시 게이팅) |
 | `web/src/lib/order-correction.ts` | `orderToParsedLines`가 원주문 라인 taxTypeSnapshot을 정정본 초깃값으로 전달(D5 복사) |
-| `web/src/lib/delivery-note.ts` 또는 신규 `web/src/lib/tax.ts` | **순수 함수** `computeStatementTax(lines)`: 면세공급가=Σ(exempt amount), 과세공급가=Σ(taxable amount), 부가세=round(과세공급가×0.10), 합계=면세+과세+부가세. 미설정(NULL) 포함 여부·플래그 반환 |
-| `web/src/app/page.tsx` 명세서 블록 | 전부 NULL이면 현 형식 유지. 스냅샷 있으면 라인에 과세/면세 표시 + tfoot에 면세공급가/과세공급가/부가세/합계. 미설정 섞인 신규 주문은 세무형 표시 대신 안내(§8·D6) |
+| 신규 `web/src/lib/tax.ts` | **순수 함수** `computeStatementTax(lines)`: 면세공급가=Σ(exempt amount), 과세공급가=Σ(taxable amount), 부가세=round(과세공급가×0.10), 합계=면세+과세+부가세. 반환에 **`mode`**(`legacy`=전부 NULL / `unset`=하나라도 'unset' / `taxed`=taxable·exempt만) → 명세서 3갈래 분기(§6.1) |
+| `web/src/app/page.tsx` 명세서 블록 | `mode==='legacy'`(전부 NULL) 현 형식. `mode==='unset'`(신규 미설정 섞임) 세무형 대신 안내 + 현 형식. `mode==='taxed'` 라인 과세/면세 표시 + tfoot 면세공급가/과세공급가/부가세/합계(§6.1·§8·D6) |
 | `web/src/app/product-management-view.tsx` | 과세구분 select(과세/면세/미설정) + app_code 표시·검색. 카테고리 UI 옆 |
 | CSV(page.tsx exportProductsCsv) | 품목 CSV에 `app_code`·`과세구분` 열 추가. **주문 CSV·합산표·월합계는 무변경**(D8) |
 
@@ -160,7 +189,7 @@
 
 | 영역 | 영향 | 근거 |
 |---|---|---|
-| 거래명세서(note) | 라인 tax_type_snapshot **전부 NULL**이면 현 "공급가 합계(부가세 없음)/VAT 미적용" 형식 **그대로**(과거 주문 회귀 100%). 스냅샷 있으면 라인 과세/면세 표시 + 면세공급가/과세공급가/부가세/합계. **미설정(NULL) 섞인 신규 주문**은 세무형 합계를 추정하지 않고 "과세구분 미설정 품목이 있어 세무형 명세서를 만들 수 없습니다" 안내 후 현 형식 유지 | C9, 재설계 §6.2 |
+| 거래명세서(note) | **전부 NULL(과거 주문)** → 현 "공급가 합계(부가세 없음)/VAT 미적용" 형식 그대로(회귀 100%). **한 줄이라도 'unset'(신규 미설정)** → 세무형 합계를 추정하지 않고 "과세구분 미설정 품목이 있어 세무형 명세서를 만들 수 없습니다" 안내 후 현 형식 유지. **taxable/exempt만** → 라인 과세/면세 표시 + 면세공급가/과세공급가/부가세/합계 | C9, 재설계 §6.2, §6.1 D9 |
 | 월합계(monthly) | **무변경**. 저장 금액(order.total=Σ공급가 amount)은 VAT 제외 공급가 그대로. VAT는 명세서 표시 계산 전용(저장 안 함) → 월 매출 합계 불변 | C10, §2 금액 불변 |
 | 합산표(aggregate) | **무변경**(수량 기반, 세금 무관) | C10 |
 | 주문 목록/CSV | 주문 CSV·목록 **무변경**(D8). 품목 CSV·품목 관리에만 app_code·과세구분 추가 | §6.2 |
@@ -181,11 +210,11 @@
 
 | 번호 | 파일 | 내용 | idempotent |
 |---|---|---|---|
-| **0013** | `0013_product_app_code.sql` | app_code 컬럼 + 카운터 테이블(+RLS) + 발급 함수(SECURITY DEFINER) + BEFORE INSERT 트리거 + backfill + NOT NULL + unique | `add column if not exists`·`create table if not exists`·`create or replace function`·`drop/create trigger`·backfill `where app_code is null`·`create unique index if not exists` |
-| **0014** | `0014_product_tax.sql` | products.tax_type CHECK 3종 확장 + DEFAULT unset + 'taxable'→'unset' 1회 backfill(D2) + order_items.tax_type_snapshot(+CHECK) + (D4) 0011 동결 가드 확장 | `drop constraint if exists→add`·`alter default`·backfill `where tax_type='taxable'`(최초 1회 전제 주석)·`add column if not exists`·`create or replace function` |
+| **0013** | `0013_product_app_code.sql` | app_code 컬럼 + 카운터 테이블(next_value=last issued, +RLS) + 발급 함수(SECURITY DEFINER) + **BEFORE INSERT OR UPDATE 트리거**(채번·명시 주입 차단·변경 차단, backfill NULL→값 허용) + backfill(카운터=max) + NOT NULL + unique | `add column if not exists`·`create table if not exists`·`create or replace function`·`drop/create trigger`·backfill `where app_code is null`·`create unique index if not exists` |
+| **0014** | `0014_product_tax.sql` | products.tax_type CHECK 3종 확장 + DEFAULT unset + **표식 가드 1회 backfill**('taxable'→'unset', §4.2b) + order_items.tax_type_snapshot(+CHECK 4값) + (D4) 0011 동결 가드 확장 | `drop constraint if exists→add`·`alter default`·**표식 없을 때만 backfill+표식 기록(한 트랜잭션)**·`add column if not exists`·`create or replace function` |
 
 - 분리 이유: app_code(식별 인프라)와 tax(표시·스냅샷)는 독립 가치·독립 롤아웃. 하나가 막혀도 다른 하나 진행. **단일 0013 통합도 가능**(D7) — 권장은 분리.
-- 데이터 무접촉 원칙의 예외 2건(정당화 필수·Codex 승인): ① 0013 app_code backfill(전 품목 채번 — 불가피, NOT NULL 전제) ② 0014 tax_type 'taxable'→'unset' backfill(§4.2 근거). 둘 다 **최초 적용 1회** 전제, 재실행 멱등(조건부 where).
+- 데이터 무접촉 원칙의 예외 2건(정당화 필수·Codex 승인): ① 0013 app_code backfill(전 품목 채번 — 불가피, NOT NULL 전제. `where app_code is null` 조건이라 재실행 0행) ② 0014 tax_type 'taxable'→'unset' backfill(§4.2 근거). ②는 값 조건만으로는 재실행 안전하지 않아 **표식 가드**로 최초 1회만 실행(§4.2b) — 사용자가 이후 고른 taxable을 재실행이 덮지 않는다.
 - 앱 코드는 0013/0014 **미적용 DB에서도 폴백으로 안 깨져야**(C11) — 컬럼 없으면 app_code/tax UI 숨김, 명세서는 현 형식. 코드 머지와 DB 적용 순서 자유도 확보(0007/0009 관례).
 
 ## 10. 구현 파일 목록·순서 (다음 구현 세션, TDD)
@@ -215,9 +244,9 @@
 
 ### 단위(순수 함수)
 1. `ordermoa_next_product_code` 형식(순수 계층은 앱 아님 — DB 실측 G로 대체) / 앱측 app_code는 표시·검색만 단위 테스트.
-2. `computeStatementTax`: 전부 taxable → 부가세=round(합×0.1); 전부 exempt → 부가세 0; 혼합 → 면세·과세 분리 + 부가세=round(과세×0.1); NULL 포함 → `hasUnset=true` 플래그.
-3. `toItemInserts`: product.tax_type가 taxable/exempt면 tax_type_snapshot 반영, unset이면 NULL.
-4. `mapDbOrder`: tax_type_snapshot → OrderLine.taxTypeSnapshot(null 포함).
+2. `computeStatementTax` mode 3갈래: 전부 NULL → `mode='legacy'`; 하나라도 'unset' → `mode='unset'`(세무형 차단); taxable/exempt만 → `mode='taxed'`(전부 taxable=round(합×0.1) / 전부 exempt=0 / 혼합=면세·과세 분리+round(과세×0.1)).
+3. `toItemInserts`: product.tax_type가 taxable/exempt/unset이면 그 값을 tax_type_snapshot에 **그대로 저장**(신규는 'unset'도 저장, NULL로 내리지 않음).
+4. `mapDbOrder`: tax_type_snapshot → OrderLine.taxTypeSnapshot(null·'unset' 구분 보존).
 5. `orderToParsedLines`(정정): 원주문 taxTypeSnapshot 복사.
 6. product-store 폴백: app_code/tax_type 누락 시 컬럼 뺀 select 성공 + UI 게이팅 플래그.
 
@@ -234,12 +263,18 @@
 | GA4 | 타 회사 insert | 그 회사 순번으로 채번(격리) |
 | GA5 | backfill 재실행 | app_code null 없음 → 0행(멱등) |
 | GA6 | unique(company_id, app_code) 위반 수동 insert | 유니크 위반 |
+| GA7 | **backfill 후 신규 품목 insert** | app_code = `max(backfill 번호)+1`(연속 — 카운터 last-issued 의미 검증) |
+| GA8 | **app_code 명시 지정 INSERT**(NEW.app_code not null) | 트리거 raise(명시 주입 차단) |
+| GA9 | **기존 품목 app_code UPDATE**(값 변경) | 트리거 raise(변경 차단) |
+| GA10 | 마이그레이션 backfill의 NULL→값 UPDATE | 통과(OLD null이라 변경 차단 예외 없음) |
 | GB1 | tax_type CHECK: `unset` insert | 성공(3종 확장 확인) |
 | GB2 | tax_type CHECK: 잘못된 값 | CHECK 위반 |
-| GB3 | 'taxable'→'unset' backfill 재실행 | 잔여 없으면 0행(멱등) |
-| GB4 | order_items.tax_type_snapshot CHECK: 'foo' | CHECK 위반 |
+| GB3a | 표식 없는 최초 적용 | legacy taxable → unset backfill 발생 + 표식 기록 |
+| GB3b | 사용자가 한 품목을 taxable로 지정 후 0014 **재실행** | 표식 있어 backfill 건너뜀 → 그 taxable **보존**(unset로 안 덮임) |
+| GB3c | 최초 적용을 rollback한 뒤 재적용 | 표식 없어 backfill 재실행 성공(원자성) |
+| GB4 | order_items.tax_type_snapshot CHECK: 'unset' insert 성공 / 'foo' insert | 'unset' 성공(4값 허용) · 'foo' CHECK 위반 |
 | GB5 | (D4 채택 시) confirmed 라인 tax_type_snapshot UPDATE | 동결 가드 차단 |
-| GB6 | 0013/0014 재실행 | 에러 없음(멱등)·기존 행 무변경 |
+| GB6 | 0013/0014 전체 재실행 | 에러 없음(멱등)·컬럼/CHECK/트리거 그대로·**backfill은 표식으로 재실행 안 됨**·사용자 지정값 무변경 |
 
 ### 브라우저 smoke (데모 → DB는 적용 후 사용자)
 1. 품목 관리: 과세구분 select 저장·표시, app_code 표시·검색.
@@ -258,15 +293,15 @@ root `npm test` · web `npm test` · web `npm run build` · `npx tsc --noEmit` �
 
 | # | 결정 | 권장 | 근거 |
 |---|---|---|---|
-| D1 | app_code 발급 = 카운터 테이블 + SECURITY DEFINER 함수 + BEFORE INSERT 트리거 | **채택** | 원자적·회사격리·import 배치 자동 채번. 앱 max+1(경합) 회피 |
-| D2 | products.tax_type **재활용 + 'taxable'→'unset' backfill** vs 신규 컬럼 | **재활용(A)** | 휴면 실측(C2)으로 backfill은 무의미 기본값 정정. 미정정 시 735품목 과세 오표기(추정 금지 위반). 보수적이면 B |
+| D1 | app_code 발급·불변 = 카운터(last-issued) + SECURITY DEFINER 함수 + BEFORE INSERT OR UPDATE 트리거(자동 채번·명시 주입 차단·변경 차단, backfill NULL→값 허용) | **채택** | 원자적·회사격리·import 배치 자동 채번, 앱 max+1 회피. DB가 코드 무결성 강제(주입·변경 불가). backfill 후 신규=max+1 연속(§5.2·GA7~GA10) |
+| D2 | products.tax_type **재활용 + 표식 가드 backfill** vs 신규 컬럼 | **재활용(A)** | 휴면 실측(C2)으로 backfill은 무의미 기본값 정정. 미정정 시 735품목 과세 오표기(추정 금지 위반). backfill 재실행 안전은 **완료 표식**으로 보장(§4.2b — 값 조건만으론 사용자 지정 taxable 덮음). 보수적이면 B(신규 컬럼, backfill 없음) |
 | D3 | tax_type_snapshot 캡처 = order_items INSERT(qc) 시점 | **채택** | product_id/unit과 동일 시점, 두 경로 자연 캡처, 마감은 unit_price만 |
 | D4 | 0011 동결 가드를 tax_type_snapshot까지 확장(create-or-replace 상위집합) | **채택(권장)** | 앱이 안 건드려도 스냅샷 불변 DB 강제. 0011→0010 선례. 미채택도 앱상 무해 |
 | D5 | 정정본 tax_type_snapshot = 원주문 복사 vs 재유도 | **복사** | unit_price 복사와 일관, 조용한 재분류 방지 |
 | D6 | 미설정 섞인 신규 주문 명세서 | **세무형 차단·안내 + 현 형식 유지** | 추정 금지. 사용자가 과세구분 채운 뒤 세무형 인쇄 |
 | D7 | 마이그레이션 0013+0014 분리 vs 통합 | **분리** | 독립 검수·롤아웃. 통합도 가능 |
 | D8 | 주문 CSV/목록/합산표/월합계에 과세 열 추가 | **1차 제외**(품목 CSV·품목 관리만 app_code·과세) | 범위 최소화, 금액 불변 |
-| D9 | order_items.tax_type_snapshot 미설정 인코딩 = NULL vs 'unset' | **NULL 통일** | 과거 NULL과 신규 미설정이 같은 명세서 분기 |
+| D9 | order_items.tax_type_snapshot 미설정 인코딩 | **과거=NULL 유지 / 신규 미설정='unset' 저장**(CHECK 4값 taxable/exempt/unset/null) | 과거(정보 없음)와 신규 미설정(사용자 미완료)을 구분해야 세무형 차단·안내가 발동. NULL 통일 취소(§6.1) |
 
 ## 13. 비범위
 
@@ -274,6 +309,7 @@ root `npm test` · web `npm test` · web `npm run build` · `npx tsc --noEmit` �
 
 ## 14. 자체 검토 기록
 
+- **Codex 검수 보정(2026-07-13 2차) 3건**: ① D9 — 과거 NULL / 신규 미설정 'unset' 구분(NULL 통일 취소), CHECK 4값, 명세서 3갈래(legacy/unset/taxed), 타입·`computeStatementTax` mode·정정 복사·테스트·smoke 정렬(§6.1·§8). ② D2 — backfill 재실행 안전을 **완료 표식 가드**로 봉합(값 조건만으론 사용자 지정 taxable 덮음), 표식+backfill 한 트랜잭션(rollback 시 재시도 가능), GB3a/b/c·GB6·가이드 정렬(§4.2b). ③ D1 — 카운터 의미를 **last-issued로 통일**(backfill 카운터=max, 신규=max+1 연속 — 이전 max+1 세팅의 번호 건너뜀 버그 정정), 트리거를 BEFORE INSERT OR UPDATE로 확장(명시 주입 차단·변경 차단, backfill NULL→값만 허용), GA7~GA10 추가(§5.1·§5.2).
 - tax_type 휴면(C2)을 web/src 전수 grep 0건으로 실측 → D2 재활용·backfill 정당성의 사실 근거 확보.
 - 저장 금액 VAT 제외 유지(§2·§8) → 월합계·합산표·CSV 무영향을 코드(monthly-summary·aggregate 순수 함수)와 대조 확인.
 - tax_type_snapshot 캡처를 qc insert로 두면 0010/0011 동결(confirmed에서만 잠금)과 무충돌(§4.4·C7) — 마감 경로가 unit_price만 UPDATE함을 order-store로 확인.
