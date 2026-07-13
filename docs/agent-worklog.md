@@ -2327,3 +2327,22 @@ SQL 자체 점검(0011):
 
 - root 5/5 · web **195/195**(+4) · build 성공 · build 후 `tsc --noEmit` 단독 통과 · audit 0 · diff-check clean.
 - 데모 smoke(worktree 임시 :3224, 원복 완료): qc+confirmed 생성 → [가격 대기] 카드 → **qc만 1건 표시**(confirmed 제외)·뱃지·요약 확인 → 행 [가격 마감]→priceClose 직행 → 상태 select "최종 확정"→confirmed만 → [전체 보기]→둘 다 초기화·2건 → 확정 직후 상태 리셋으로 방금 주문 노출 확인 → 390px 겹침/오버플로 없음 → 콘솔 0.
+
+## 2026-07-13 Codex (W23-R5b 확정 주문 정정 구현 worktree)
+
+상태:
+
+- **구현 진행 중, Supabase 미적용.** 기준 브랜치의 R4 통합(`ab94b2a`)과 R5b 설계 문서 merge(`63f0060`) 뒤, 전용 worktree `D:\Documents\ERP-1-wt-r5b-implementation` / `codex/r5b-order-correction`에서 작업했다. 기준 브랜치·공유 Supabase·`web/.env.local`은 무접촉이다.
+
+구현:
+
+- `web/supabase/migrations/0012_order_correction_link.sql`: `corrected_from_order_id`와 `correction_started_at`을 추가하는 idempotent 초안. 자기 참조 CHECK·활성 정정본 부분 유니크·회사 경계/원본 상태/표식/링크·표식 불변을 지키는 `ordermoa_` 트리거를 둔다. 파일 작성만 했으며 적용하지 않았다.
+- `web/src/lib/order-store.ts`: 0012 컬럼이 없는 DB는 이전 SELECT로 폴백하고 정정 UI를 숨긴다. `correctConfirmedOrder`만 원주문 confirmed→cancelled+표식 조건부 UPDATE 뒤 새 correction 주문을 만든다. 단독 cancel API는 추가하지 않았다.
+- `web/src/lib/order-correction.ts`와 테스트: 확정 스냅샷을 새 검수 라인으로 복사하고, confirmed만·활성 정정본 없음일 때만 정정하게 한다.
+- `web/src/app/page.tsx`: [정정]→확인→수정→[정정 확정] 흐름과 별도 취소 이력, D3 표식 있는 원주문만의 재발행을 추가했다. 가격 대기에는 정정 진입을 만들지 않았고, 취소 주문은 활성 목록에 넣지 않는다.
+- `docs/guide-apply-0012-order-correction-link.md`: 사용자 SQL Editor 적용 절차와 G1~G12 가드 실험을 작성했다.
+
+남은 검증:
+
+- 자동 테스트·build·audit·diff-check와 코드 리뷰를 다시 실행한다. 브라우저 자동화는 정정 버튼 클릭 대기 시간 초과가 한 번 있어, 통과로 기록하지 않고 별도 재확인이 필요하다.
+- 사용자만 0012를 적용한 뒤 G1~G12와 로그인 DB smoke(정정 후 F5·원주문 이력·새 명세서·합산/월합계 제외)를 실행한다.

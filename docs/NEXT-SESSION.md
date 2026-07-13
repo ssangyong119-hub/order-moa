@@ -1,6 +1,6 @@
 # 세션 인계 — 오더모아 (Order-Moa) MVP
 
-작성일: 2026-07-08 · 최종 갱신 2026-07-11 (W23 문서 전수 개편 후)
+작성일: 2026-07-08 · 최종 갱신 2026-07-13 (W23-R4 통합 · R5b 구현 worktree)
 작업 폴더: `D:\Documents\ERP-1` ← **Claude Code를 반드시 이 폴더에서 열 것** (자동낙찰기 `D:\Projects\new app`에서 열면 문서 클릭·경로가 어긋남)
 브랜치: `codex/integrate-mvp-docs-web`
 
@@ -47,6 +47,15 @@
 - **W22 실측 완료(2026-07-10~11, 사용자)**: **0009 Supabase 적용 완료**(`Success. No rows returned`) → 개별 품목 기본 출고단가 저장 → 파싱에서 "기본 단가 적용" 금액 표시 실측 확인 → **카탈로그 735건 DB 반영 완료**(신규 735 · 별칭 207건 시도 · 전부 성공, 중복명·검토필요 품목은 앱이 자동 제외). 잔여: 중복명 품목은 이름 구분(예: `콩나물(시루)`) 후 개별 반영, '기타'로 들어간 카테고리 정리(급하지 않음). Claude 후속 디버깅 1건(`c3dc098` — 기본 단가 fallback 라인의 일괄 저장 제외)까지 푸시됨.
 - **W23 기획 준비(2026-07-11, Codex)**: 실사용 인터뷰를 반영해 `가격 포함 바로 최종 확정`과 `수량 확인→매입처 발주→가격 입력→최종 확정`을 함께 제공하는 선택형 흐름을 사용자와 합의했다. 기준 설계: `docs/superpowers/specs/2026-07-11-order-moa-dual-confirmation-workflow-design.md`. Claude 문서개편 지시: `docs/task-prompt-W23-system-redesign-planning.md`.
 - **W23 문서 전수 개편(2026-07-11, Claude — 문서 완료·코드 미착수)**: ① 문서·구현 충돌 감사 `docs/order-moa-document-audit-2026-07-11.md`(17개 문서 × 코드 대조, 충돌 7류 확인·처리) ② 새 기준 설계 `docs/order-moa-system-redesign-2026-07-11.md`(15개 절 — 용어·상태 전이표·두 경로·가격 마감 UX·데이터 대안 비교(권장 방향: orders 단일 소스 유지, 내부 표현은 R1에서 비교)·단계 R0~R8·성공/중단 기준·승인 게이트) ③ 헌장·제품정의·요구(F14~F19)·기능(§5.3)·화면(§2-1/§16/§17)·DB(적용 현황·0006 order_id)·모듈맵(M17~M20)·로드맵(W23 단계표)·검수(§12)·검증(§12) 전수 정렬. **앱 코드·SQL 무변경.** 스냅샷 원칙은 "판매단가가 최종 확정되는 시점"으로 재정의(기존 주문 의미 불변). OCR은 "제외"→"검증 게이트 있는 보류 실험(입력 어댑터)"로 재분류.
+
+## 2026-07-13 최신 인계
+
+- 기준 브랜치 `codex/integrate-mvp-docs-web`는 R4까지 `ab94b2a`와 R5b 설계 문서 merge `63f0060`가 원격에 반영되어 있다.
+- R5b 구현은 별도 worktree `D:\Documents\ERP-1-wt-r5b-implementation`, 브랜치 `codex/r5b-order-correction`에서 진행 중이다. 여기서만 구현 파일을 수정한다. 기준 브랜치에 바로 merge/rebase/reset하지 않는다.
+- 구현 범위: 0012 초안(`web/supabase/migrations/0012_order_correction_link.sql`), 적용 가이드, `order-store`의 정정 명령/0012 컬럼 폴백, 주문 목록의 정정 진입·취소 이력·D3 재발행 UI다. 단독 취소 버튼/API는 없다.
+- 아직 **0012는 미적용**이다. `web/.env.local`은 수정·이동 금지이며, Supabase SQL Editor 실행은 사용자만 한다. 적용 뒤에는 가이드 G1~G12와 로그인 DB smoke를 실제로 확인한다.
+- 불변 원칙: confirmed 라인/단가 스냅샷 직접 수정 금지, quantity_confirmed는 정정 대상 아님, cancelled는 일반 목록·합산·월합계·대시보드에서 제외, raw_text는 원주문에만 남고 삭제 가능.
+- R5b 구현 worktree의 자동 검증과 코드 리뷰를 마친 뒤 커밋·푸시한다. 이어서 사용자 적용 검증이 끝난 뒤에만 기준 브랜치 통합을 판단한다.
 
 ## 다음에 이어서 할 일 (우선순위)
 0. **W23-R1 ✅ 게이트 통과(2026-07-11)** — 실험 E1~E4 사용자 실측 전부 기대값(2500/7500 재계산 · 의도된 23502 · ok 2) + **0010 Supabase 적용 완료**(quantity_confirmed 상태·역전이 금지·confirmed 라인 스냅샷 가드 트리거 가동). 결정 기록 `docs/order-moa-w23-r1-state-model-decision.md`(권장안 1b-ii 채택·실측 기록 포함). Codex 사후 검수: §8 열린 결정 + 0010 적용 사실.

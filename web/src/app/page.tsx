@@ -32,8 +32,10 @@ import {
 } from "@/lib/customer-store";
 import {
   closeOrderPrices,
+  correctConfirmedOrder,
   deleteOrderRawText,
   loadCompanyData,
+  loadCancelledOrders,
   loadOrders,
   planCloseOrderPrices,
   planCustomerPriceSaves,
@@ -41,9 +43,9 @@ import {
   withRawTextCleared,
   type ConfirmedOrder,
   type OrderLine,
-  type OrderStatus,
   type PriceCloseInput,
 } from "@/lib/order-store";
+import { canCorrectOrder, orderToParsedLines, replaceOrderById } from "@/lib/order-correction";
 import { buildNewProductRegistration, type NewProductRegistrationInput } from "@/lib/product-registration";
 import { padDeliveryNoteLines } from "@/lib/delivery-note";
 import {
@@ -262,6 +264,10 @@ export default function HomePage() {
   const [confirmDate, setConfirmDate] = useState<string>(todayKst()); // 주문일(KST 오늘 기본)
 
   const [orders, setOrders] = useState<ConfirmedOrder[]>([]);
+  const [cancelledOrders, setCancelledOrders] = useState<ConfirmedOrder[]>([]);
+  const [correctionSchemaReady, setCorrectionSchemaReady] = useState(false);
+  const [correctionOriginal, setCorrectionOriginal] = useState<ConfirmedOrder | null>(null);
+  const [showCancelledHistory, setShowCancelledHistory] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
   const [aggCustomer, setAggCustomer] = useState<string>("all");
   const [aggDate, setAggDate] = useState<string>(""); // "" = 전체 날짜
@@ -299,7 +305,7 @@ export default function HomePage() {
       setDbError(null);
       try {
         const loaded = await loadCompanyData(db, companyId);
-        const ords = await loadOrders(db, companyId, loaded.products);
+        const orderResult = await loadOrders(db, companyId, loaded.products);
         if (!live) return;
         setCustomers(loaded.customers);
         setSuppliers(loaded.suppliers);
@@ -328,7 +334,8 @@ export default function HomePage() {
           customerPrices: loaded.customerPrices,
           orderExamples: mappedExamples,
         });
-        setOrders(ords);
+        setOrders(orderResult.orders);
+        setCorrectionSchemaReady(orderResult.correctionSchemaReady);
         setSelectedCustomerId(loaded.customers[0]?.id ?? "");
         if (loaded.seeded) flash("샘플 데이터를 설치했습니다. (최초 설치 또는 누락분 복구 · 가명 테스트용)");
       } catch {
@@ -354,6 +361,9 @@ export default function HomePage() {
     setExamples(loaded.orderExamples);
     setSelectedCustomerId(loaded.customers[0]?.id ?? "");
     setOrders([]);
+    setCancelledOrders([]);
+    setCorrectionSchemaReady(true);
+    setCorrectionOriginal(null);
     setView("dashboard");
     flash("샘플 데이터를 불러왔습니다. (가명·테스트용)");
   }
@@ -363,6 +373,7 @@ export default function HomePage() {
     if (!selectedCustomerId || rawText.trim() === "") return;
     const parsed = parseOrderText(rawText, selectedCustomerId, products, customerPrices);
     setLines(parsed);
+    setCorrectionOriginal(null);
     setView("review");
     flash("");
   }
@@ -846,13 +857,87 @@ export default function HomePage() {
   }
 
   // W23-R2: status="confirmed"=최종 확정(경로 A, 기존 그대로) / "quantity_confirmed"=수량만 확정·가격 대기(경로 B).
-  async function confirmOrder(status: OrderStatus = "confirmed") {
+  async function confirmOrder(status: "confirmed" | "quantity_confirmed" = "confirmed") {
     if (!canConfirm(lines) || saving) return;
+    if (correctionOriginal && status !== "confirmed") return;
     const customer = customers.find((c) => c.id === selectedCustomerId);
     const doneMsg =
       status === "quantity_confirmed"
         ? "수량이 확정되었습니다(가격 대기). 합산표·매입처 발주에 바로 쓸 수 있고, 명세서는 가격 마감 후 발행됩니다."
         : "주문이 저장되었습니다. 주문 목록에서 명세서를 보거나 합산표로 이동하세요.";
+
+    const draftLines = lines.map((l) => ({
+      productId: l.productId as string,
+      rawName: l.rawText || null,
+      quantity: l.quantity as number,
+      unit: l.unit,
+      unitPrice: l.unitPrice,
+    }));
+
+    // R5b: 원주문은 여기서만 취소된다. 정정 진입 시에는 어떤 DB 쓰기도 하지 않는다.
+    if (correctionOriginal) {
+      setSaving(true);
+      try {
+        let saved: ConfirmedOrder;
+        if (db && companyId) {
+          saved = await correctConfirmedOrder(
+            db,
+            companyId,
+            correctionOriginal,
+            confirmDate,
+            draftLines,
+            products,
+          );
+        } else {
+          const correctionLines: OrderLine[] = draftLines.map((line) => {
+            const product = products.find((p) => p.id === line.productId);
+            return {
+              id: crypto.randomUUID(),
+              productId: line.productId,
+              productName: product?.name ?? line.rawName ?? "품목",
+              quantity: line.quantity,
+              unit: line.unit,
+              unitPrice: line.unitPrice,
+              amount: lineAmount(line.quantity, line.unitPrice),
+              basePurchasePrice: product?.basePurchasePrice ?? null,
+            };
+          });
+          saved = {
+            id: `correction_${crypto.randomUUID()}`,
+            date: confirmDate,
+            customerId: correctionOriginal.customerId,
+            customerName: correctionOriginal.customerName,
+            lines: correctionLines,
+            total: sumAmounts(correctionLines.map((line) => line.amount)),
+            margin: estimatedOrderMargin(correctionLines),
+            status: "confirmed",
+            correctedFromOrderId: correctionOriginal.id,
+            rawText: null,
+          };
+        }
+        const cancelledOriginal: ConfirmedOrder = {
+          ...correctionOriginal,
+          status: "cancelled",
+          correctionStartedAt: correctionOriginal.correctionStartedAt ?? new Date().toISOString(),
+        };
+        setOrders((prev) => replaceOrderById(prev, correctionOriginal.id, saved));
+        setCancelledOrders((prev) => [cancelledOriginal, ...prev.filter((order) => order.id !== cancelledOriginal.id)]);
+        setCorrectionOriginal(null);
+        setLines([]);
+        setRawText("");
+        setConfirmDate(todayKst());
+        setOrderListDate(saved.date);
+        setOrderListStatus("all");
+        setCurrentOrderId(saved.id);
+        setView("orders");
+        flash(`정정이 완료되었습니다. 기존 주문은 취소로 보관되고 새 주문이 확정되었습니다. 새 거래명세서를 발행하세요.${db ? "" : " (데모 모드 — 새로고침 시 초기화)"}`);
+      } catch (e) {
+        flash(e instanceof Error ? e.message : "정정 저장에 실패했습니다. 네트워크 확인 후 다시 시도해주세요.");
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
 
     // DB 모드: ordermoa_orders/items에 저장(단가 스냅샷, amount는 DB 생성값)
     if (db && companyId) {
@@ -863,13 +948,7 @@ export default function HomePage() {
           companyId,
           selectedCustomerId,
           confirmDate,
-          lines.map((l) => ({
-            productId: l.productId as string,
-            rawName: l.rawText || null,
-            quantity: l.quantity as number,
-            unit: l.unit,
-            unitPrice: l.unitPrice,
-          })),
+          draftLines,
           products,
           rawText, // 발주 원문(W09) — best-effort 저장, 실패해도 주문은 유지
           status,
@@ -930,6 +1009,42 @@ export default function HomePage() {
     flash(`${doneMsg} (데모 모드 — 새로고침 시 초기화)`);
   }
 
+  function canRecoverCorrection(order: ConfirmedOrder) {
+    return (
+      order.status === "cancelled" &&
+      Boolean(order.correctionStartedAt) &&
+      !orders.some((activeOrder) => activeOrder.correctedFromOrderId === order.id)
+    );
+  }
+
+  function startCorrection(order: ConfirmedOrder) {
+    const isRecovery = canRecoverCorrection(order);
+    if (!correctionSchemaReady || (!canCorrectOrder(order, orders) && !isRecovery)) return;
+    const prompt = isRecovery
+      ? "이 정정 절차는 새 주문 생성 전에 중단되었습니다. 정정본을 다시 만들까요?\n확정 전에는 아무것도 바뀌지 않습니다."
+      : "이 주문을 정정할까요?\n[정정 확정]을 누르면 기존 주문은 취소로 보관되고, 수정한 내용이 새 주문으로 확정됩니다. 확정 전에는 아무것도 바뀌지 않습니다.";
+    if (!window.confirm(prompt)) return;
+    setCorrectionOriginal(order);
+    setSelectedCustomerId(order.customerId); // 정정 중 거래처는 ReviewView 밖에서 바꾸는 UI가 없다(D4).
+    setConfirmDate(order.date);
+    setRawText(""); // 원문은 원주문에만 남기며 정정본으로 복사하지 않는다.
+    setLines(orderToParsedLines(order));
+    setView("review");
+    flash("");
+  }
+
+  async function toggleCancelledHistory() {
+    const next = !showCancelledHistory;
+    setShowCancelledHistory(next);
+    if (!next || !db || !companyId || !correctionSchemaReady) return;
+    try {
+      setCancelledOrders(await loadCancelledOrders(db, companyId, products));
+    } catch {
+      setShowCancelledHistory(false);
+      flash("취소 이력을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+    }
+  }
+
   // 발주 원문 삭제(W09) — raw_text만 지우고 주문/품목/금액/명세서는 유지.
   async function deleteRawText(order: ConfirmedOrder) {
     if (!window.confirm("이 주문의 발주 원문을 삭제할까요?\n주문 내역·금액·명세서는 그대로 유지됩니다.")) return;
@@ -942,6 +1057,7 @@ export default function HomePage() {
       }
     }
     setOrders((prev) => withRawTextCleared(prev, order.id));
+    setCancelledOrders((prev) => withRawTextCleared(prev, order.id));
     flash("발주 원문을 삭제했습니다. 주문 내역은 그대로 유지됩니다.");
   }
 
@@ -1345,6 +1461,7 @@ export default function HomePage() {
     <Shell
       view={view}
       onNav={(v) => {
+        if (v !== "review") setCorrectionOriginal(null);
         setView(v);
         flash("");
       }}
@@ -1645,7 +1762,12 @@ export default function HomePage() {
           priceSaving={priceSaving}
           onConfirm={() => confirmOrder("confirmed")}
           onConfirmQuantityOnly={() => confirmOrder("quantity_confirmed")}
-          onBack={() => setView("paste")}
+          correctionMode={Boolean(correctionOriginal)}
+          correctionOriginal={correctionOriginal}
+          onBack={() => {
+            setCorrectionOriginal(null);
+            setView("paste");
+          }}
         />
       )}
 
@@ -1912,6 +2034,11 @@ export default function HomePage() {
                   전체 보기
                 </button>
                 <button onClick={exportOrdersCsv} disabled={orders.length === 0}>CSV 내보내기</button>
+                {correctionSchemaReady && (
+                  <button onClick={() => void toggleCancelledHistory()}>
+                    {showCancelledHistory ? "취소 이력 닫기" : "취소 이력 보기"}
+                  </button>
+                )}
                 <span className="muted">
                   {orderListDate ? orderListDate : "전체 날짜"}
                   {orderListStatus === "quantity_confirmed" ? " · 가격 대기만" : orderListStatus === "confirmed" ? " · 최종 확정만" : ""}
@@ -1937,7 +2064,7 @@ export default function HomePage() {
                         <th>품목 요약</th>
                         <th className="num">금액</th>
                         <th className="num">예상 마진</th>
-                        <th>명세서</th>
+                        <th>처리</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1950,6 +2077,11 @@ export default function HomePage() {
                               <>
                                 {" "}
                                 <span className="badge amber">가격 대기</span>
+                              </>
+                            )}
+                            {o.correctedFromOrderId && (
+                              <>
+                                {" "}<span className="badge">정정본</span>
                               </>
                             )}
                           </td>
@@ -1973,21 +2105,80 @@ export default function HomePage() {
                                 가격 마감
                               </button>
                             ) : (
-                              <button
-                                className="link"
-                                onClick={() => {
-                                  setCurrentOrderId(o.id);
-                                  setView("note");
-                                }}
-                              >
-                                보기
-                              </button>
+                              <div className="row-actions">
+                                <button
+                                  className="link"
+                                  onClick={() => {
+                                    setCurrentOrderId(o.id);
+                                    setView("note");
+                                  }}
+                                >
+                                  보기
+                                </button>
+                                {correctionSchemaReady && canCorrectOrder(o, orders) && (
+                                  <button className="link" onClick={() => startCorrection(o)}>
+                                    정정
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+              {correctionSchemaReady && showCancelledHistory && (
+                <div style={{ borderTop: "1px solid var(--line)", marginTop: 14, paddingTop: 14 }}>
+                  <h3>취소 이력</h3>
+                  {cancelledOrders.length === 0 ? (
+                    <p className="muted">정정으로 취소된 주문이 없습니다.</p>
+                  ) : (
+                    <div className="table-wrap">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>날짜</th>
+                            <th>거래처</th>
+                            <th>품목 요약</th>
+                            <th>상태</th>
+                            <th>처리</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cancelledOrders.map((order) => {
+                            const recoverable = canRecoverCorrection(order);
+                            return (
+                              <tr key={order.id}>
+                                <td>{order.date}</td>
+                                <td>{order.customerName}</td>
+                                <td>{summarizeItems(order.lines)}</td>
+                                <td>
+                                  <span className="badge">취소됨</span>
+                                  {order.correctionStartedAt && <span className="muted"> · 정정 절차</span>}
+                                </td>
+                                <td>
+                                  <div className="row-actions">
+                                    {recoverable && (
+                                      <button className="link" onClick={() => startCorrection(order)}>
+                                        정정본 만들기(재발행)
+                                      </button>
+                                    )}
+                                    {order.rawText && (
+                                      <button className="link" onClick={() => void deleteRawText(order)}>
+                                        원문 삭제
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -2114,6 +2305,8 @@ function ReviewView(props: {
   onConfirm: () => void;
   /** W23-R2 경로 B: 수량·단위만 확정하고 가격은 나중에 마감. */
   onConfirmQuantityOnly: () => void;
+  correctionMode?: boolean;
+  correctionOriginal?: ConfirmedOrder | null;
   onBack: () => void;
 }) {
   const { lines, products, customerName } = props;
@@ -2190,6 +2383,11 @@ function ReviewView(props: {
         <span>3 확정</span>
       </div>
       <h2>파싱 결과 확인 · {customerName}</h2>
+      {props.correctionMode && props.correctionOriginal && (
+        <p className="notice warn">
+          {props.correctionOriginal.customerName} · {props.correctionOriginal.date} 주문의 정정본 작성 중입니다. 확정 전에는 기존 주문이 그대로 유지됩니다.
+        </p>
+      )}
       <p className="muted">
         품목/수량/단위/단가를 직접 고칠 수 있습니다. 미매칭(빨강)·수량 확인(노랑)이 남으면 확정할 수
         없습니다. 후보 확인은 비슷한 품목이 여러 개 걸린 경우라, 품목을 한 번 선택해야 합니다.
@@ -2431,16 +2629,18 @@ function ReviewView(props: {
       <div className="row-actions" style={{ marginTop: 10 }}>
         <button onClick={props.onBack}>← 다시 붙여넣기</button>
         <button className="primary" onClick={props.onConfirm} disabled={!confirmable || props.busy}>
-          {props.busy ? "저장 중…" : "주문 확정"}
+          {props.busy ? "저장 중…" : props.correctionMode ? "정정 확정 (기존 주문 취소)" : "주문 확정"}
         </button>
-        <button onClick={props.onConfirmQuantityOnly} disabled={!confirmable || props.busy}>
-          {props.busy ? "저장 중…" : "수량만 확정 (가격 나중)"}
-        </button>
+        {!props.correctionMode && (
+          <button onClick={props.onConfirmQuantityOnly} disabled={!confirmable || props.busy}>
+            {props.busy ? "저장 중…" : "수량만 확정 (가격 나중)"}
+          </button>
+        )}
       </div>
       <p className="muted" style={{ marginTop: 8 }}>
-        확정하면 이 거래처의 판매 주문으로 저장됩니다. 매입처 발주는 &lsquo;품목별 합산표&rsquo;에서 따로 합니다.
-        {" "}<strong>수량만 확정</strong>은 단가를 아직 몰라도 저장하는 것 — 합산표·매입처 발주에는 바로 쓰이고,
-        거래명세서는 매입가 확인 후 <strong>가격 마감</strong>을 거쳐야 발행됩니다.
+        {props.correctionMode
+          ? "정정 확정 시 기존 주문은 취소 이력으로 보관되고, 현재 내용만 새 최종 확정 주문으로 저장됩니다."
+          : <>확정하면 이 거래처의 판매 주문으로 저장됩니다. 매입처 발주는 &lsquo;품목별 합산표&rsquo;에서 따로 합니다. {" "}<strong>수량만 확정</strong>은 단가를 아직 몰라도 저장하는 것 — 합산표·매입처 발주에는 바로 쓰이고, 거래명세서는 매입가 확인 후 <strong>가격 마감</strong>을 거쳐야 발행됩니다.</>}
       </p>
     </section>
   );

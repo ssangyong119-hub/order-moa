@@ -9,7 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Customer, CustomerPrice, Product, Supplier } from "./domain/types";
 import { estimatedOrderMargin, sumAmounts } from "./calculations";
 import { normalizeProductCategory } from "./product-category";
-import { isMissingCategoryColumn, selectProductsWithFallback } from "./product-store";
+import { isMissingCategoryColumn, isMissingColumnError, selectProductsWithFallback } from "./product-store";
 import {
   sampleCustomers,
   sampleCustomerPrices,
@@ -30,7 +30,8 @@ export interface OrderLine {
 }
 
 /** W23-R2 주문 상태: confirmed=최종 확정(명세서 가능·월합계 포함) / quantity_confirmed=수량 확인·가격 대기(합산·매입처 발주만). */
-export type OrderStatus = "confirmed" | "quantity_confirmed";
+export type OrderStatus = "confirmed" | "quantity_confirmed" | "cancelled";
+type SaveOrderStatus = Exclude<OrderStatus, "cancelled">;
 
 export interface ConfirmedOrder {
   id: string;
@@ -41,6 +42,10 @@ export interface ConfirmedOrder {
   total: number;
   margin: number | null;
   status: OrderStatus;
+  /** 0012 정정본이면 직전 원주문 id. 일반 주문은 null/undefined. */
+  correctedFromOrderId?: string | null;
+  /** 정정 절차가 원주문 취소까지 진행됐음을 남기는 0012 복구 표식. */
+  correctionStartedAt?: string | null;
   /** 발주 원문(카톡/문자). undefined=미조회, null=없음/삭제됨, string=원문. */
   rawText?: string | null;
 }
@@ -59,14 +64,16 @@ export function toOrderInsert(
   companyId: string,
   customerId: string,
   orderDate: string,
-  status: OrderStatus = "confirmed",
+  status: SaveOrderStatus = "confirmed",
+  options: { correctedFromOrderId?: string; source?: "kakao" | "correction" } = {},
 ) {
   return {
     company_id: companyId,
     customer_id: customerId,
     order_date: orderDate,
-    source: "kakao",
+    source: options.source ?? "kakao",
     status,
+    ...(options.correctedFromOrderId ? { corrected_from_order_id: options.correctedFromOrderId } : {}),
   };
 }
 
@@ -98,6 +105,8 @@ export interface DbOrderRow {
   customer_id: string;
   /** 0010 이전 픽스처/구버전 호환 — 없거나 모르는 값이면 confirmed로 정규화. */
   status?: string;
+  corrected_from_order_id?: string | null;
+  correction_started_at?: string | null;
   customer: { name: string } | null;
   items: DbItemRow[];
 }
@@ -126,7 +135,12 @@ export function mapDbOrder(row: DbOrderRow, products: Product[]): ConfirmedOrder
     lines,
     total: sumAmounts(lines.map((l) => l.amount)),
     margin: estimatedOrderMargin(lines),
-    status: row.status === "quantity_confirmed" ? "quantity_confirmed" : "confirmed",
+    status:
+      row.status === "quantity_confirmed" || row.status === "cancelled"
+        ? row.status
+        : "confirmed",
+    correctedFromOrderId: row.corrected_from_order_id ?? null,
+    correctionStartedAt: row.correction_started_at ?? null,
   };
 }
 
@@ -474,6 +488,28 @@ export async function loadCompanyData(db: SupabaseClient, companyId: string): Pr
 
 const ORDER_SELECT =
   "id,order_date,customer_id,status,customer:ordermoa_customers(name),items:ordermoa_order_items(id,product_id,raw_name,quantity,unit,unit_price,amount)";
+const ORDER_SELECT_WITH_CORRECTION =
+  "id,order_date,customer_id,status,corrected_from_order_id,correction_started_at,customer:ordermoa_customers(name),items:ordermoa_order_items(id,product_id,raw_name,quantity,unit,unit_price,amount)";
+
+function isMissingCorrectionColumnError(error: unknown): boolean {
+  return isMissingColumnError(error, "corrected_from_order_id") ||
+    isMissingColumnError(error, "correction_started_at");
+}
+
+function selectOrders(
+  db: SupabaseClient,
+  companyId: string,
+  statuses: OrderStatus[],
+  columns: string,
+) {
+  return db
+    .from("ordermoa_orders")
+    .select(columns)
+    .eq("company_id", companyId)
+    .in("status", statuses)
+    .order("order_date", { ascending: false })
+    .order("created_at", { ascending: false });
+}
 
 /** 확정 주문 목록(최신순). 거래처별/기간 합계는 이 데이터(order_date·customer_id·amount)로 산출 가능. */
 /** 발주 원문(order_imports)을 주문에 병합 — order_id 기준. 순수 함수(테스트 대상). */
@@ -495,15 +531,19 @@ export async function loadOrders(
   db: SupabaseClient,
   companyId: string,
   products: Product[],
-): Promise<ConfirmedOrder[]> {
-  const res = await db
-    .from("ordermoa_orders")
-    .select(ORDER_SELECT)
-    .eq("company_id", companyId)
-    // W23-R2: 가격 대기(quantity_confirmed) 주문도 목록·합산에 포함. 명세서·월합계는 화면에서 status로 거른다.
-    .in("status", ["confirmed", "quantity_confirmed"])
-    .order("order_date", { ascending: false })
-    .order("created_at", { ascending: false });
+): Promise<{ orders: ConfirmedOrder[]; correctionSchemaReady: boolean }> {
+  // 0012 적용 전 DB에서도 기존 주문 흐름은 유지한다. 두 컬럼이 없으면 정정 UI만 숨긴다.
+  let res = await selectOrders(
+    db,
+    companyId,
+    ["confirmed", "quantity_confirmed"],
+    ORDER_SELECT_WITH_CORRECTION,
+  );
+  let correctionSchemaReady = true;
+  if (res.error && isMissingCorrectionColumnError(res.error)) {
+    correctionSchemaReady = false;
+    res = await selectOrders(db, companyId, ["confirmed", "quantity_confirmed"], ORDER_SELECT);
+  }
   if (res.error) throw res.error;
   const orders = (res.data as unknown as DbOrderRow[]).map((row) => mapDbOrder(row, products));
 
@@ -515,10 +555,35 @@ export async function loadOrders(
       .eq("company_id", companyId)
       .not("order_id", "is", null);
     if (!imp.error && imp.data) {
-      return attachRawText(orders, imp.data as Array<{ order_id: string | null; raw_text: string | null }>);
+      return {
+        orders: attachRawText(orders, imp.data as Array<{ order_id: string | null; raw_text: string | null }>),
+        correctionSchemaReady,
+      };
     }
   } catch {
     // 원문 병합 실패는 주문 목록 로딩을 막지 않는다.
+  }
+  return { orders, correctionSchemaReady };
+}
+
+/** 취소 주문은 일반 목록과 분리된 정정 이력에서만 조회한다. */
+export async function loadCancelledOrders(
+  db: SupabaseClient,
+  companyId: string,
+  products: Product[],
+): Promise<ConfirmedOrder[]> {
+  const res = await selectOrders(db, companyId, ["cancelled"], ORDER_SELECT_WITH_CORRECTION);
+  if (res.error) throw res.error;
+  const orders = (res.data as unknown as DbOrderRow[]).map((row) => mapDbOrder(row, products));
+  try {
+    const imp = await db
+      .from("ordermoa_order_imports")
+      .select("order_id,raw_text")
+      .eq("company_id", companyId)
+      .not("order_id", "is", null);
+    if (!imp.error && imp.data) return attachRawText(orders, imp.data as Array<{ order_id: string | null; raw_text: string | null }>);
+  } catch {
+    // 이력 원문 병합 실패는 취소 이력 열람을 막지 않는다.
   }
   return orders;
 }
@@ -540,11 +605,12 @@ export async function saveOrder(
   lines: DraftLine[],
   products: Product[],
   rawText: string | null = null,
-  status: OrderStatus = "confirmed",
+  status: SaveOrderStatus = "confirmed",
+  options: { correctedFromOrderId?: string; source?: "kakao" | "correction" } = {},
 ): Promise<ConfirmedOrder> {
   const orderRes = await db
     .from("ordermoa_orders")
-    .insert(toOrderInsert(companyId, customerId, orderDate, "quantity_confirmed"))
+    .insert(toOrderInsert(companyId, customerId, orderDate, "quantity_confirmed", options))
     .select("id,order_date,customer_id,status,customer:ordermoa_customers(name)")
     .single();
   if (orderRes.error) throw orderRes.error;
@@ -582,6 +648,7 @@ export async function saveOrder(
     order_date: orderRes.data.order_date as string,
     customer_id: orderRes.data.customer_id as string,
     status: finalStatus,
+    corrected_from_order_id: options.correctedFromOrderId ?? null,
     customer: (orderRes.data as unknown as DbOrderRow).customer,
     items: itemsRes.data as unknown as DbItemRow[],
   };
@@ -612,6 +679,59 @@ export async function saveOrder(
     }
   }
   return order;
+}
+
+/**
+ * 최종 확정 주문 정정: 원주문을 조건부 취소+표식 기록한 뒤 새 주문을 확정한다.
+ * 별도 cancel API는 의도적으로 제공하지 않는다(D6). 생성 실패 시 표식 있는 취소 원주문만 재발행할 수 있다.
+ */
+export async function correctConfirmedOrder(
+  db: SupabaseClient,
+  companyId: string,
+  original: ConfirmedOrder,
+  orderDate: string,
+  lines: DraftLine[],
+  products: Product[],
+): Promise<ConfirmedOrder> {
+  if (original.status === "confirmed") {
+    const cancel = await db
+      .from("ordermoa_orders")
+      .update({ status: "cancelled", correction_started_at: new Date().toISOString() })
+      .eq("company_id", companyId)
+      .eq("id", original.id)
+      .eq("status", "confirmed")
+      .select("id");
+    if (cancel.error) throw cancel.error;
+    if (!cancel.data || cancel.data.length !== 1) {
+      // 다른 탭이 먼저 취소했을 수 있다. 표식 있는 정정 취소만 복구 재발행으로 이어진다.
+      const current = await db
+        .from("ordermoa_orders")
+        .select("status,correction_started_at")
+        .eq("company_id", companyId)
+        .eq("id", original.id)
+        .single();
+      if (current.error) throw current.error;
+      const row = current.data as { status?: string; correction_started_at?: string | null };
+      if (row.status !== "cancelled" || !row.correction_started_at) {
+        throw new Error("이미 처리된 주문입니다. 목록을 새로고침해주세요.");
+      }
+    }
+  } else if (original.status !== "cancelled" || !original.correctionStartedAt) {
+    throw new Error("이미 처리된 주문입니다. 목록을 새로고침해주세요.");
+  }
+
+  const corrected = await saveOrder(
+    db,
+    companyId,
+    original.customerId,
+    orderDate,
+    lines,
+    products,
+    null,
+    "confirmed",
+    { correctedFromOrderId: original.id, source: "correction" },
+  );
+  return { ...corrected, correctedFromOrderId: original.id };
 }
 
 /**

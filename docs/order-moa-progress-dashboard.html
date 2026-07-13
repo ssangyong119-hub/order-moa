@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>오더모아 진행현황 — 2026-07-11</title>
+<title>오더모아 진행현황 — 2026-07-13</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; margin: 0; background: #f6f7f9; color: #202124; line-height: 1.55; }
@@ -52,15 +52,15 @@
   <div class="wrap">
     <h1>오더모아 진행현황</h1>
     <p class="sub">전체 ERP 대체가 아니라, 중간 납품업자의 흩어진 발주를 모아 품목·수량을 확인하고 합산·매입처 발주로 이은 뒤, 준비된 판매가격 또는 매입가 확인 후 마감한 가격으로 거래명세서까지 연결하는 반응형 웹 업무 도구.</p>
-    <p class="sub">기준일 2026-07-11 · 브랜치 <code style="background:#33405f;color:#dfe6f5">codex/integrate-mvp-docs-web</code></p>
+    <p class="sub">기준일 2026-07-13 · 브랜치 <code style="background:#33405f;color:#dfe6f5">codex/integrate-mvp-docs-web</code></p>
   </div>
 </header>
 <div class="wrap">
-  <div class="focus">📌 <strong>지금 하는 일:</strong> W23-R5a 운영 UX 팩 구현·검수 완료(마이그레이션 0, web 186/186). 가격 입력 전체선택/Enter·단가 관리 적용 단가 표시·매입처 발주 문장 날짜·편집·이번 발주만 매입처 변경, 거래처·날짜 필터 변경 시 임시 재지정·편집본 초기화까지 됨. 다음 후보: W23-R5b 확정 주문 정정(취소→복사→재확정) / W23-R4 대시보드 오늘 업무 큐 / W24 품목코드·과세구분 — R5b·W24는 각각 별도 마이그레이션·Codex 승인.</div>
+  <div class="focus">📌 <strong>지금 하는 일:</strong> W23-R4 오늘 업무 큐는 통합 완료. W23-R5b 확정 주문 정정은 코드·0012 초안·자동 검증까지 완료됐고, 사용자 SQL Editor의 0012 적용과 로그인 DB smoke(G1~G12 포함)가 남아 진행 중이다. 원주문 스냅샷 불변·가격 대기 격리·raw_text 삭제 가능 원칙을 유지한다. 다음 후보는 0012 적용 검증 뒤 R5b 통합, 그 다음 W24 품목코드·과세구분(별도 승인)이다.</div>
 
-  <h2>전체 진행률 (작업 보드 27개 기준)</h2>
-  <div class="progressbar"><div style="width:89%"></div></div>
-  <p class="counts">완료 24 · 다음 0 · 보류 2 — 1차 트랙(보류 제외) 24/25 완료</p>
+  <h2>전체 진행률 (작업 보드 29개 기준)</h2>
+  <div class="progressbar"><div style="width:86%"></div></div>
+  <p class="counts">완료 25 · 다음 0 · 보류 2 — 1차 트랙(보류 제외) 25/27 완료</p>
   <div class="legend"><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span><span class="badge" style="background:#fef7e0;color:#946200">다음</span><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span><span class="badge" style="background:#fde8e8;color:#b02a2a">제외</span></div>
 
   <h2>핵심 흐름 (이 순서가 제품의 전부)</h2>
@@ -330,6 +330,26 @@
     <dt>확인 방법</dt><dd>web 184/184(신규 11: aggregate 날짜·override, price-store effective, price-input 정규화) · root 5/5 · build 성공 · tsc 통과 · audit 0 · diff-check clean. 데모 smoke: 파싱 Enter→다음 칸 · 단가 관리 base-only &#x27;기본 단가 적용 중&#x27; · 계란(미지정)→야채 이번만 재배정→미지정 0·문장 재그룹 · 발주 문장 날짜/편집 유지/다시 만들기 · 회귀(주문 확정·가격 마감 09000→9000·명세서) · 모바일 390px 오버플로 없음 · 콘솔 0. 미커밋 — Codex 검수 대기. 의도적 편차: 단가 관리 Enter=저장 유지(일괄 저장 없어 키보드 저장 경로 보존).</dd>
   </dl>
   <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/price-input.ts</code></li><li><code>docs/superpowers/specs/2026-07-11-order-moa-operations-ux-tax-design.md</code></li><li><code>docs/task-prompt-W23-R5a-operational-ux-pack.md</code></li><li><code>docs/agent-worklog.md</code></li></ul></details>
+</div>
+<div class="card s-done">
+  <div class="card-head"><span class="wid">W23-R4</span><strong>오늘 업무 대시보드 큐</strong><span class="badge" style="background:#e6f4ea;color:#1e7e34">완료</span></div>
+  <p class="plain">대시보드가 저장된 주문 상태만 읽어 오늘 할 일을 보여줍니다. 가격 대기는 날짜와 무관하게 모두, 명세서 준비와 매입처 발주는 오늘 주문만 계산하며 취소 주문은 모든 카드에서 제외됩니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>가격 대기와 당일 마감 업무를 첫 화면에서 바로 구분해, 확인·마감·명세서 흐름으로 빠르게 들어가게 한다.</dd>
+    <dt>선행 조건</dt><dd>완료. 마이그레이션과 새 저장값 없이 기존 주문 상태를 읽기 전용으로 집계한다.</dd>
+    <dt>확인 방법</dt><dd>root 5/5 · web 195/195 · build · tsc · audit 0 · diff-check clean. 데모 smoke에서 가격 대기/명세서/매입처 발주 카드 수치·직행·모바일 390px을 확인했다.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>web/src/lib/dashboard-queue.ts</code></li><li><code>web/src/app/order-list-filter.ts</code></li><li><code>docs/agent-worklog.md</code></li></ul></details>
+</div>
+<div class="card s-doing">
+  <div class="card-head"><span class="wid">W23-R5b</span><strong>확정 주문 정정 — 취소·복사·새 주문 재확정</strong><span class="badge" style="background:#e7f0fe;color:#1a56b0">진행 중</span></div>
+  <p class="plain">최종 확정 주문은 직접 고치지 않고, 정정 확정 때만 원주문을 취소 이력으로 남긴 뒤 품목·수량·단가를 복사한 새 주문을 확정합니다. 가격 대기 주문은 정정 대상이 아니며, 새 주문은 원주문 연결을 보존합니다.</p>
+  <dl>
+    <dt>왜 필요한가</dt><dd>확정 단가 스냅샷과 기존 거래명세서를 바꾸지 않으면서, 실무 정정을 추적 가능하게 만든다.</dd>
+    <dt>선행 조건</dt><dd>0012_order_correction_link.sql은 아직 미적용. 사용자 SQL Editor에서 적용하고 G1~G12 가드 실측 및 로그인 DB smoke를 마친 뒤에만 완료/통합 판단한다.</dd>
+    <dt>확인 방법</dt><dd>구현 worktree 자동 검증 예정: root npm test · web npm test · build · tsc · audit · diff-check. 0012 미적용 DB는 컬럼 폴백으로 기존 주문 기능을 유지하고 정정 UI를 숨긴다.</dd>
+  </dl>
+  <details><summary>관련 문서/파일</summary><ul><li><code>docs/superpowers/specs/2026-07-12-order-moa-r5b-correction-design.md</code></li><li><code>docs/guide-apply-0012-order-correction-link.md</code></li><li><code>web/supabase/migrations/0012_order_correction_link.sql</code></li></ul></details>
 </div></div><h2 class="phase">2차</h2><div class="grid">
 <div class="card s-hold">
   <div class="card-head"><span class="wid">W16</span><strong>2차 보류: 미수금·세금계산서 근거·원가/재고</strong><span class="badge" style="background:#f1f3f4;color:#5f6368">보류</span></div>

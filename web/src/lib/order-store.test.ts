@@ -3,7 +3,9 @@ import {
   attachRawText,
   buildSeedRows,
   closeOrderPrices,
+  correctConfirmedOrder,
   diffSeedRows,
+  loadOrders,
   mapDbOrder,
   planCloseOrderPrices,
   planCustomerPriceSaves,
@@ -39,6 +41,22 @@ test("toOrderInsert(W23-R2): 수량만 확정은 quantity_confirmed로 저장(�
   );
   // 기본값은 여전히 confirmed — 기존 경로 A 무변경
   expect(toOrderInsert("comp1", "cust1", "2026-07-11").status).toBe("confirmed");
+});
+
+test("toOrderInsert(R5b): 정정본은 원주문 링크와 correction 출처만 저장한다", () => {
+  expect(
+    toOrderInsert("comp1", "cust1", "2026-07-13", "quantity_confirmed", {
+      correctedFromOrderId: "original-1",
+      source: "correction",
+    }),
+  ).toEqual({
+    company_id: "comp1",
+    customer_id: "cust1",
+    order_date: "2026-07-13",
+    source: "correction",
+    status: "quantity_confirmed",
+    corrected_from_order_id: "original-1",
+  });
 });
 
 test("toItemInserts: amount(generated) 미포함 + unit_price 스냅샷 포함", () => {
@@ -92,6 +110,24 @@ test("mapDbOrder(W23-R2): quantity_confirmed는 가격 대기로, 모르는 값�
   expect(mapDbOrder({ ...base, status: "quantity_confirmed" }, []).status).toBe("quantity_confirmed");
   expect(mapDbOrder({ ...base, status: "confirmed" }, []).status).toBe("confirmed");
   expect(mapDbOrder({ ...base, status: "draft" }, []).status).toBe("confirmed"); // 예약값 방어
+});
+
+test("mapDbOrder(R5b): cancelled와 정정 연결/시작 표식을 이력 모델로 보존한다", () => {
+  const base: DbOrderRow = {
+    id: "original-1",
+    order_date: "2026-07-13",
+    customer_id: "c1",
+    status: "cancelled",
+    corrected_from_order_id: null,
+    correction_started_at: "2026-07-13T12:00:00.000Z",
+    customer: { name: "가람식당" },
+    items: [],
+  };
+  expect(mapDbOrder(base, [])).toMatchObject({
+    status: "cancelled",
+    correctedFromOrderId: null,
+    correctionStartedAt: "2026-07-13T12:00:00.000Z",
+  });
 });
 
 const orderWithLines = (id: string): ConfirmedOrder => ({
@@ -526,4 +562,122 @@ test("saveOrder(경로 B): 수량만 확정은 quantity_confirmed로 남고 승�
   const order = await saveOrder(db, "comp1", "c1", "2026-07-11", [{ productId: "p1", rawName: null, quantity: 2, unit: "박스", unitPrice: 0 }], [], null, "quantity_confirmed");
   expect(order.status).toBe("quantity_confirmed");
   expect(calls.some(isOrdersUpdateToConfirmed)).toBe(false); // 승격 없음
+});
+
+test("loadOrders(R5b): 0012 컬럼이 없으면 기존 목록을 반환하고 정정 UI를 비활성화한다", async () => {
+  const { db } = makeFakeDb((c) => {
+    if (c.table === "ordermoa_orders" && c.op === "select" && c.selectCols?.includes("corrected_from_order_id")) {
+      return { data: null, error: { code: "42703", message: "column corrected_from_order_id does not exist" } };
+    }
+    if (c.table === "ordermoa_orders" && c.op === "select") {
+      return {
+        data: [{ id: "o1", order_date: "2026-07-13", customer_id: "c1", status: "confirmed", customer: { name: "가람식당" }, items: [] }],
+        error: null,
+      };
+    }
+    if (c.table === "ordermoa_order_imports") return { data: [], error: null };
+    return undefined;
+  });
+  await expect(loadOrders(db, "comp1", [])).resolves.toMatchObject({
+    correctionSchemaReady: false,
+    orders: [expect.objectContaining({ id: "o1", status: "confirmed" })],
+  });
+});
+
+test("loadOrders(R5b): PostgREST schema cache의 0012 컬럼 누락도 기존 목록으로 폴백한다", async () => {
+  const { db } = makeFakeDb((c) => {
+    if (c.table === "ordermoa_orders" && c.op === "select" && c.selectCols?.includes("corrected_from_order_id")) {
+      return { data: null, error: { code: "PGRST204", message: "Could not find the 'correction_started_at' column of 'ordermoa_orders' in the schema cache" } };
+    }
+    if (c.table === "ordermoa_orders" && c.op === "select") {
+      return {
+        data: [{ id: "o1", order_date: "2026-07-13", customer_id: "c1", status: "confirmed", customer: { name: "가람식당" }, items: [] }],
+        error: null,
+      };
+    }
+    if (c.table === "ordermoa_order_imports") return { data: [], error: null };
+    return undefined;
+  });
+
+  await expect(loadOrders(db, "comp1", [])).resolves.toMatchObject({
+    correctionSchemaReady: false,
+    orders: [expect.objectContaining({ id: "o1", status: "confirmed" })],
+  });
+});
+
+test("correctConfirmedOrder: 원주문 취소와 정정 시작 표식을 단일 조건부 UPDATE 후 새 정정본을 저장한다", async () => {
+  const { db, calls } = makeFakeDb((c) => {
+    if (c.table === "ordermoa_orders" && c.op === "update" && (c.values as { status?: string })?.status === "cancelled") {
+      return { data: [{ id: "original-1" }], error: null };
+    }
+    if (c.table === "ordermoa_orders" && c.op === "insert") {
+      return { data: { id: "correction-1", order_date: "2026-07-13", customer_id: "c1", status: "quantity_confirmed", customer: { name: "가람식당" } }, error: null };
+    }
+    if (c.table === "ordermoa_order_items" && c.op === "insert") {
+      return { data: [{ id: "line-1", product_id: "p1", raw_name: "콩나물", quantity: 3, unit: "박스", unit_price: 8000, amount: 24000 }], error: null };
+    }
+    if (isOrdersUpdateToConfirmed(c)) return { data: [{ id: "correction-1" }], error: null };
+    return undefined;
+  });
+
+  const corrected = await correctConfirmedOrder(
+    db,
+    "comp1",
+    { ...orderWithLines("original-1"), correctionStartedAt: null },
+    "2026-07-13",
+    [{ productId: "p1", rawName: "콩나물", quantity: 3, unit: "박스", unitPrice: 8000 }],
+    [],
+  );
+
+  expect(corrected).toMatchObject({ id: "correction-1", status: "confirmed", correctedFromOrderId: "original-1" });
+  const cancel = calls.find((c) => c.table === "ordermoa_orders" && c.op === "update" && (c.values as { status?: string })?.status === "cancelled");
+  expect(cancel?.values).toMatchObject({ status: "cancelled", correction_started_at: expect.any(String) });
+  expect(cancel?.eqs).toEqual(expect.arrayContaining([["company_id", "comp1"], ["id", "original-1"], ["status", "confirmed"]]));
+  const inserted = calls.find((c) => c.table === "ordermoa_orders" && c.op === "insert");
+  expect(inserted?.values).toMatchObject({ source: "correction", corrected_from_order_id: "original-1", status: "quantity_confirmed" });
+});
+
+test("correctConfirmedOrder: 표식 없는 취소 주문은 재발행하지 않는다", async () => {
+  const { db, calls } = makeFakeDb(() => undefined);
+  await expect(
+    correctConfirmedOrder(
+      db,
+      "comp1",
+      { ...orderWithLines("original-1"), status: "cancelled", correctionStartedAt: null },
+      "2026-07-13",
+      [{ productId: "p1", rawName: null, quantity: 1, unit: "박스", unitPrice: 8000 }],
+      [],
+    ),
+  ).rejects.toThrow("이미 처리된 주문");
+  expect(calls.some((c) => c.op === "insert" || c.op === "update")).toBe(false);
+});
+
+test("correctConfirmedOrder: 조건부 취소가 0행이어도 표식 있는 취소 원주문만 재조회 후 재발행한다", async () => {
+  const { db, calls } = makeFakeDb((c) => {
+    if (c.table === "ordermoa_orders" && c.op === "update" && (c.values as { status?: string })?.status === "cancelled") {
+      return { data: [], error: null };
+    }
+    if (c.table === "ordermoa_orders" && c.op === "select" && c.selectCols === "status,correction_started_at") {
+      return { data: { status: "cancelled", correction_started_at: "2026-07-13T12:00:00.000Z" }, error: null };
+    }
+    if (c.table === "ordermoa_orders" && c.op === "insert") {
+      return { data: { id: "correction-2", order_date: "2026-07-13", customer_id: "c1", status: "quantity_confirmed", customer: { name: "가람식당" } }, error: null };
+    }
+    if (c.table === "ordermoa_order_items" && c.op === "insert") {
+      return { data: [{ id: "line-2", product_id: "p1", raw_name: null, quantity: 1, unit: "박스", unit_price: 8000, amount: 8000 }], error: null };
+    }
+    if (isOrdersUpdateToConfirmed(c)) return { data: [{ id: "correction-2" }], error: null };
+    return undefined;
+  });
+  await expect(
+    correctConfirmedOrder(
+      db,
+      "comp1",
+      orderWithLines("original-1"),
+      "2026-07-13",
+      [{ productId: "p1", rawName: null, quantity: 1, unit: "박스", unitPrice: 8000 }],
+      [],
+    ),
+  ).resolves.toMatchObject({ id: "correction-2", correctedFromOrderId: "original-1" });
+  expect(calls.some((c) => c.table === "ordermoa_orders" && c.op === "select" && c.selectCols === "status,correction_started_at")).toBe(true);
 });
